@@ -52,6 +52,7 @@
   <ConfigModal ref="configModalRef" @saved="onConfigSaved" />
   <DetailDrawer ref="drawerRef" />
   <GroupModal ref="groupModalRef" @saved="onGroupSaved" />
+  <TaskModal ref="taskModalRef" @saved="onTaskSaved" />
 </template>
 
 <script setup>
@@ -62,6 +63,7 @@ import CardsView from './components/CardsView.vue'
 import ConfigModal from './components/ConfigModal.vue'
 import DetailDrawer from './components/DetailDrawer.vue'
 import GroupModal from './components/GroupModal.vue'
+import TaskModal from './components/TaskModal.vue'
 import { fetchTasks, fetchGroups, fetchConfigs } from './api'
 
 // ====================== 组件 refs ======================
@@ -76,6 +78,7 @@ const tasks = ref([])
 const groups = ref([])
 const configs = ref([])
 const groupModalRef = ref(null)
+const taskModalRef = ref(null)
 
 const stats = computed(() => ({
   tasks: tasks.value.length,
@@ -139,11 +142,6 @@ const exportReport = () => {
   alert('触发导出大盘报表')
 }
 
-const openNewTask = () => {
-  // TODO: 后续实现任务弹窗
-  alert('新建采集任务（待实现）')
-}
-
 const batchSyncGroups = () => {
   alert('触发同步组策略')
 }
@@ -156,6 +154,7 @@ const importConfig = () => {
   alert('触发 Excel 导入配置')
 }
 
+// ====================== 配置组相关 ======================
 const openNewConfig = () => {
   configModalRef.value?.open(false) // 新建模式
 }
@@ -166,6 +165,19 @@ const editGroup = (group) => {
 
 const onGroupSaved = () => {
   loadAllData()
+}
+
+// ====================== 任务相关 ======================
+const onTaskSaved = () => {
+  loadAllData()
+}
+
+const openNewTask = () => {
+  taskModalRef.value?.open(false)
+}
+
+const editTask = (task) => {
+  taskModalRef.value?.open(true, task)
 }
 
 // ====================== 数据加载 ======================
@@ -200,11 +212,6 @@ const editConfig = (config) => {
 
 const viewDetail = (item) => {
   drawerRef.value?.open(item.EqName || item.groupName || '详情', item)
-}
-
-const editTask = (task) => {
-  console.log('编辑任务', task)
-  // TODO: 后续实现任务编辑弹窗
 }
 
 const onConfigSaved = () => {

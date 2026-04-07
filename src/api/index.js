@@ -90,3 +90,28 @@ export const toggleGroupStatus = async (id, isEnabled) => {
     body: formData
   }).then(res => res.json())
 }
+
+// ====================== 任务 API ======================
+export const createTask = async (data) => {
+  if (USE_MOCK) {
+    await delay()
+    return { success: true, data: { id: Date.now(), ...data } }
+  }
+  return fetch(API.tasks, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  }).then(res => res.json())
+}
+
+export const updateTask = async (id, data) => {
+  if (USE_MOCK) {
+    await delay()
+    return { success: true }
+  }
+  return fetch(`${API.tasks}/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  }).then(res => res.json())
+}
