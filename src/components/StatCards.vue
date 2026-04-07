@@ -1,0 +1,30 @@
+<template>
+  <div class="stat-row">
+    <div
+      v-for="card in cards"
+      :key="card.tab"
+      class="stat-card"
+      :class="{ active: activeTab === card.tab }"
+      @click="$emit('update:activeTab', card.tab)"
+    >
+      <div class="stat-title">{{ card.title }}</div>
+      <div class="stat-value">{{ card.value }}</div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+const props = defineProps({
+  activeTab: String,
+  stats: Object
+})
+
+const cards = [
+  { tab: 'overview', title: '总览', value: 'Dashboard' },          // 固定字符串
+  { tab: 'task',    title: '任务数', value: props.stats?.tasks ?? '--' },
+  { tab: 'group',   title: '配置组数', value: props.stats?.groups ?? '--' },
+  { tab: 'config',  title: '配置数', value: props.stats?.configs ?? '--' }
+]
+
+defineEmits(['update:activeTab'])
+</script>
