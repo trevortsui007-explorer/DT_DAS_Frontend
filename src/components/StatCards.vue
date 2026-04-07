@@ -14,17 +14,18 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 const props = defineProps({
   activeTab: String,
   stats: Object
 })
 
-const cards = [
-  { tab: 'overview', title: '总览', value: 'Dashboard' },          // 固定字符串
-  { tab: 'task',    title: '任务数', value: props.stats?.tasks ?? '--' },
-  { tab: 'group',   title: '配置组数', value: props.stats?.groups ?? '--' },
-  { tab: 'config',  title: '配置数', value: props.stats?.configs ?? '--' }
-]
+const cards = computed(() => [
+  { tab: 'overview', title: '总览', value: 'Dashboard' },
+  { tab: 'task', title: '任务数', value: props.stats?.tasks ?? '--' },
+  { tab: 'group', title: '配置组数', value: props.stats?.groups ?? '--' },
+  { tab: 'config', title: '配置数', value: props.stats?.configs ?? '--' }
+])
 
 defineEmits(['update:activeTab'])
 </script>
