@@ -39,3 +39,54 @@ export const fetchConfigs = async () => {
   }
   return fetch(`${API.configs}?all=true`).then(res => res.json())
 }
+
+// ====================== 配置组 API ======================
+export const createGroup = async (data) => {
+  if (USE_MOCK) {
+    await delay()
+    // 模拟返回成功
+    return { success: true, data: { id: Date.now(), ...data } }
+  }
+  return fetch(API.groups, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  }).then(res => res.json())
+}
+
+export const updateGroup = async (id, data) => {
+  if (USE_MOCK) {
+    await delay()
+    return { success: true }
+  }
+  return fetch(`${API.groups}/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  }).then(res => res.json())
+}
+
+export const deleteGroup = async (id) => {
+  if (USE_MOCK) {
+    await delay()
+    return { success: true }
+  }
+  return fetch(`${API.groups}/${id}`, {
+    method: 'DELETE'
+  }).then(res => res.json())
+}
+
+export const toggleGroupStatus = async (id, isEnabled) => {
+  if (USE_MOCK) {
+    await delay()
+    return { success: true }
+  }
+  // 注意后端 PATCH 接口可能需要 formdata，这里简化处理
+  const formData = new FormData()
+  formData.append('ids', id)
+  formData.append('isEnabled', isEnabled)
+  return fetch(`${API.groups}/status/`, {
+    method: 'PATCH',
+    body: formData
+  }).then(res => res.json())
+}

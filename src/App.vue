@@ -44,12 +44,14 @@
         :error="error"
         @view-detail="viewDetail"
         @edit-config="editConfig"
+        @edit-group="editGroup"
       />
     </div>
   </div>
 
   <ConfigModal ref="configModalRef" @saved="onConfigSaved" />
   <DetailDrawer ref="drawerRef" />
+  <GroupModal ref="groupModalRef" @saved="onGroupSaved" />
 </template>
 
 <script setup>
@@ -59,6 +61,7 @@ import TableView from './components/TableView.vue'
 import CardsView from './components/CardsView.vue'
 import ConfigModal from './components/ConfigModal.vue'
 import DetailDrawer from './components/DetailDrawer.vue'
+import GroupModal from './components/GroupModal.vue'
 import { fetchTasks, fetchGroups, fetchConfigs } from './api'
 
 // ====================== 组件 refs ======================
@@ -72,6 +75,7 @@ const error = ref('')
 const tasks = ref([])
 const groups = ref([])
 const configs = ref([])
+const groupModalRef = ref(null)
 
 const stats = computed(() => ({
   tasks: tasks.value.length,
@@ -145,8 +149,7 @@ const batchSyncGroups = () => {
 }
 
 const openNewGroup = () => {
-  // TODO: 后续实现配置组弹窗
-  alert('新增配置组（待实现）')
+  groupModalRef.value?.open(false)   // false 表示新建模式
 }
 
 const importConfig = () => {
@@ -155,6 +158,14 @@ const importConfig = () => {
 
 const openNewConfig = () => {
   configModalRef.value?.open(false) // 新建模式
+}
+
+const editGroup = (group) => {
+  groupModalRef.value?.open(true, group)
+}
+
+const onGroupSaved = () => {
+  loadAllData()
 }
 
 // ====================== 数据加载 ======================
@@ -167,9 +178,6 @@ const loadAllData = async () => {
       fetchGroups(),
       fetchConfigs()
     ])
-    console.log('tasksRes', tasksRes)
-    console.log('groupsRes', groupsRes)
-    console.log('configsRes', configsRes)
     tasks.value = tasksRes.data || []
     groups.value = groupsRes.data || []
     configs.value = configsRes.data || []

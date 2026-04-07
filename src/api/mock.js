@@ -24,11 +24,19 @@ export const mockGroups = {
     {
       id: 101,
       groupName: '电力组',
+      groupCategory: '二厂',
+      groupType: '默认周期执行组',
+      sortOrder: 1,
+      isEnabled: true,
       configCount: 3
     },
     {
       id: 102,
       groupName: '水务组',
+      groupCategory: '三厂',
+      groupType: '默认周期执行组',
+      sortOrder: 2,
+      isEnabled: false,
       configCount: 5
     }
   ]
