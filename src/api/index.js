@@ -115,3 +115,31 @@ export const updateTask = async (id, data) => {
     body: JSON.stringify(data)
   }).then(res => res.json())
 }
+
+// 检查表是否存在
+export const checkTableExists = (tableName) => {
+  if (USE_MOCK) {
+    return Promise.resolve({ exists: false, columns: [] })
+  }
+  return fetch(`/api/table/check?tableName=${tableName}`).then(res => res.json())
+}
+
+// 获取表结构
+export const getTableSchema = (tableName) => {
+  if (USE_MOCK) {
+    return Promise.resolve({ columns: [] })
+  }
+  return fetch(`/api/table/schema?tableName=${tableName}`).then(res => res.json())
+}
+
+// 创建表
+export const createTable = (tableName, columns) => {
+  if (USE_MOCK) {
+    return Promise.resolve({ success: true })
+  }
+  return fetch(`/api/table/create`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tableName, columns })
+  }).then(res => res.json())
+}

@@ -117,7 +117,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 import { translateCron } from '@/utils/cron'
 
 const emit = defineEmits(['saved'])

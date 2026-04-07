@@ -49,10 +49,11 @@
     </div>
   </div>
 
-  <ConfigModal ref="configModalRef" @saved="onConfigSaved" />
+  <ConfigModal ref="configModalRef" @saved="onConfigSaved" @goBack="handleGoBackToImport" />
   <DetailDrawer ref="drawerRef" />
   <GroupModal ref="groupModalRef" @saved="onGroupSaved" />
   <TaskModal ref="taskModalRef" @saved="onTaskSaved" />
+  <ImportConfigModal ref="importConfigModalRef" @imported="handleImportSuccess" />
 </template>
 
 <script setup>
@@ -64,11 +65,15 @@ import ConfigModal from './components/ConfigModal.vue'
 import DetailDrawer from './components/DetailDrawer.vue'
 import GroupModal from './components/GroupModal.vue'
 import TaskModal from './components/TaskModal.vue'
+import ImportConfigModal from './components/ImportConfigModal.vue'
 import { fetchTasks, fetchGroups, fetchConfigs } from './api'
 
 // ====================== 组件 refs ======================
 const configModalRef = ref(null)
 const drawerRef = ref(null)
+const groupModalRef = ref(null)
+const taskModalRef = ref(null)
+const importConfigModalRef = ref(null)
 
 // ====================== 数据状态 ======================
 const activeTab = ref('overview')
@@ -77,8 +82,6 @@ const error = ref('')
 const tasks = ref([])
 const groups = ref([])
 const configs = ref([])
-const groupModalRef = ref(null)
-const taskModalRef = ref(null)
 
 const stats = computed(() => ({
   tasks: tasks.value.length,
@@ -150,10 +153,6 @@ const openNewGroup = () => {
   groupModalRef.value?.open(false)   // false 表示新建模式
 }
 
-const importConfig = () => {
-  alert('触发 Excel 导入配置')
-}
-
 // ====================== 配置组相关 ======================
 const openNewConfig = () => {
   configModalRef.value?.open(false) // 新建模式
@@ -178,6 +177,24 @@ const openNewTask = () => {
 
 const editTask = (task) => {
   taskModalRef.value?.open(true, task)
+}
+
+// ====================== Excel/Csv解析相关 ======================
+// 点击“导入配置”按钮：初始化打开导入弹窗
+const importConfig = () => {
+  importConfigModalRef.value?.open(false)
+}
+
+// 步骤接力：从“导入弹窗”跳转到“配置弹窗”
+const handleImportSuccess = (configData) => {
+  // 参数解释：open(isEdit = false, data = configData, isFromImport = true)
+  configModalRef.value?.open(false, configData, true)
+}
+
+// 步骤回退：从“配置弹窗”回到“导入弹窗”
+const handleGoBackToImport = () => {
+  // 传 true 表示保留之前上传的文件、解析结果和映射关系
+  importConfigModalRef.value?.open(true)
 }
 
 // ====================== 数据加载 ======================
