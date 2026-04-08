@@ -4,11 +4,13 @@
     <div v-else-if="error" class="error-placeholder">{{ error }}</div>
     <div v-else-if="items.length === 0" class="empty-placeholder">暂无数据</div>
     <div v-else class="config-grid">
-      <!-- 配置组卡片 -->
+
       <template v-if="type === 'group'">
-        <div v-for="group in items" :key="group.id" class="config-card">
+        <div v-for="group in items" :key="group.id" class="config-card" @click="editGroup(group)">
           <div class="card-header">
-            <h4 class="clickable-title" @click.stop="viewDetail(group)">{{ group.groupName || `配置组 ${group.id}` }}</h4>
+            <h4 class="clickable-title" @click.stop="viewDetail(group)">
+              {{ group.groupName || `配置组 ${group.id}` }}
+            </h4>
             <span :style="{ color: group.isEnabled ? '#52c41a' : '#ff4d4f', fontSize: '12px' }">
               ● {{ group.isEnabled ? '启用' : '禁用' }}
             </span>
@@ -19,32 +21,32 @@
             <p>关联配置数：{{ group.configCount || group.ConfigCount || 0 }}</p>
             <p>排序：{{ group.sortOrder ?? group.SortOrder ?? '-' }}</p>
           </div>
-          <div class="card-actions">
-            <a @click.stop="viewDetail(group)">详情 →</a>
-            <a @click.stop="editGroup(group)">编辑组</a>
+          <div class="card-actions" @click.stop>
+            <a @click="viewDetail(group)">详情 →</a>
+            <a @click="editGroup(group)">编辑组</a>
           </div>
         </div>
       </template>
 
-      <!-- 配置项卡片：悬停显示详细信息 -->
       <template v-else-if="type === 'config'">
         <div v-for="config in items" :key="config.id" class="config-card" @click="editConfig(config)">
           <div class="card-header">
-            <h4 class="clickable-title" @click.stop="viewDetail(config)">{{ config.EqName || config.eqName || '未命名设备' }}</h4>
+            <h4 class="clickable-title" @click.stop="viewDetail(config)">
+              {{ config.EqName || config.eqName || '未命名设备' }}
+            </h4>
             <span :style="{ color: (config.IsEnabled || config.isEnabled) ? '#52c41a' : '#ff4d4f', fontSize: '12px' }">
               ● {{ (config.IsEnabled || config.isEnabled) ? '运行中' : '已禁用' }}
             </span>
           </div>
-          <div class="card-body" @click.stop>
+          <div class="card-body">
             <p>表名：{{ config.TableName || config.tableName || '-' }}</p>
             <p>类型：<span class="ant-tag">{{ config.FileType || 'csv' }}</span></p>
           </div>
           <div class="card-actions" @click.stop>
             <a @click="viewDetail(config)">详情 →</a>
-            <a @click.stop="editConfig(config)">编辑配置</a>
+            <a @click="editConfig(config)">编辑配置</a>
           </div>
 
-          <!-- 悬停时显示的详细信息面板 -->
           <div class="hover-detail">
             <div class="hover-detail-content">
               <div><strong>文件路径规则：</strong>{{ config.FilePathPattern || config.filePathPattern || '-' }}</div>
@@ -56,6 +58,7 @@
           </div>
         </div>
       </template>
+
     </div>
   </div>
 </template>

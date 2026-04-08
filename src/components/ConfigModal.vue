@@ -76,7 +76,7 @@
 
               <div class="form-item" style="margin-top:12px;">
                 <label>存储过程/服务名</label>
-                <input type="text" class="ant-input" v-model="formData.procedureName" placeholder="后处理类型为2时填写" />
+                <input type="text" class="ant-input" v-model="formData.procedureName" placeholder="需进行后处理时填写" />
               </div>
 
               <div class="form-item" style="margin-top:12px; display: flex; flex-direction: column;">
@@ -157,41 +157,36 @@ function open(edit = false, data = null, fromImport = false) {
   // 每次打开时先重置标记
   autoMarkers.value = {}
 
-  if (edit && data) {
-    // 编辑逻辑...
-    formData.value = { ...data } // 假设编辑模式直接赋值
-  } else if (data && !edit) {
-    // 导入过来的数据填充
+  if (data) {
+    // 【核心修复】：不管是编辑还是导入，统一下发映射！兼容后端的大写字段和前端的小写字段
     formData.value = {
-      id: '',
-      eqName: data.eqName || '',
-      tableName: data.TableName || '',
-      filePathPattern: data.FilePathPattern || '',
-      fileNamePattern: data.FileNamePattern || '',
-      fileType: data.FileType || 'csv',
-      headerRow: data.HeaderRow || 1,
-      startRow: data.StartRow || 2,
-      postProcessingType: data.PostProcessingType || 0,
-      procedureName: data.ProcedureName || '',
-      isEnabled: data.IsEnabled !== undefined ? data.IsEnabled : true,
-      extFields: data.ExtFields || '',
-      fieldMappings: typeof data.FieldMappings === 'object'
-        ? JSON.stringify(data.FieldMappings, null, 2)
-        : (data.FieldMappings || '')
+      id: data.id || data.Id || '',
+      eqName: data.eqName || data.EqName || '',
+      tableName: data.tableName || data.TableName || '',
+      filePathPattern: data.filePathPattern || data.FilePathPattern || '',
+      fileNamePattern: data.fileNamePattern || data.FileNamePattern || '',
+      fileType: data.fileType || data.FileType || 'csv',
+      headerRow: data.headerRow || data.HeaderRow || 1,
+      startRow: data.startRow || data.StartRow || 2,
+      postProcessingType: data.postProcessingType ?? data.PostProcessingType ?? 0,
+      procedureName: data.procedureName || data.ProcedureName || '',
+      isEnabled: data.isEnabled ?? data.IsEnabled ?? true,
+      extFields: data.extFields || data.ExtFields || '',
+      fieldMappings: typeof (data.fieldMappings || data.FieldMappings) === 'object'
+        ? JSON.stringify(data.fieldMappings || data.FieldMappings, null, 2)
+        : (data.fieldMappings || data.FieldMappings || '')
     }
 
-    // --- 核心修改：如果是导入，且携带了标记对象 ---
+    // 如果是导入，才处理绿色高亮标记
     if (fromImport && data._autoFilledFields) {
-      // 直接继承第一步传过来的标记
       autoMarkers.value = { ...data._autoFilledFields }
     } else if (fromImport) {
-      // 兼容逻辑：如果没有标记对象，但来自导入，默认让关键字段变绿
       autoMarkers.value = {
-        tableName: !!data.TableName,
-        fileNamePattern: !!data.FileNamePattern,
-        fileType: !!data.FileType,
-        headerRow: true,
-        startRow: true
+        TableName: !!data.TableName,
+        FileNamePattern: !!data.FileNamePattern,
+        FileType: !!data.FileType,
+        HeaderRow: true,
+        StartRow: true
       }
     }
   } else {
@@ -236,9 +231,11 @@ defineExpose({ open })
 
 <style scoped>
 .form-grid { margin-bottom: 16px; }
-.segmented-control { position: relative; display: flex; background-color: #f0f2f5; border-radius: 9999px; padding: 4px; height: 36px; width: 100%; }
+.segmented-control { position: relative; display: flex; background-color: #f0f2f5; border-radius: 9999px; padding: 4px; height: 26px; width: 100%; }
 .segment-pill { position: absolute; top: 4px; left: 0; height: calc(100% - 8px); width: calc(33.333% - 4px); background-color: var(--ant-primary, #52c41a); border-radius: 9999px; transition: left 0.35s cubic-bezier(0.645, 0.045, 0.355, 1); z-index: 1; }
 .segment-options { display: flex; position: relative; z-index: 2; width: 100%; height: 100%; }
 .segment-option { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 500; color: var(--ant-text-secondary); cursor: pointer; transition: color 0.3s ease; border-radius: 9999px; user-select: none; }
 .segment-option.active { color: #ffffff; font-weight: 600; }
+.auto-filled-input { background-color: #f6ffed !important; border-color: #b7eb8f !important; transition: all 0.3s; }
+.auto-filled-input:focus { background-color: #ffffff !important; border-color: var(--ant-primary, #1677ff) !important; box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.2) !important; }
 </style>
