@@ -17,6 +17,14 @@
   --ant-danger: #ff4d4f;
   --ant-purple: #722ed1;
   --ant-cyan: #13c2c2;
+  --ant-success: #52c41a;
+  --ant-error: #ff4d4f;
+  --ant-pink: #eb2f96;
+  --ant-geekblue: #2f54eb;
+  --ant-lime: #a0d911;
+  --ant-gold: #faad14;
+  --ant-volcano: #fa541c;
+  --ant-magenta: #eb2f96;
 }
 
 /* =================================================================
@@ -184,41 +192,89 @@ html, body {
    6. 扩展组件：按钮
 ================================================================= */
 .ant-btn {
-  display: inline-block;
-  font-weight: 400;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 500;
   white-space: nowrap;
   text-align: center;
-  background-image: none;
-  border: 1px solid transparent;
+  border: 1px solid #d9d9d9;
   cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.645, 0.045, 0.355, 1);
-  user-select: none;
+  transition: all 0.2s cubic-bezier(0.645, 0.045, 0.355, 1);
   height: 32px;
-  padding: 4px 15px;
+  padding: 4px 16px;
   font-size: 14px;
-  border-radius: 4px;
+  border-radius: 6px; /* 圆角稍微圆润一点更现代 */
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.015);
 }
 
+/* --- 主色调：Ant 绿 (Primary) --- */
 .ant-btn-primary {
   color: #fff;
-  background: var(--ant-primary);
-  border-color: var(--ant-primary);
+  background: #52c41a;
+  border-color: #52c41a;
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.12);
 }
-
 .ant-btn-primary:hover {
-  background: var(--ant-primary-hover);
-  border-color: var(--ant-primary-hover);
+  background: #73d13d;
+  border-color: #73d13d;
 }
 
-.ant-btn-default {
-  color: var(--ant-text-primary);
-  background: #fff;
-  border-color: #d9d9d9;
+/* --- 渐变紫色：用于“新增/重要” (更深邃专业) --- */
+.ant-btn-gradient-purple {
+  color: #fff;
+  background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%); /* 蓝紫渐变 */
+  border: none;
+}
+.ant-btn-gradient-purple:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
 }
 
-.ant-btn-default:hover {
-  color: var(--ant-primary);
-  border-color: var(--ant-primary);
+/* --- 极客蓝：用于“批量操作/同步” (沉稳) --- */
+.ant-btn-geekblue {
+  color: #2f54eb;
+  background: #f0f5ff;
+  border-color: #adc6ff;
+}
+.ant-btn-geekblue:hover {
+  color: #fff;
+  background: #2f54eb;
+  border-color: #2f54eb;
+}
+
+/* --- 青色：用于“数据刷新/导出/导入” (清爽) --- */
+.ant-btn-cyan {
+  color: #13c2c2;
+  background: #e6fffb;
+  border-color: #87e8de;
+}
+.ant-btn-cyan:hover {
+  color: #fff;
+  background: #13c2c2;
+  border-color: #13c2c2;
+}
+
+/* --- 幽灵/边框模式：用于不那么重要的辅助按钮 --- */
+.ant-btn-ghost-cyan {
+  background: transparent;
+  color: #13c2c2;
+  border-color: #13c2c2;
+}
+.ant-btn-ghost-cyan:hover {
+  background: rgba(19, 194, 194, 0.1);
+}
+
+/* --- 危险色：保持克制 --- */
+.ant-btn-red {
+  color: #ff4d4f;
+  background: #fff1f0;
+  border-color: #ffccc7;
+}
+.ant-btn-red:hover {
+  color: #fff;
+  background: #ff4d4f;
+  border-color: #ff4d4f;
 }
 
 /* =================================================================
@@ -566,36 +622,6 @@ textarea.ant-input {
 }
 .table-container::-webkit-scrollbar-thumb:hover {
   background: var(--ant-primary);
-}
-
-/* =================================================================
-   14. 扩展按钮颜色
-================================================================= */
-.ant-btn-purple {
-  background-color: var(--ant-purple);
-  border-color: var(--ant-purple);
-  color: #fff;
-}
-.ant-btn-purple:hover { background: #9254de; border-color: #9254de; color: #fff; }
-
-.ant-btn-cyan {
-  background-color: var(--ant-cyan);
-  border-color: var(--ant-cyan);
-  color: #fff;
-}
-.ant-btn-cyan:hover { background: #36cfc9; border-color: #36cfc9; color: #fff; }
-
-.ant-btn-orange {
-  background-color: var(--ant-warning);
-  border-color: var(--ant-warning);
-  color: #fff;
-}
-.ant-btn-orange:hover { background: #ffc53d; border-color: #ffc53d; color: #fff; }
-
-/* 映射行特殊样式 */
-.mapping-row.system-field {
-  background-color: #f9f0ff; /* 系统预设字段背景色 */
-  border-left: 4px solid var(--ant-purple);
 }
 
 /* =================================================================

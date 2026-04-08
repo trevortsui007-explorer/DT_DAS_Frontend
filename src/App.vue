@@ -1,10 +1,6 @@
 <template>
   <div class="app-form-wrapper">
-    <StatCards
-      :activeTab="activeTab"
-      :stats="stats"
-      @update:activeTab="handleTabChange"
-    />
+    <StatCards :activeTab="activeTab" :stats="stats" @update:activeTab="handleTabChange" />
     <div class="module-card">
       <div class="header-section">
         <div>
@@ -16,7 +12,9 @@
             v-for="btn in actionButtons"
             :key="btn.text"
             class="ant-btn"
-            :class="{ 'ant-btn-primary': btn.primary }"
+            :class="[
+              btn.btnType ? `ant-btn-${btn.btnType}` : (btn.primary ? 'ant-btn-primary' : 'ant-btn-default')
+            ]"
             @click="btn.handler"
           >
             {{ btn.text }}
@@ -45,6 +43,7 @@
         @view-detail="viewDetail"
         @edit-config="editConfig"
         @edit-group="editGroup"
+        @selection-change="handleSelectionChange"
       />
     </div>
   </div>
@@ -54,6 +53,7 @@
   <GroupModal ref="groupModalRef" @saved="onGroupSaved" />
   <TaskModal ref="taskModalRef" @saved="onTaskSaved" />
   <ImportConfigModal ref="importConfigModalRef" @imported="handleImportSuccess" />
+  <BatchAssignModal ref="assignModalRef" @confirm="handleAssignConfirm" />
 </template>
 
 <script setup>
@@ -66,6 +66,7 @@ import DetailDrawer from './components/DetailDrawer.vue'
 import GroupModal from './components/GroupModal.vue'
 import TaskModal from './components/TaskModal.vue'
 import ImportConfigModal from './components/ImportConfigModal.vue'
+import BatchAssignModal from './components/BatchAssignModal.vue'
 import { fetchTasks, fetchGroups, fetchConfigs } from './api'
 
 // ====================== 组件 refs ======================
@@ -74,6 +75,7 @@ const drawerRef = ref(null)
 const groupModalRef = ref(null)
 const taskModalRef = ref(null)
 const importConfigModalRef = ref(null)
+const assignModalRef = ref(null)
 
 // ====================== 数据状态 ======================
 const activeTab = ref('overview')
@@ -82,11 +84,12 @@ const error = ref('')
 const tasks = ref([])
 const groups = ref([])
 const configs = ref([])
+const selectedIds = ref([])
 
 const stats = computed(() => ({
   tasks: tasks.value.length,
   groups: groups.value.length,
-  configs: configs.value.length
+  configs: configs.value.length,
 }))
 
 const currentTitle = computed(() => {
@@ -94,7 +97,7 @@ const currentTitle = computed(() => {
     overview: '全量采集总览',
     task: '任务监控详情',
     group: '配置组管理',
-    config: '具体配置项'
+    config: '具体配置项',
   }
   return titles[activeTab.value] || ''
 })
@@ -104,7 +107,7 @@ const currentDesc = computed(() => {
     overview: '概览大盘：显示系统整体运行状态与采集指标',
     task: '任务层级：管理采集任务，每个任务关联多个配置组',
     group: '组层级：显示任务下的配置组，每个组关联具体的配置项',
-    config: '原子层级：最底层的采集配置，直接对接物理资源'
+    config: '原子层级：最底层的采集配置，直接对接物理资源',
   }
   return descs[activeTab.value] || ''
 })
@@ -114,22 +117,23 @@ const actionButtons = computed(() => {
   switch (activeTab.value) {
     case 'overview':
       return [
-        { text: '刷新大盘', handler: refreshOverview, primary: false },
-        { text: '导出报告', handler: exportReport, primary: true }
+        { text: '刷新大盘', handler: refreshOverview, btnType: 'cyan' },
+        { text: '导出报告', handler: exportReport, btnType: 'ghost-cyan' },
       ]
     case 'task':
       return [
-        { text: '+ 新建采集任务', handler: openNewTask, primary: true }
+        { text: '+ 新建采集任务', handler: openNewTask, btnType: 'gradient-purple' },
       ]
     case 'group':
       return [
-        { text: '批量同步', handler: batchSyncGroups, primary: false },
-        { text: '+ 新增配置组', handler: openNewGroup, primary: true }
+        { text: '批量同步', handler: batchSyncGroups, btnType: 'geekblue' },
+        { text: '+ 新增配置组', handler: openNewGroup, btnType: 'primary' },
       ]
     case 'config':
       return [
-        { text: '导入配置', handler: importConfig, primary: false },
-        { text: '+ 新增配置项', handler: openNewConfig, primary: true }
+        { text: '批量分配组', handler: openAssignModal, btnType: 'geekblue' },
+        { text: '导入配置', handler: importConfig, btnType: 'cyan' },
+        { text: '+ 新增配置项', handler: openNewConfig, btnType: 'gradient-purple' },
       ]
     default:
       return []
@@ -150,7 +154,7 @@ const batchSyncGroups = () => {
 }
 
 const openNewGroup = () => {
-  groupModalRef.value?.open(false)   // false 表示新建模式
+  groupModalRef.value?.open(false) // false 表示新建模式
 }
 
 // ====================== 配置组相关 ======================
@@ -179,7 +183,7 @@ const editTask = (task) => {
   taskModalRef.value?.open(true, task)
 }
 
-// ====================== Excel/Csv解析相关 ======================
+// ====================== 配置相关：Excel/Csv解析相关 ======================
 // 点击“导入配置”按钮：初始化打开导入弹窗
 const importConfig = () => {
   importConfigModalRef.value?.open(false)
@@ -197,6 +201,27 @@ const handleGoBackToImport = () => {
   importConfigModalRef.value?.open(true)
 }
 
+// 批量分配功能
+const openAssignModal = () => {
+  if (selectedIds.value.length === 0) {
+    alert('请先框选需要分配的配置项！')
+    return
+  }
+  // 传 true 表示保留之前上传的文件、解析结果和映射关系
+  assignModalRef.value.open(selectedIds.value, groups.value)
+}
+
+// 获取传回选择的id
+const handleSelectionChange = (ids) => {
+  selectedIds.value = ids
+}
+
+// 分配完后清空选中状态
+const handleAssignConfirm = () => {
+  loadAllData()
+  selectedIds.value = []
+}
+
 // ====================== 数据加载 ======================
 const loadAllData = async () => {
   loading.value = true
@@ -205,7 +230,7 @@ const loadAllData = async () => {
     const [tasksRes, groupsRes, configsRes] = await Promise.all([
       fetchTasks(),
       fetchGroups(),
-      fetchConfigs()
+      fetchConfigs(),
     ])
     tasks.value = tasksRes.data || []
     groups.value = groupsRes.data || []
@@ -221,6 +246,7 @@ const loadAllData = async () => {
 // ====================== 事件处理 ======================
 const handleTabChange = (tab) => {
   activeTab.value = tab
+  selectedIds.value = []
 }
 
 const editConfig = (config) => {
@@ -252,7 +278,7 @@ onMounted(() => {
   background: #fff;
   border-radius: 12px;
   padding: 24px;
-  box-shadow: 0 1px 2px 0 rgba(0,0,0,0.03);
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
 }
 .header-section {
   display: flex;

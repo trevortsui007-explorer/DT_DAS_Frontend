@@ -93,7 +93,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 
 const props = defineProps({
   type: { type: String, required: true },
@@ -104,45 +104,41 @@ const props = defineProps({
 
 const emit = defineEmits(['view-detail', 'edit-config', 'edit-group', 'selection-change'])
 
-const viewDetail = (item) => emit('view-detail', item)
-const editConfig = (item) => emit('edit-config', item)
-const editGroup = (item) => emit('edit-group', item)
-
-// ================= 框选与多选逻辑 =================
+// ================= 状态管理 =================
 const gridRef = ref(null)
 const isSelecting = ref(false)
-const hasDragged = ref(false) // 用于区分是“点击”还是“拖拽”
+const hasDragged = ref(false)
 const box = ref({ left: 0, top: 0, width: 0, height: 0 })
 let startPos = { x: 0, y: 0 }
 
-// 选中的 ID 集合和拖拽时的预览集合
 const selectedIds = ref(new Set())
 const previewIds = ref(new Set())
+const formatId = (id) => isNaN(Number(id)) ? id : Number(id)
 
-// 点击卡片：如果只是点一下没拖拽，进入编辑；如果是想选中，可以用下面的逻辑调整
+watch(() => props.items, () => {
+  selectedIds.value.clear()
+  emit('selection-change', [])
+})
+
+// ================= 交互逻辑 =================
+
 const handleCardClick = (item, typeStr) => {
   if (hasDragged.value) return
 
-  // 既然写了 toggleSelection，我们可以在点击时触发它，或者直接删掉它
-  // 这里演示：如果用户点击了已经选中的卡片，则切换选中状态；否则执行编辑
-  if (selectedIds.value.has(item.id || item.Id)) {
-    toggleSelection(item.id || item.Id)
-    return
+  const id = formatId(item.id || item.Id)
+
+  // 如果点击时按住了 Ctrl 键，或者该卡片已经被选中，则切换选中状态
+  // 否则执行默认的编辑/详情跳转
+  if (selectedIds.value.has(id)) {
+    selectedIds.value.delete(id)
+    emit('selection-change', Array.from(selectedIds.value))
+  } else {
+    if (typeStr === 'group') emit('edit-group', item)
+    else emit('edit-config', item)
   }
-
-  if (typeStr === 'group') editGroup(item)
-  else editConfig(item)
-}
-
-// 切换某个卡片的选中状态
-const toggleSelection = (id) => {
-  if (selectedIds.value.has(id)) selectedIds.value.delete(id)
-  else selectedIds.value.add(id)
-  emit('selection-change', Array.from(selectedIds.value))
 }
 
 const onMouseDown = (e) => {
-  // 忽略对按钮或文字链接的点击
   if (e.target.tagName === 'A' || e.target.closest('.card-actions')) return
 
   isSelecting.value = true
@@ -150,22 +146,22 @@ const onMouseDown = (e) => {
   previewIds.value.clear()
 
   const rect = gridRef.value.getBoundingClientRect()
-  startPos.x = e.clientX - rect.left + gridRef.value.scrollLeft
-  startPos.y = e.clientY - rect.top + gridRef.value.scrollTop
+  // 考虑滚动条偏移
+  startPos.x = e.clientX - rect.left
+  startPos.y = e.clientY - rect.top
 
   box.value = { left: startPos.x, top: startPos.y, width: 0, height: 0 }
 
   document.addEventListener('mousemove', onMouseMove)
   document.addEventListener('mouseup', onMouseUp)
-  e.preventDefault() // 防止选中文本
 }
 
 const onMouseMove = (e) => {
   if (!isSelecting.value) return
 
   const rect = gridRef.value.getBoundingClientRect()
-  const currentX = e.clientX - rect.left + gridRef.value.scrollLeft
-  const currentY = e.clientY - rect.top + gridRef.value.scrollTop
+  const currentX = e.clientX - rect.left
+  const currentY = e.clientY - rect.top
 
   box.value.left = Math.min(startPos.x, currentX)
   box.value.top = Math.min(startPos.y, currentY)
@@ -173,7 +169,7 @@ const onMouseMove = (e) => {
   box.value.height = Math.abs(currentY - startPos.y)
 
   if (box.value.width > 5 || box.value.height > 5) {
-    hasDragged.value = true // 标记产生了实际拖拽
+    hasDragged.value = true
   }
 
   // 碰撞检测
@@ -181,31 +177,33 @@ const onMouseMove = (e) => {
   previewIds.value.clear()
 
   cards.forEach(card => {
-    const l = card.offsetLeft
-    const t = card.offsetTop
-    const r = l + card.offsetWidth
-    const b = t + card.offsetHeight
+    // 使用 getBoundingClientRect 进行更精确的屏幕坐标碰撞检测
+    const cRect = card.getBoundingClientRect()
+    const containerRect = gridRef.value.getBoundingClientRect()
+
+    const l = cRect.left - containerRect.left
+    const t = cRect.top - containerRect.top
+    const r = l + cRect.width
+    const b = t + cRect.height
 
     const isOverlapped = !(r < box.value.left || l > box.value.left + box.value.width ||
       b < box.value.top || t > box.value.top + box.value.height)
 
     if (isOverlapped) {
       const id = card.getAttribute('data-id')
-      if (id) previewIds.value.add(Number(id))
+      if (id) previewIds.value.add(formatId(id))
     }
   })
 }
 
 const onMouseUp = () => {
-  if (!isSelecting.value) return
   isSelecting.value = false
-
   document.removeEventListener('mousemove', onMouseMove)
   document.removeEventListener('mouseup', onMouseUp)
 
-  if (!hasDragged.value) return // 没拖拽就直接退出，交给 onClick 处理
+  if (!hasDragged.value) return
 
-  // 批量翻转选中状态
+  // 合并预览到选中
   previewIds.value.forEach(id => {
     if (selectedIds.value.has(id)) {
       selectedIds.value.delete(id)
@@ -214,8 +212,7 @@ const onMouseUp = () => {
     }
   })
   previewIds.value.clear()
-
-  // 将选中的 ID 数组发给父组件，父组件可以借此显示“批量删除/批量分配”按钮
+  // 通知父组件
   emit('selection-change', Array.from(selectedIds.value))
 }
 </script>
