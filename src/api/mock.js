@@ -28,7 +28,13 @@ export const mockGroups = {
       groupType: '默认周期执行组',
       sortOrder: 1,
       isEnabled: true,
-      configCount: 3
+      configCount: 3,
+      // 新增：关联配置项的简要信息，用于悬停显示
+      AssociatedConfigs: [
+        { Id: 201, EqName: '温度传感器 A' },
+        { Id: 203, EqName: '电压监控仪 01' },
+        { Id: 204, EqName: '电流互感器 B' }
+      ]
     },
     {
       id: 102,
@@ -37,7 +43,11 @@ export const mockGroups = {
       groupType: '默认周期执行组',
       sortOrder: 2,
       isEnabled: false,
-      configCount: 5
+      configCount: 2,
+      AssociatedConfigs: [
+        { Id: 202, EqName: '压力传感器 B' },
+        { Id: 205, EqName: '流量计 C' }
+      ]
     }
   ]
 }
