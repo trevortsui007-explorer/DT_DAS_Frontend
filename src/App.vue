@@ -28,6 +28,7 @@
         :type="activeTab"
         :tasks="tasks"
         :stats="stats"
+        :allGroups="groups"
         :loading="loading"
         :error="error"
         @edit-task="editTask"
@@ -176,11 +177,11 @@ const onTaskSaved = () => {
 }
 
 const openNewTask = () => {
-  taskModalRef.value?.open(false)
+  taskModalRef.value?.open(false, null, groups.value)
 }
 
 const editTask = (task) => {
-  taskModalRef.value?.open(true, task)
+  taskModalRef.value?.open(true, task, groups.value)
 }
 
 // ====================== 配置相关：Excel/Csv解析相关 ======================

@@ -2,33 +2,31 @@
   <div>
     <div class="ant-modal-mask" :class="{ active: visible }" @click="close"></div>
     <div class="ant-modal-wrap" :class="{ active: visible }">
-      <div class="ant-modal" style="width: 600px;">
-        <div class="ant-modal-header">
-          <span class="ant-modal-title">{{ isEdit ? '编辑任务' : '新建任务' }}</span>
-          <span style="cursor:pointer; float:right;" @click="close">×</span>
-        </div>
-        <div class="ant-modal-body">
+      <div class="ant-modal" style="width: 640px;"> <div class="ant-modal-header">
+        <span class="ant-modal-title">{{ isEdit ? '编辑任务' : '新建任务' }}</span>
+        <span class="close-btn" @click="close">×</span>
+      </div>
+
+        <div class="ant-modal-body scrollable-body">
           <input type="hidden" v-model="formData.id" />
 
           <div class="form-item">
-            <label><span style="color:red;">*</span> 任务名称</label>
+            <label class="required">任务名称</label>
             <input type="text" class="ant-input" v-model="formData.taskName" placeholder="请输入任务名称" />
           </div>
 
-          <div class="form-item" style="margin-top:16px;">
+          <div class="form-item">
             <label>描述</label>
-            <textarea class="ant-input" v-model="formData.description" rows="2" placeholder="可选，描述任务用途"></textarea>
+            <textarea class="ant-input" v-model="formData.description" rows="2" placeholder="描述任务用途"></textarea>
           </div>
 
-          <!-- 任务模式胶囊（独立样式） -->
-          <div class="form-item" style="margin-top:16px;">
+          <div class="form-item">
             <label>任务模式</label>
             <div class="custom-segmented">
               <div class="custom-segmented__pill" :style="{ transform: `translateX(${modePillLeft})` }"></div>
               <div class="custom-segmented__options">
                 <div
-                  v-for="mode in taskModes"
-                  :key="mode.value"
+                  v-for="mode in taskModes" :key="mode.value"
                   class="custom-segmented__option"
                   :class="{ 'custom-segmented__option--active': formData.taskMode === mode.value }"
                   @click="formData.taskMode = mode.value"
@@ -39,11 +37,10 @@
             </div>
           </div>
 
-          <!-- 周期执行：频率设置 -->
-          <div v-if="formData.taskMode === 1" class="form-item" style="margin-top:16px;">
+          <div v-if="formData.taskMode === 1" class="frequency-section">
             <label>执行频率</label>
             <div class="frequency-selector">
-              <select v-model="frequencyPreset" class="ant-input" style="width: 100%;">
+              <select v-model="frequencyPreset" class="ant-input" @change="updateCronFromPreset">
                 <option value="">-- 选择快捷频率 --</option>
                 <option value="daily">每天固定时间</option>
                 <option value="weekly">每周几</option>
@@ -53,60 +50,50 @@
                 <option value="custom">自定义 Cron</option>
               </select>
 
-              <!-- 根据预设显示额外输入 -->
-              <div v-if="frequencyPreset === 'daily'" style="margin-top: 12px;">
-                <label>执行时间 (HH:mm)</label>
+              <div v-if="frequencyPreset === 'daily'" class="preset-input">
                 <input type="time" v-model="dailyTime" class="ant-input" @change="updateCronFromPreset" />
               </div>
-              <div v-else-if="frequencyPreset === 'weekly'" style="margin-top: 12px;">
-                <label>选择星期几</label>
-                <select v-model="weeklyDay" class="ant-input" @change="updateCronFromPreset">
-                  <option value="1">星期一</option>
-                  <option value="2">星期二</option>
-                  <option value="3">星期三</option>
-                  <option value="4">星期四</option>
-                  <option value="5">星期五</option>
-                  <option value="6">星期六</option>
-                  <option value="0">星期日</option>
-                </select>
-                <label style="margin-top:8px;">执行时间 (HH:mm)</label>
-                <input type="time" v-model="weeklyTime" class="ant-input" @change="updateCronFromPreset" />
-              </div>
-              <div v-else-if="frequencyPreset === 'monthly'" style="margin-top: 12px;">
-                <label>每月几号 (1-31)</label>
-                <input type="number" v-model="monthlyDay" min="1" max="31" class="ant-input" @change="updateCronFromPreset" />
-                <label style="margin-top:8px;">执行时间 (HH:mm)</label>
-                <input type="time" v-model="monthlyTime" class="ant-input" @change="updateCronFromPreset" />
-              </div>
-              <div v-else-if="frequencyPreset === 'hourly'" style="margin-top: 12px;">
-                <label>分钟 (0-59)</label>
-                <input type="number" v-model="hourlyMinute" min="0" max="59" class="ant-input" @change="updateCronFromPreset" />
-              </div>
-              <div v-else-if="frequencyPreset === 'minutes'" style="margin-top: 12px;">
-                <label>每隔多少分钟 (1-59)</label>
-                <input type="number" v-model="minutesInterval" min="1" max="59" class="ant-input" @change="updateCronFromPreset" />
-              </div>
-              <div v-else-if="frequencyPreset === 'custom'" style="margin-top: 12px;">
-                <label>Cron 表达式</label>
-                <input type="text" v-model="cronExpression" class="ant-input" placeholder="例如: 0 2 * * *" @input="syncCronFromInput" />
-              </div>
             </div>
-            <!-- 显示当前 Cron 的可读描述 -->
             <div v-if="cronExpression" class="cron-preview">
               <span class="cron-label">当前频率：</span>
               <span class="cron-desc">{{ cronDescription }}</span>
             </div>
           </div>
 
-          <!-- 状态开关 -->
-          <div class="form-item" style="margin-top:16px;">
-            <label>状态</label>
-            <label class="toggle-switch" style="display: block;">
+          <div class="form-item">
+            <div class="label-with-extra">
+              <label>关联配置组</label>
+              <span class="extra-info">已选 {{ formData.groupIds.length }} 个</span>
+            </div>
+            <div class="group-select-grid">
+              <div
+                v-for="group in allGroups"
+                :key="group.id"
+                class="group-checkbox-card"
+                :class="{ 'is-checked': formData.groupIds.includes(group.id) }"
+                @click="toggleGroupSelection(group.id)"
+              >
+                <div class="checkbox-status">
+                  <div class="inner-dot"></div>
+                </div>
+                <div class="group-card-content">
+                  <div class="group-card-name">{{ group.groupName || group.GroupName }}</div>
+                  <div class="group-card-meta">{{ group.configCount || 0 }} 个配置项</div>
+                </div>
+              </div>
+              <div v-if="allGroups.length === 0" class="empty-inline">暂无可用配置组</div>
+            </div>
+          </div>
+
+          <div class="form-item inline-flex">
+            <label>立即启用</label>
+            <label class="toggle-switch">
               <input type="checkbox" v-model="formData.isEnabled" />
               <span class="toggle-slider"></span>
             </label>
           </div>
         </div>
+
         <div class="ant-modal-footer">
           <button class="ant-btn ant-btn-default" @click="close">取消</button>
           <button class="ant-btn ant-btn-primary" @click="save">保存任务</button>
@@ -122,28 +109,12 @@ import { translateCron } from '@/utils/cron'
 
 const emit = defineEmits(['saved'])
 
+// 状态控制
 const visible = ref(false)
 const isEdit = ref(false)
-const formData = ref({
-  id: null,
-  taskName: '',
-  description: '',
-  taskMode: 1,      // 0: 常规任务, 1: 周期执行
-  cronExpression: '',
-  isEnabled: true
-})
+const allGroups = ref([]) // 由 open 方法从外部传入
 
-const taskModes = [
-  { value: 0, label: '常规任务' },
-  { value: 1, label: '周期执行' }
-]
-
-const modePillLeft = computed(() => {
-  const index = taskModes.findIndex(m => m.value === formData.value.taskMode)
-  return `${index * 100}%`  // 两个选项，每个占100%宽度，通过translateX移动
-})
-
-// 频率预设相关
+// 时间相关
 const frequencyPreset = ref('')
 const dailyTime = ref('02:00')
 const weeklyDay = ref('1')
@@ -154,114 +125,95 @@ const hourlyMinute = ref(0)
 const minutesInterval = ref(30)
 const customCron = ref('')
 
-const cronExpression = computed({
-  get: () => formData.value.cronExpression,
-  set: (val) => { formData.value.cronExpression = val }
+const formData = ref({
+  id: null,
+  taskName: '',
+  description: '',
+  taskMode: 1,
+  cronExpression: '',
+  isEnabled: true,
+  groupIds: []
 })
 
-const cronDescription = computed(() => {
-  if (!cronExpression.value) return '未设置'
-  return translateCron(cronExpression.value)
+// 任务模式配置
+const taskModes = [{ value: 0, label: '常规任务' }, { value: 1, label: '周期执行' }]
+const modePillLeft = computed(() => {
+  const index = taskModes.findIndex(m => m.value === formData.value.taskMode)
+  return `${index * 100}%`
 })
 
-// 根据预设更新 cron
+// Cron 预览
+const cronExpression = computed(() => formData.value.cronExpression)
+const cronDescription = computed(() => cronExpression.value ? translateCron(cronExpression.value) : '未设置')
+
+// 切换选择
+const toggleGroupSelection = (id) => {
+  const index = formData.value.groupIds.indexOf(id)
+  if (index > -1) {
+    formData.value.groupIds.splice(index, 1)
+  } else {
+    formData.value.groupIds.push(id)
+  }
+}
+
+// 解析Cron表达式
 function updateCronFromPreset() {
   let cron = ''
   switch (frequencyPreset.value) {
     case 'daily':
-      if (dailyTime.value) {
-        const [hour, minute] = dailyTime.value.split(':')
-        cron = `${minute} ${hour} * * *`
-      }
+      const [dHour, dMin] = dailyTime.value.split(':'); cron = `${dMin} ${dHour} * * *`
       break
     case 'weekly':
-      if (weeklyTime.value) {
-        const [hour, minute] = weeklyTime.value.split(':')
-        cron = `${minute} ${hour} * * ${weeklyDay.value}`
-      }
+      const [wHour, wMin] = weeklyTime.value.split(':'); cron = `${wMin} ${wHour} * * ${weeklyDay.value}`
       break
     case 'monthly':
-      if (monthlyTime.value && monthlyDay.value) {
-        const [hour, minute] = monthlyTime.value.split(':')
-        cron = `${minute} ${hour} ${monthlyDay.value} * *`
-      }
+      const [mHour, mMin] = monthlyTime.value.split(':'); cron = `${mMin} ${mHour} ${monthlyDay.value} * *`
       break
-    case 'hourly':
-      cron = `${hourlyMinute.value} * * * *`
-      break
-    case 'minutes':
-      cron = `*/${minutesInterval.value} * * * *`
-      break
-    case 'custom':
-      cron = customCron.value
-      break
-    default:
-      return
+    case 'hourly': cron = `${hourlyMinute.value} * * * *`; break
+    case 'minutes': cron = `*/${minutesInterval.value} * * * *`; break
+    case 'custom': cron = customCron.value; break
   }
-  if (cron) {
-    formData.value.cronExpression = cron
-  }
+  if (cron) formData.value.cronExpression = cron
 }
 
-function syncCronFromInput() {
-  frequencyPreset.value = 'custom'
-  customCron.value = cronExpression.value
-}
-
-function open(edit = false, data = null) {
+// 打开 Modal
+function open(edit = false, data = null, groups = []) {
   isEdit.value = edit
+  allGroups.value = groups // 接收来自 App.vue 的配置组数据
+
   if (edit && data) {
     formData.value = {
-      id: data.id || data.Id || null,
-      taskName: data.taskName || data.TaskName || '',
-      description: data.description || data.Description || '',
-      taskMode: (data.taskMode ?? data.TaskMode) !== undefined ? (data.taskMode ?? data.TaskMode) : 1,
-      cronExpression: data.cronExpression || data.CronExpression || '',
-      isEnabled: data.isEnabled !== undefined ? data.isEnabled : (data.IsEnabled ?? true)
+      id: data.id || data.Id,
+      taskName: data.taskName || data.TaskName,
+      description: data.description || data.Description,
+      taskMode: data.taskMode ?? data.TaskMode ?? 1,
+      cronExpression: data.cronExpression || data.CronExpression,
+      isEnabled: data.isEnabled ?? data.IsEnabled ?? true,
+      groupIds: data.groupIds || data.GroupIds || [] // 假设后端返回了已关联的ID
     }
-    // 尝试解析现有 cron 到预设（简化，不实现自动匹配，用户可手动选择预设）
   } else {
-    formData.value = {
-      id: null,
-      taskName: '',
-      description: '',
-      taskMode: 1,
-      cronExpression: '',
-      isEnabled: true
-    }
-    frequencyPreset.value = ''
+    formData.value = { id: null, taskName: '', description: '', taskMode: 1, cronExpression: '', isEnabled: true, groupIds: [] }
   }
   visible.value = true
 }
 
-function close() {
-  visible.value = false
-}
+function close() { visible.value = false }
 
 async function save() {
-  if (!formData.value.taskName.trim()) {
-    alert('请填写任务名称')
-    return
-  }
-  if (formData.value.taskMode === 1 && !formData.value.cronExpression) {
-    alert('请设置执行频率')
-    return
-  }
+  if (!formData.value.taskName.trim()) return alert('请填写任务名称')
 
   const payload = {
+    Id: formData.value.id,
     TaskName: formData.value.taskName,
     Description: formData.value.description,
     TaskMode: formData.value.taskMode,
     CronExpression: formData.value.cronExpression,
-    IsEnabled: formData.value.isEnabled
-  }
-  if (isEdit.value && formData.value.id) {
-    payload.Id = formData.value.id
+    IsEnabled: formData.value.isEnabled,
+    GroupIds: formData.value.groupIds // 发送选中的 ID 数组给后端
   }
 
-  // TODO: 替换为真实 API
-  console.log('保存任务', payload)
-  alert('任务保存成功！（实际项目中请替换为接口调用）')
+  console.log('提交任务数据:', payload)
+  alert('保存成功')
   close()
   emit('saved')
 }
@@ -270,67 +222,91 @@ defineExpose({ open })
 </script>
 
 <style scoped>
-/* 独立胶囊样式，不依赖全局 */
-.custom-segmented {
-  position: relative;
+/* 弹窗基础布局 */
+.scrollable-body {
+  max-height: 70vh;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+.form-item { margin-bottom: 20px; }
+.form-item label { display: block; margin-bottom: 8px; font-weight: 500; color: #333; }
+.form-item label.required::before { content: '*'; color: #ff4d4f; margin-right: 4px; }
+
+.label-with-extra { display: flex; justify-content: space-between; align-items: center; }
+.extra-info { font-size: 12px; color: #52c41a; font-weight: normal; }
+
+/* 配置组选择网格 */
+.group-select-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  background: #fbfbfb;
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  padding: 12px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.group-checkbox-card {
   display: flex;
-  background-color: #f0f2f5;
-  border-radius: 9999px;
-  padding: 4px;
-  height: 36px;
-  width: 100%;
+  align-items: center;
+  padding: 10px;
+  background: #fff;
+  border: 1px solid #e8e8e8;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
 }
-.custom-segmented__pill {
-  position: absolute;
-  top: 4px;
-  left: 0;
-  height: calc(100% - 8px);
-  width: calc(50% - 4px);
-  background-color: var(--ant-primary, #52c41a);
-  border-radius: 9999px;
-  transition: transform 0.35s cubic-bezier(0.645, 0.045, 0.355, 1);
-  z-index: 1;
+
+.group-checkbox-card:hover {
+  border-color: #52c41a;
+  background: #f6ffed;
 }
-.custom-segmented__options {
-  display: flex;
-  position: relative;
-  z-index: 2;
-  width: 100%;
+
+.group-checkbox-card.is-checked {
+  border-color: #52c41a;
+  background: #f6ffed;
 }
-.custom-segmented__option {
-  flex: 1;
+
+/* 模拟 Checkbox 样式 */
+.checkbox-status {
+  width: 18px;
+  height: 18px;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  margin-right: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--ant-text-secondary, #8c8c8c);
-  cursor: pointer;
-  transition: color 0.3s ease;
-  border-radius: 9999px;
-  user-select: none;
-}
-.custom-segmented__option--active {
-  color: #ffffff;
-  font-weight: 600;
+  background: #fff;
+  transition: all 0.2s;
 }
 
-.frequency-selector {
-  margin-top: 8px;
+.is-checked .checkbox-status {
+  background: #52c41a;
+  border-color: #52c41a;
 }
-.cron-preview {
-  margin-top: 12px;
-  padding: 8px 12px;
-  background: #f6f6f6;
-  border-radius: 6px;
-  font-size: 13px;
+
+.is-checked .checkbox-status .inner-dot {
+  width: 8px;
+  height: 4px;
+  border-left: 2px solid #fff;
+  border-bottom: 2px solid #fff;
+  transform: rotate(-45deg) translateY(-1px);
 }
-.cron-label {
-  font-weight: 500;
-  color: #333;
-}
-.cron-desc {
-  color: #1677ff;
-  margin-left: 8px;
-}
+
+.group-card-name { font-size: 13px; font-weight: 500; color: #333; }
+.group-card-meta { font-size: 12px; color: #999; margin-top: 2px; }
+
+/* 其他样式 */
+.cron-preview { margin-top: 8px; padding: 8px 12px; background: #f6ffed; border-radius: 4px; border: 1px dashed #b7eb8f; font-size: 12px; }
+.cron-desc { color: #52c41a; font-weight: bold; }
+.inline-flex { display: flex; align-items: center; gap: 12px; }
+.empty-inline { grid-column: span 2; text-align: center; color: #999; padding: 20px; font-size: 13px; }
+
+/* 关闭按钮 */
+.close-btn { font-size: 20px; color: #999; cursor: pointer; transition: color 0.2s; }
+.close-btn:hover { color: #666; }
 </style>
