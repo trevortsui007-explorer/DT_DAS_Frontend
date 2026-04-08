@@ -19,21 +19,25 @@
                 <label><span style="color:red;">*</span> 设备名称 (EqName)</label>
                 <input type="text" class="ant-input" v-model="formData.eqName" placeholder="请输入设备名称" />
               </div>
+
               <div class="form-item" style="margin-top:12px;">
                 <label><span style="color:red;">*</span> 目标表名 (TableName)</label>
                 <input type="text" class="ant-input" :class="{ 'auto-filled-input': isAuto('TableName') }" v-model="formData.tableName" placeholder="请输入数据库目标表名" @input="autoMarkers.TableName = false" />
               </div>
+
               <div class="form-item" style="margin-top:12px;">
                 <label><span style="color:red;">*</span> 文件路径规则</label>
-                <input type="text" class="ant-input" :class="{ 'auto-filled-input': isAuto('FileNamePattern') }" v-model="formData.filePathPattern" placeholder="例如: D:/Desktop/{yyyy}.{MM}.{dd}/" @input="autoMarkers.FileNamePattern = false" />
+                <input type="text" class="ant-input" v-model="formData.filePathPattern" placeholder="例如: D:/Desktop/{yyyy}.{MM}.{dd}/" />
               </div>
+
               <div class="form-item" style="margin-top:12px;">
                 <label>文件名规则</label>
-                <input type="text" class="ant-input" v-model="formData.fileNamePattern" placeholder="例如: Log.csv" />
+                <input type="text" class="ant-input" :class="{ 'auto-filled-input': isAuto('FileNamePattern') }" v-model="formData.fileNamePattern" placeholder="例如: Log.csv" @input="autoMarkers.FileNamePattern = false" />
               </div>
+
               <div class="form-item" style="margin-top:12px;">
                 <label>文件类型</label>
-                <select class="ant-input" v-model="formData.fileType">
+                <select class="ant-input" :class="{ 'auto-filled-input': isAuto('FileType') }" v-model="formData.fileType" @change="autoMarkers.FileType = false">
                   <option value="csv">CSV 文件</option>
                   <option value="txt">TXT 文件</option>
                   <option value="xlsx">Excel 文件</option>
@@ -44,11 +48,12 @@
             <div class="form-column">
               <div class="form-item">
                 <label>表头行号 (HeaderRow)</label>
-                <input type="number" class="ant-input" :class="{ 'auto-filled-input': isAuto('headerRow') }" v-model="formData.headerRow" @input="autoMarkers.headerRow = false" />
+                <input type="number" class="ant-input" :class="{ 'auto-filled-input': isAuto('HeaderRow') }" v-model="formData.headerRow" @input="autoMarkers.HeaderRow = false" />
               </div>
+
               <div class="form-item" style="margin-top:12px;">
                 <label>数据起始行 (StartRow)</label>
-                <input type="number" class="ant-input" v-model="formData.startRow" />
+                <input type="number" class="ant-input" :class="{ 'auto-filled-input': isAuto('StartRow') }" v-model="formData.startRow" @input="autoMarkers.StartRow = false" />
               </div>
 
               <div class="form-item" style="margin-top:12px;">
