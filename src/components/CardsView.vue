@@ -139,16 +139,20 @@ const handleCardClick = (item, typeStr) => {
 }
 
 const onMouseDown = (e) => {
+  // 排除点击按钮或链接的情况
   if (e.target.tagName === 'A' || e.target.closest('.card-actions')) return
 
   isSelecting.value = true
   hasDragged.value = false
   previewIds.value.clear()
 
-  const rect = gridRef.value.getBoundingClientRect()
-  // 考虑滚动条偏移
+  const grid = gridRef.value
+  const container = grid.parentElement // .cards-view 滚动容器
+  const rect = grid.getBoundingClientRect()
+
+  // 核心：点击位置 = (当前鼠标 - Grid相对视口位置) + 容器已滚动距离
   startPos.x = e.clientX - rect.left
-  startPos.y = e.clientY - rect.top
+  startPos.y = e.clientY - rect.top + container.scrollTop
 
   box.value = { left: startPos.x, top: startPos.y, width: 0, height: 0 }
 
@@ -159,10 +163,29 @@ const onMouseDown = (e) => {
 const onMouseMove = (e) => {
   if (!isSelecting.value) return
 
-  const rect = gridRef.value.getBoundingClientRect()
-  const currentX = e.clientX - rect.left
-  const currentY = e.clientY - rect.top
+  const grid = gridRef.value
+  const container = grid.parentElement
+  const gridRect = grid.getBoundingClientRect()
+  const containerRect = container.getBoundingClientRect()
 
+  // 1. 处理自动滚动逻辑
+  const threshold = 40 // 触发距离边缘的距离
+  const scrollSpeed = 15 // 滚动速度
+
+  if (e.clientY > containerRect.bottom - threshold) {
+    container.scrollTop += scrollSpeed // 向下滚
+  } else if (e.clientY < containerRect.top + threshold) {
+    container.scrollTop -= scrollSpeed // 向上滚
+  }
+
+  // 2. 计算当前鼠标在内容区的位置
+  // 限制 currentY 不得小于 0，且不得超过内容的实际高度
+  const scrollHeight = grid.scrollHeight
+  const rawY = e.clientY - gridRect.top + container.scrollTop
+  const currentY = Math.max(0, Math.min(rawY, scrollHeight))
+  const currentX = e.clientX - gridRect.left
+
+  // 3. 更新框选框尺寸
   box.value.left = Math.min(startPos.x, currentX)
   box.value.top = Math.min(startPos.y, currentY)
   box.value.width = Math.abs(currentX - startPos.x)
@@ -172,22 +195,23 @@ const onMouseMove = (e) => {
     hasDragged.value = true
   }
 
-  // 碰撞检测
-  const cards = gridRef.value.querySelectorAll('.config-card')
+  // 4. 碰撞检测（直接比对“内容坐标”）
+  const cards = grid.querySelectorAll('.config-card')
   previewIds.value.clear()
 
   cards.forEach(card => {
-    // 使用 getBoundingClientRect 进行更精确的屏幕坐标碰撞检测
-    const cRect = card.getBoundingClientRect()
-    const containerRect = gridRef.value.getBoundingClientRect()
+    // 获取卡片相对于 Grid 内容顶部的偏移
+    const cardTop = card.offsetTop
+    const cardLeft = card.offsetLeft
+    const cardWidth = card.offsetWidth
+    const cardHeight = card.offsetHeight
 
-    const l = cRect.left - containerRect.left
-    const t = cRect.top - containerRect.top
-    const r = l + cRect.width
-    const b = t + cRect.height
-
-    const isOverlapped = !(r < box.value.left || l > box.value.left + box.value.width ||
-      b < box.value.top || t > box.value.top + box.value.height)
+    const isOverlapped = !(
+      cardLeft + cardWidth < box.value.left ||
+      cardLeft > box.value.left + box.value.width ||
+      cardTop + cardHeight < box.value.top ||
+      cardTop > box.value.top + box.value.height
+    )
 
     if (isOverlapped) {
       const id = card.getAttribute('data-id')
@@ -214,6 +238,22 @@ const onMouseUp = () => {
   previewIds.value.clear()
   // 通知父组件
   emit('selection-change', Array.from(selectedIds.value))
+}
+
+// 查看详情
+const viewDetail = (item) => {
+  // 阻止冒泡，防止触发卡片的点击选中逻辑
+  emit('view-detail', item)
+}
+
+// 编辑组
+const editGroup = (item) => {
+  emit('edit-group', item)
+}
+
+// 编辑配置项
+const editConfig = (item) => {
+  emit('edit-config', item)
 }
 </script>
 
@@ -246,6 +286,8 @@ const onMouseUp = () => {
   cursor: pointer;
   position: relative;
   overflow: hidden;
+  will-change: transform, box-shadow;
+  box-sizing: border-box;
 }
 
 /* 碰到的预览样式 */
@@ -258,12 +300,12 @@ const onMouseUp = () => {
 .config-card.selected {
   border-color: #52c41a;
   background-color: #f6ffed;
+  box-shadow: inset 0 0 0 1px #52c41a;
 }
 
 /* 悬停浮起效果，如果是选中状态就不浮起了，避免乱飞 */
 .config-card:not(.selected):hover {
   box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-  transform: translateY(-2px);
 }
 
 .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
@@ -281,6 +323,7 @@ const onMouseUp = () => {
   border-radius: 6px;
   margin-top: 0;
   padding: 0 12px;
+  box-sizing: border-box;
   transition: max-height 0.4s cubic-bezier(0.33, 1, 0.68, 1), opacity 0.3s ease, margin 0.2s ease;
 }
 /* 注意：为了防止拖拽框选时弹出一大片详情，加了 :not(.preview-toggle) */
@@ -293,4 +336,37 @@ const onMouseUp = () => {
 .hover-detail-content { font-size: 12px; color: #555; line-height: 1.6; }
 .hover-detail-content div { margin-bottom: 6px; word-break: break-all; }
 .hover-detail-content strong { color: #333; margin-right: 6px; }
+
+/* 1. 给最外层容器增加高度限制和滚动条 */
+.cards-view {
+  width: 100%;
+  max-height: calc(100vh - 200px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 4px 4px 24px;
+}
+
+/* 2. 顺手把滚动条美化一下（应用问题2里的拓展样式） */
+.cards-view::-webkit-scrollbar {
+  width: 6px;
+}
+.cards-view::-webkit-scrollbar-track {
+  background: transparent;
+}
+.cards-view::-webkit-scrollbar-thumb {
+  background: #d9d9d9;
+  border-radius: 10px;
+}
+.cards-view::-webkit-scrollbar-thumb:hover {
+  background: #bfbfbf;
+}
+
+/* 原有的网格样式保持不变 */
+.config-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+  position: relative;
+  user-select: none;
+}
 </style>
