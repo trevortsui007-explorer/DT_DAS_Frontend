@@ -1,11 +1,10 @@
 <template>
-  <div class="cards-view">
+  <div class="cards-view"  @mousedown="onMouseDown">
     <div v-if="loading" class="loading-placeholder">加载中...</div>
     <div v-else-if="error" class="error-placeholder">{{ error }}</div>
     <div v-else-if="items.length === 0" class="empty-placeholder">暂无数据</div>
 
-    <div v-else class="config-grid" ref="gridRef" @mousedown="onMouseDown">
-
+    <div v-else class="config-grid" ref="gridRef">
       <div
         v-if="isSelecting"
         class="selection-box"
@@ -142,12 +141,13 @@ const onMouseDown = (e) => {
   // 排除点击按钮或链接的情况
   if (e.target.tagName === 'A' || e.target.closest('.card-actions')) return
 
+  const grid = gridRef.value
+  if (!grid) return
+
   isSelecting.value = true
   hasDragged.value = false
   previewIds.value.clear()
 
-  const grid = gridRef.value
-  const container = grid.parentElement // .cards-view 滚动容器
   const rect = grid.getBoundingClientRect()
 
   startPos.x = e.clientX - rect.left
@@ -178,22 +178,22 @@ const onMouseMove = (e) => {
   }
 
   // 2. 计算当前鼠标在内容区的位置
-  const rawX = e.clientX - gridRect.left
-  const rawY = e.clientY - gridRect.top
-
   // 获取 Grid 的实际物理尺寸作为最高/最低限制
   const maxX = grid.offsetWidth
   const maxY = grid.offsetHeight
 
   // 将当前鼠标坐标严格限制在 [0, max] 范围内，绝不超界
-  const currentX = Math.max(0, Math.min(rawX, maxX))
-  const currentY = Math.max(0, Math.min(rawY, maxY))
+  const currentX = Math.max(0, Math.min(e.clientX - gridRect.left, maxX))
+  const currentY = Math.max(0, Math.min(e.clientY - gridRect.top, maxY))
+
+  const safeStartX = Math.max(0, Math.min(startPos.x, maxX))
+  const safeStartY = Math.max(0, Math.min(startPos.y, maxY))
 
   // 3. 更新框选框尺寸
-  box.value.left = Math.min(startPos.x, currentX)
-  box.value.top = Math.min(startPos.y, currentY)
-  box.value.width = Math.abs(currentX - startPos.x)
-  box.value.height = Math.abs(currentY - startPos.y)
+  box.value.left = Math.min(safeStartX, currentX)
+  box.value.top = Math.min(safeStartY, currentY)
+  box.value.width = Math.abs(currentX - safeStartX)
+  box.value.height = Math.abs(currentY - safeStartY)
 
   if (box.value.width > 5 || box.value.height > 5) {
     hasDragged.value = true
@@ -347,7 +347,8 @@ const editConfig = (item) => {
   max-height: calc(100vh - 200px);
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 4px 4px 24px;
+  padding: 8px 8px 24px;
+  cursor: crosshair;
 }
 
 /* 2. 顺手把滚动条美化一下（应用问题2里的拓展样式） */
@@ -372,5 +373,7 @@ const editConfig = (item) => {
   gap: 16px;
   position: relative;
   user-select: none;
+  min-height: 100%;
+  width: 100%;
 }
 </style>

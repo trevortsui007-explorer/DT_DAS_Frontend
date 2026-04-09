@@ -100,7 +100,7 @@ html, body {
 .header-section {
   margin-bottom: 20px;
   border-left: 4px solid var(--ant-primary);
-  padding-left: 12px;
+  padding-left: 16px;
   display: flex;
   justify-content: space-between;
   align-items: center;
