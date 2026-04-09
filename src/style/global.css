@@ -156,6 +156,9 @@ html, body {
   transition: all 0.3s;
   display: flex;
   flex-direction: column;
+  position: relative;
+  overflow: visible !important;
+  z-index: 1;
 }
 
 .config-card:hover {
@@ -163,6 +166,7 @@ html, body {
   border-color: var(--ant-primary);
   box-shadow: 0 2px 8px rgba(82, 196, 26, 0.15);
   transform: translateY(-2px);
+  z-index: 100;
 }
 
 .config-card h4 {
@@ -175,6 +179,33 @@ html, body {
   margin: 0;
   font-size: 13px;
   color: var(--ant-text-secondary);
+}
+
+.hover-detail {
+  position: absolute;
+  top: calc(100% - 10px);
+  left: 0;
+  right: 0;
+  z-index: 999;
+
+  background: #ffffff;
+  border: 1px solid #52c41a;
+  border-radius: 8px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+
+  max-height: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+}
+
+.config-card:hover .hover-detail {
+  max-height: 300px;
+  opacity: 1;
+  pointer-events: auto;
+  padding: 12px;
+  transform: translateY(0);
 }
 
 /* =================================================================
