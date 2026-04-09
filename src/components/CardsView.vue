@@ -150,9 +150,8 @@ const onMouseDown = (e) => {
   const container = grid.parentElement // .cards-view 滚动容器
   const rect = grid.getBoundingClientRect()
 
-  // 核心：点击位置 = (当前鼠标 - Grid相对视口位置) + 容器已滚动距离
   startPos.x = e.clientX - rect.left
-  startPos.y = e.clientY - rect.top + container.scrollTop
+  startPos.y = e.clientY - rect.top
 
   box.value = { left: startPos.x, top: startPos.y, width: 0, height: 0 }
 
@@ -179,11 +178,16 @@ const onMouseMove = (e) => {
   }
 
   // 2. 计算当前鼠标在内容区的位置
-  // 限制 currentY 不得小于 0，且不得超过内容的实际高度
-  const scrollHeight = grid.scrollHeight
-  const rawY = e.clientY - gridRect.top + container.scrollTop
-  const currentY = Math.max(0, Math.min(rawY, scrollHeight))
-  const currentX = e.clientX - gridRect.left
+  const rawX = e.clientX - gridRect.left
+  const rawY = e.clientY - gridRect.top
+
+  // 获取 Grid 的实际物理尺寸作为最高/最低限制
+  const maxX = grid.offsetWidth
+  const maxY = grid.offsetHeight
+
+  // 将当前鼠标坐标严格限制在 [0, max] 范围内，绝不超界
+  const currentX = Math.max(0, Math.min(rawX, maxX))
+  const currentY = Math.max(0, Math.min(rawY, maxY))
 
   // 3. 更新框选框尺寸
   box.value.left = Math.min(startPos.x, currentX)
