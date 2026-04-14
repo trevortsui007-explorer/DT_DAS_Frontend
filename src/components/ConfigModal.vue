@@ -38,9 +38,9 @@
               <div class="form-item" style="margin-top:12px;">
                 <label>文件类型</label>
                 <select class="ant-input" :class="{ 'auto-filled-input': isAuto('FileType') }" v-model="formData.fileType" @change="autoMarkers.FileType = false">
-                  <option value="csv">CSV 文件</option>
-                  <option value="txt">TXT 文件</option>
-                  <option value="xlsx">Excel 文件</option>
+                  <option value=".csv">CSV 文件</option>
+                  <option value=".txt">TXT 文件</option>
+                  <option value=".xlsx">Excel 文件</option>
                 </select>
               </div>
             </div>
@@ -158,7 +158,7 @@ function open(edit = false, data = null, fromImport = false) {
   autoMarkers.value = {}
 
   if (data) {
-    // 【核心修复】：不管是编辑还是导入，统一下发映射！兼容后端的大写字段和前端的小写字段
+    // 兼容后端的大写字段和前端的小写字段
     formData.value = {
       id: data.id || data.Id || '',
       eqName: data.eqName || data.EqName || '',

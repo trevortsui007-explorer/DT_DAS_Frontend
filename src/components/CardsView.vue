@@ -70,18 +70,25 @@
             </span>
           </div>
           <div class="card-body">
-            <p>表名：{{ config.TableName || config.tableName || '-' }}</p>
-            <p>类型：<span class="ant-tag">{{ config.FileType || config.fileType || 'csv' }}</span></p>
+            <p><strong>文件路径规则：</strong>{{ config.FilePathPattern || config.filePathPattern || '-' }}</p>
+            <p><strong>文件名规则：</strong>{{ config.FileNamePattern || config.fileNamePattern || '-' }}</p>
+            <p><strong>类型：</strong><span class="ant-tag">{{ config.FileType || config.fileType || '-' }}</span></p>
           </div>
           <div class="card-actions" @click.stop>
             <a @click="viewDetail(config)">详情 →</a>
-            <a @click="editConfig(config)">编辑配置</a>
+            <a @click="viewSourceDetail(config)">查看源路径情况</a>
           </div>
 
           <div class="hover-detail">
             <div class="hover-detail-content">
-              <div><strong>文件路径规则：</strong>{{ config.FilePathPattern || config.filePathPattern || '-' }}</div>
-              <div><strong>文件名规则：</strong>{{ config.FileNamePattern || config.fileNamePattern || '-' }}</div>
+              <div><strong>入库表名：</strong>{{ config.TableName || config.tableName || '-' }}</div>
+              <div>
+                <strong>后处理：</strong>
+                <span v-if="config.postProcessingType === 0">无后处理</span>
+                <span v-else-if="config.postProcessingType === 1">存储过程 - {{ config.procedureName || '-' }}</span>
+                <span v-else-if="config.postProcessingType === 2">服务 -  {{ config.serviceName || '-' }}</span>
+                <span v-else>-</span>
+              </div>
               <div><strong>扩展字段：</strong>{{ config.ExtFields || config.extFields || '-' }}</div>
             </div>
           </div>
@@ -255,8 +262,8 @@ const editGroup = (item) => {
   emit('edit-group', item)
 }
 
-// 编辑配置项
-const editConfig = (item) => {
+// 查看源路径情况
+const viewSourceDetail = (item) => {
   emit('edit-config', item)
 }
 </script>

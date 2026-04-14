@@ -1,5 +1,5 @@
 // 是否使用 Mock 数据（开发阶段设为 true）
-const USE_MOCK = true
+const USE_MOCK = false
 
 // 真实后端地址（当 USE_MOCK = false 时使用）
 const BASE_URL = 'http://localhost:31173'
