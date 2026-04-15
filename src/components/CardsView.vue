@@ -108,7 +108,7 @@ const props = defineProps({
   error: String,
 })
 
-const emit = defineEmits(['view-detail', 'edit-config', 'edit-group', 'selection-change'])
+const emit = defineEmits(['view-detail', 'edit-config', 'edit-group', 'selection-change', 'inspect-source'])
 
 // ================= 状态管理 =================
 const gridRef = ref(null)
@@ -264,7 +264,7 @@ const editGroup = (item) => {
 
 // 查看源路径情况
 const viewSourceDetail = (item) => {
-  emit('edit-config', item)
+  emit('inspect-source', item)
 }
 </script>
 
@@ -274,8 +274,8 @@ const viewSourceDetail = (item) => {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 16px;
-  position: relative; /* 为 selection-box 定位 */
-  user-select: none;  /* 拖拽时防文字选中 */
+  position: relative;
+  user-select: none;
 }
 
 /* ================= 框选工具样式 ================= */

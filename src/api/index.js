@@ -143,3 +143,18 @@ export const createTable = (tableName, columns) => {
     body: JSON.stringify({ tableName, columns })
   }).then(res => res.json())
 }
+
+// 获取数据源信息
+export const fetchInspection = async ({configId, startTime, endTime, user, pass}) => {
+  if (USE_MOCK) {
+    return Promise.resolve({
+      success: true
+    })
+  }
+
+  const params = new URLSearchParams({configId, startTime, endTime, user, pass})
+
+  return fetch(
+    `${BASE_URL}/api/files/discovery?${params.toString()}`
+  ).then(res => res.json())
+}
