@@ -179,7 +179,7 @@ const loadAllData = async () => {
     tasks.value = t.data || []
     groups.value = g.data || []
     configs.value = c.data || []
-  } catch (e) {
+  } catch  {
     error.value = '数据加载失败'
   } finally {
     loading.value = false
@@ -230,11 +230,11 @@ const fetchInspectionData = async (row, year, month) => {
 /**
  * 如果需要“强制刷新”功能，可以提供这个方法
  */
-const refreshInspection = (row, year, month) => {
-  const cacheKey = `${row.id}_${year}_${month}`
-  delete inspectionCache.value[cacheKey] // 删除特定缓存
-  fetchInspectionData(row, year, month)
-}
+// const refreshInspection = (row, year, month) => {
+//   const cacheKey = `${row.id}_${year}_${month}`
+//   delete inspectionCache.value[cacheKey] // 删除特定缓存
+//   fetchInspectionData(row, year, month)
+// }
 
 /**
  * 首次打开弹窗
