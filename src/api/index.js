@@ -1,160 +1,231 @@
-// 是否使用 Mock 数据（开发阶段设为 true）
-const USE_MOCK = false
+// src/api/index.js
+import request from './request'
 
-// 真实后端地址（当 USE_MOCK = false 时使用）
-const BASE_URL = 'http://localhost:31173'
-
-export const API = {
-  tasks: `${BASE_URL}/api/data-acquisition/tasks`,
-  groups: `${BASE_URL}/api/file-configs/group`,
-  configs: `${BASE_URL}/api/file-configs`
+// ====================== CONFIG ======================
+export const fetchConfigs = () => {
+  return request.get('/api/file-configs?all=true')
 }
 
-// 导入 Mock 数据
-import { mockTasks, mockGroups, mockConfigs } from './mock'
-
-// 模拟网络延迟
-const delay = (ms = 300) => new Promise(resolve => setTimeout(resolve, ms))
-
-export const fetchTasks = async () => {
-  if (USE_MOCK) {
-    await delay()
-    return mockTasks
-  }
-  return fetch(API.tasks).then(res => res.json())
+export const fetchConfigById = (id) => {
+  return request.get(`/api/file-configs/${id}`)
 }
 
-export const fetchGroups = async () => {
-  if (USE_MOCK) {
-    await delay()
-    return mockGroups
-  }
-  return fetch(API.groups).then(res => res.json())
+export const createConfig = (data) => {
+  return request.post('/api/file-configs', data)
 }
 
-export const fetchConfigs = async () => {
-  if (USE_MOCK) {
-    await delay()
-    return mockConfigs
-  }
-  return fetch(`${API.configs}?all=true`).then(res => res.json())
+export const updateConfig = (id, data) => {
+  return request.put(`/api/file-configs/${id}`, data)
 }
 
-// ====================== 配置组 API ======================
-export const createGroup = async (data) => {
-  if (USE_MOCK) {
-    await delay()
-    // 模拟返回成功
-    return { success: true, data: { id: Date.now(), ...data } }
-  }
-  return fetch(API.groups, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data)
-  }).then(res => res.json())
-}
-
-export const updateGroup = async (id, data) => {
-  if (USE_MOCK) {
-    await delay()
-    return { success: true }
-  }
-  return fetch(`${API.groups}/${id}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data)
-  }).then(res => res.json())
-}
-
-export const deleteGroup = async (id) => {
-  if (USE_MOCK) {
-    await delay()
-    return { success: true }
-  }
-  return fetch(`${API.groups}/${id}`, {
-    method: 'DELETE'
-  }).then(res => res.json())
-}
-
-export const toggleGroupStatus = async (id, isEnabled) => {
-  if (USE_MOCK) {
-    await delay()
-    return { success: true }
-  }
-  // 注意后端 PATCH 接口可能需要 formdata，这里简化处理
+// 启用/禁用配置（FormData）
+export const setConfigStatus = (ids, isEnabled) => {
   const formData = new FormData()
-  formData.append('ids', id)
+  formData.append('ids', ids)
   formData.append('isEnabled', isEnabled)
-  return fetch(`${API.groups}/status/`, {
-    method: 'PATCH',
-    body: formData
-  }).then(res => res.json())
+
+  return request.patch('/api/data-acquisition/tasks/status', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
 }
 
-// ====================== 任务 API ======================
-export const createTask = async (data) => {
-  if (USE_MOCK) {
-    await delay()
-    return { success: true, data: { id: Date.now(), ...data } }
-  }
-  return fetch(API.tasks, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data)
-  }).then(res => res.json())
+// ====================== GROUP ======================
+export const fetchGroups = () => {
+  return request.get('/api/file-configs/group')
 }
 
-export const updateTask = async (id, data) => {
-  if (USE_MOCK) {
-    await delay()
-    return { success: true }
-  }
-  return fetch(`${API.tasks}/${id}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data)
-  }).then(res => res.json())
+export const fetchGroupById = (id) => {
+  return request.get(`/api/file-configs/group/${id}`)
 }
+
+export const createGroup = (data) => {
+  return request.post('/api/file-configs/group', data)
+}
+
+export const updateGroup = (id, data) => {
+  return request.put(`/api/file-configs/group/${id}`, data)
+}
+
+export const deleteGroup = (id) => {
+  return request.delete(`/api/file-configs/group/${id}`)
+}
+
+// group status
+export const setGroupStatus = (ids, isEnabled) => {
+  const formData = new FormData()
+  formData.append('ids', ids)
+  formData.append('isEnabled', isEnabled)
+
+  return request.patch('/api/file-configs/group/status/', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
+}
+
+// group-config relation
+export const bindConfigsToGroup = (groupId, ids) => {
+  return request.post(
+    `/api/file-configs/group/${groupId}/configs`,
+    null,
+    { params: { ids } }
+  )
+}
+
+export const removeConfigsFromGroup = (groupId, ids) => {
+  return request.delete(
+    `/api/file-configs/group/${groupId}/configs`,
+    { params: { ids } }
+  )
+}
+
+// ====================== TASK ======================
+export const fetchTasks = () => {
+  return request.get('/api/data-acquisition/tasks')
+}
+
+export const fetchTaskById = (id) => {
+  return request.get(`/api/data-acquisition/tasks/${id}`)
+}
+
+export const createTask = (data) => {
+  return request.post('/api/data-acquisition/tasks', data)
+}
+
+export const updateTask = (id, data) => {
+  return request.put(`/api/data-acquisition/tasks/${id}`, data)
+}
+
+export const deleteTasks = (ids) => {
+  return request.delete('/api/data-acquisition/tasks', {
+    params: { ids }
+  })
+}
+
+export const setTaskStatus = (ids, isEnabled) => {
+  return request.patch('/api/data-acquisition/tasks/status', null, {
+    params: { ids, isEnabled }
+  })
+}
+
+// task-group
+export const fetchTaskGroups = (taskId) => {
+  return request.get(`/api/data-acquisition/tasks/${taskId}/groups`)
+}
+
+export const assignTaskGroups = (taskId, ids) => {
+  return request.post(
+    `/api/data-acquisition/tasks/${taskId}/groups`,
+    null,
+    { params: { ids } }
+  )
+}
+
+// ====================== FILE ======================
+export const listFiles = (params) => {
+  return request.get('/api/files/list', { params })
+}
+
+export const checkFileExists = (path) => {
+  return request.get('/api/files/exists', {
+    params: { path }
+  })
+}
+
+export const previewFile = (path, top = 10) => {
+  return request.get('/api/files/preview', {
+    params: { path, top }
+  })
+}
+
+// ====================== LOG ======================
+export const createLog = (data) => {
+  return request.post('/api/data-acquisition/log', data)
+}
+
+export const createTaskLog = (data) => {
+  return request.post('/api/data-acquisition/task-log', data)
+}
+
+export const updateTaskLog = (id, data) => {
+  return request.put(`/api/data-acquisition/task-log/${id}`, data)
+}
+
+// ====================== EXECUTION ======================
+export const executeById = (id, processDate) => {
+  return request.post(`/api/data-acquisition/execute-by-id/${id}`, null, {
+    params: { processDate }
+  })
+}
+
+export const executeManual = (id, processDate) => {
+  return request.post(`/api/data-acquisition/execute-manual/${id}`, null, {
+    params: { processDate }
+  })
+}
+
+export const executeByGroup = (groupIds, processDate) => {
+  return request.post('/api/data-acquisition/execute-by-groups', null, {
+    params: { groupIds, processDate }
+  })
+}
+
+export const executeByRange = (id, startDate, endDate) => {
+  return request.post(`/api/data-acquisition/execute-by-range/${id}`, null, {
+    params: { startDate, endDate }
+  })
+}
+
+export const executeConfigsRange = (ids, startDate, endDate) => {
+  return request.post('/api/data-acquisition/execute-configs-range', null, {
+    params: { ids, startDate, endDate }
+  })
+}
+
+// ====================== SQL ======================
+export const bulkImport = (data) => {
+  return request.post('/api/data-acquisition/bulk-import', data)
+}
+
+export const executeSproc = (sproc) => {
+  return request.post('/api/data-acquisition/execute-post-process', null, {
+    params: { sproc }
+  })
+}
+
+// ====================== TABLE 表相关 ======================
 
 // 检查表是否存在
 export const checkTableExists = (tableName) => {
-  if (USE_MOCK) {
-    return Promise.resolve({ exists: false, columns: [] })
-  }
-  return fetch(`/api/table/check?tableName=${tableName}`).then(res => res.json())
+  return request.get('/api/table/check', {
+    params: { tableName }
+  })
 }
 
 // 获取表结构
 export const getTableSchema = (tableName) => {
-  if (USE_MOCK) {
-    return Promise.resolve({ columns: [] })
-  }
-  return fetch(`/api/table/schema?tableName=${tableName}`).then(res => res.json())
+  return request.get('/api/table/schema', {
+    params: { tableName }
+  })
 }
 
 // 创建表
 export const createTable = (tableName, columns) => {
-  if (USE_MOCK) {
-    return Promise.resolve({ success: true })
-  }
-  return fetch(`/api/table/create`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ tableName, columns })
-  }).then(res => res.json())
+  return request.post('/api/table/create', {
+    tableName,
+    columns
+  })
 }
 
-// 获取数据源信息
-export const fetchInspection = async ({configId, startTime, endTime, user, pass}) => {
-  if (USE_MOCK) {
-    return Promise.resolve({
-      success: true
-    })
-  }
 
-  const params = new URLSearchParams({configId, startTime, endTime, user, pass})
+// ====================== 数据源探测 ======================
 
-  return fetch(
-    `${BASE_URL}/api/files/discovery?${params.toString()}`
-  ).then(res => res.json())
+export const fetchInspection = ({ configId, startTime, endTime, user, pass }) => {
+  return request.get('/api/files/discovery', {
+    params: {
+      configId,
+      startTime,
+      endTime,
+      user,
+      pass
+    }
+  })
 }
