@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="app-form-wrapper">
 
     <StatCards
@@ -73,7 +73,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import {
+import message, {
   StatCards, TableView, CardsView,
   ConfigModal, DetailDrawer, GroupModal,
   TaskModal, ImportConfigModal, BatchAssignModal,
@@ -105,8 +105,8 @@ const selectedIds = ref([])
 // 巡检相关状态
 const inspectionVisible = ref(false)
 const inspectionData = ref(null)
-const currentInspectingRow = ref(null) // 记录当前正在巡检的行数据
-const inspectionCache = ref({}) // 格式：{ "configId_year_month": data }
+const currentInspectingRow = ref(null)
+const inspectionCache = ref({})
 
 // ====================== computed ======================
 const stats = computed(() => ({
@@ -127,10 +127,10 @@ const currentTitle = computed(() => ({
 }[activeTab.value]))
 
 const currentDesc = computed(() => ({
-  overview: '概览大盘：显示系统整体运行状态与采集指标',
-  task: '任务层级：管理采集任务，每个任务关联多个配置组',
-  group: '组层级：显示任务下的配置组',
-  config: '原子层级：最底层采集配置',
+  overview: '概览大盘，展示系统整体运行状态与采集指标',
+  task: '任务层级，用于管理采集任务，每个任务可关联多个配置组',
+  group: '分组层级，展示任务下的配置组信息',
+  config: '原子层级，展示最底层采集配置',
 }[activeTab.value]))
 
 // ====================== buttons ======================
@@ -181,6 +181,7 @@ const loadAllData = async () => {
     configs.value = c.data || []
   } catch  {
     error.value = '数据加载失败'
+    message.error(error.value)
   } finally {
     loading.value = false
   }
@@ -224,6 +225,7 @@ const fetchInspectionData = async (row, year, month) => {
 
   } catch (e) {
     console.error('获取巡检数据失败:', e)
+    message.error('巡检数据获取失败')
   }
 }
 
@@ -264,7 +266,8 @@ const handleInspectionMonthChange = ({ year, month }) => {
 // ====================== 数据更新时清除缓存 ======================
 // 当配置保存成功后，建议清空缓存，防止显示旧的巡检状态
 const onConfigSaved = () => {
-  inspectionCache.value = {} // 清空所有巡检缓存
+  inspectionCache.value = {}
+  message.success('配置保存成功')
   loadAllData()
 }
 
@@ -276,22 +279,34 @@ const handleTabChange = (tab) => {
 
 const openNewTask = () => taskModalRef.value?.open(false, null, groups.value)
 const editTask = (task) => taskModalRef.value?.open(true, task, groups.value)
-const onTaskSaved = () => loadAllData()
+const onTaskSaved = () => {
+  message.success('任务保存成功')
+  loadAllData()
+}
 
 const openNewGroup = () => groupModalRef.value?.open(false, null, configs.value)
 const editGroup = (group) => groupModalRef.value?.open(true, group, configs.value)
-const onGroupSaved = () => loadAllData()
-const batchSyncGroups = () => alert('同步中...')
+const onGroupSaved = () => {
+  message.success('分组保存成功')
+  loadAllData()
+}
+const batchSyncGroups = () => message.success('批量同步进行中')
 
 const openNewConfig = () => configModalRef.value?.open(false)
 const editConfig = (config) => configModalRef.value?.open(true, config)
 
 const importConfig = () => importConfigModalRef.value?.open(false)
-const handleImportSuccess = (data) => configModalRef.value?.open(false, data, true)
+const handleImportSuccess = (data) => {
+  message.success('导入成功，请继续确认配置')
+  configModalRef.value?.open(false, data, true)
+}
 const handleGoBackToImport = () => importConfigModalRef.value?.open(true)
 
 const openAssignModal = () => {
-  if (!selectedIds.value.length) return alert('请先选择项')
+  if (!selectedIds.value.length) {
+    message.error('请先选择配置项')
+    return
+  }
   assignModalRef.value.open(selectedIds.value, groups.value)
 }
 
@@ -300,11 +315,12 @@ const handleSelectionChange = (ids) => {
 }
 
 const handleAssignConfirm = () => {
+  message.success('批量分配完成')
   loadAllData()
   selectedIds.value = []
 }
 
-const exportReport = () => alert('导出中...')
+const exportReport = () => message.success('导出功能开发中')
 const viewDetail = (item) => drawerRef.value?.open(item.EqName || item.groupName || '详情', item)
 
 onMounted(() => {
@@ -344,3 +360,5 @@ onMounted(() => {
   gap: 8px;
 }
 </style>
+
+
