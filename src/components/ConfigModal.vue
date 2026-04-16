@@ -91,7 +91,7 @@
 
           <div class="form-item" style="margin-top:12px;">
             <label>扩展字段 (ExtFields)</label>
-            <input type="text" class="ant-input" v-model="formData.extFields" placeholder="例如: row, fullFilePath" />
+            <input type="text" class="ant-input" :class="{ 'auto-filled-input': isAuto('ExtFields') }" v-model="formData.extFields" placeholder="例如: row, fullFilePath" @input="autoMarkers.ExtFields = false" />
           </div>
 
           <div class="form-item" style="margin-top:12px;">
@@ -123,7 +123,8 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
+import * as api from '@/api'
 
 const emit = defineEmits(['saved', 'goBack'])
 
@@ -149,6 +150,34 @@ const pillLeft = computed(() => {
   const index = postTypes.findIndex(t => t.value === formData.value.postProcessingType)
   return `${index * 33.333}%`
 })
+
+// ==================== 后处理类型联动 ExtFields ====================
+watch(() => formData.value.postProcessingType, (newVal) => {
+  // 将当前的扩展字段转为数组处理，去除空格并过滤掉空值
+  let fields = formData.value.extFields
+    ? formData.value.extFields.split(',').map(f => f.trim()).filter(f => f)
+    : [];
+
+  const targetField = 'IsProcessed';
+
+  if (newVal !== 0) {
+    // 切换到非 0 (C#服务或存储过程): 如果没有 IsProcessed，则添加
+    if (!fields.includes(targetField)) {
+      fields.push(targetField);
+    }
+  } else {
+    // 切换到 0 (无操作): 如果有 IsProcessed，则移除
+    fields = fields.filter(f => f !== targetField);
+  }
+
+  // 重新拼回字符串，并更新标记让它也变绿（如果是自动新增的话）
+  formData.value.extFields = fields.join(', ');
+
+  // 如果是由于切换导致的变动，我们可以视其为一种“自动填充”
+  if (newVal !== 0) {
+    autoMarkers.value.ExtFields = true;
+  }
+});
 
 function open(edit = false, data = null, fromImport = false) {
   isEdit.value = edit
@@ -214,16 +243,68 @@ function formatJson() {
     const parsed = JSON.parse(formData.value.fieldMappings)
     formData.value.fieldMappings = JSON.stringify(parsed, null, 2)
   } catch (err) {
-    alert('JSON 格式有误，请检查后再试～')
+    alert('JSON 格式有误，请检查后再试～', err)
   }
 }
 
 async function save() {
-  const payload = { ...formData.value }
-  console.log('保存数据：', payload)
-  alert('保存成功！')
-  close()
-  emit('saved')
+  try {
+    // ================= 1. 校验 =================
+    if (!formData.value.eqName || !formData.value.tableName) {
+      alert('请填写必填项：设备名称和目标表名')
+      return
+    }
+
+    // ================= 2. 构造 payload =================
+    const payload = {
+      EqName: formData.value.eqName,
+      TableName: formData.value.tableName,
+      FilePathPattern: formData.value.filePathPattern,
+      FileNamePattern: formData.value.fileNamePattern,
+      FileType: formData.value.fileType,
+      HeaderRow: Number(formData.value.headerRow) || 0,
+      StartRow: Number(formData.value.startRow) || 1,
+      IsEnabled: formData.value.isEnabled,
+      PostProcessingType: parseInt(formData.value.postProcessingType),
+      ProcedureName: formData.value.procedureName,
+      ExtFields: formData.value.extFields,
+      FieldMappings: formData.value.fieldMappings,
+
+      PostTableName: "",
+      ServiceName:
+        formData.value.postProcessingType === 1
+          ? formData.value.procedureName
+          : "",
+      Flag: "",
+      FlagName: ""
+    }
+
+    console.log('提交数据:', payload)
+
+    // ================= 3. 调用 API =================
+    let result
+
+    if (formData.value.id) {
+      // 更新
+      result = await api.updateConfig(formData.value.id, payload)
+    } else {
+      // 新增
+      result = await api.createConfig(payload)
+    }
+
+    // ================= 4. 处理结果 =================
+    if (result?.code === '1' || result?.info == "新增成功") {
+      alert(`保存成功！ID: ${result.data}`)
+      close()
+      emit('saved')
+    } else {
+      alert('保存失败：' + (result?.msg || result?.message || '未知错误'))
+    }
+
+  } catch (err) {
+    console.error('请求异常:', err)
+    alert('请求失败：' + (err?.message || '服务器错误'))
+  }
 }
 
 defineExpose({ open })

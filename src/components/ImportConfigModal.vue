@@ -128,6 +128,10 @@
                     @click="addSpecialField('row')"
                   >+ row追溯</button>
                   <button
+                    class="ant-btn ant-btn-sm ant-btn-orange"
+                    @click="addSpecialField('path')"
+                  >+ 完整路径追溯</button>
+                  <button
                     class="ant-btn ant-btn-sm ant-btn-cyan"
                     @click="addSpecialField('time')"
                   >+ createdt追溯</button>
@@ -138,7 +142,7 @@
                 </div>
               </div>
 
-              <div class="mapping-list cards-view-wrapper">
+              <div class="mapping-list cards-view-wrapper" style="margin-top: 10px;">
                 <div
                   v-for="(map, idx) in fieldMappings"
                   :key="idx"
@@ -294,7 +298,7 @@ function handleDrop(e) {
 function processFile(file) {
   fileData.value = { fileName: file.name }
   fileName.value = file.name
-  fileType.value = file.name.split('.').pop().toLowerCase()
+  fileType.value = '.' + file.name.split('.').pop().toLowerCase()
 
   // --- 标记这些字段为自动填充状态（触发绿色背景） ---
   if (autoStates.value) {
@@ -358,12 +362,13 @@ function parseSheet() {
     }))
 }
 
-// ==================== 特殊系统字段（第一个版本新增） ====================
+// ==================== 特殊系统字段 ====================
 function addSpecialField(type) {
   const specialMaps = {
-    id: { excelHeader: '', dbField: 'Id', dataType: 'int', isSystem: true, isAutoFilled: true },
+    id: { excelHeader: '', dbField: 'Id', dataType: 'string', isSystem: true, isAutoFilled: true },
     row: { excelHeader: '{row}', dbField: 'row', dataType: 'int', isSystem: true, isAutoFilled: true },
-    time: { excelHeader: '{createdt}', dbField: 'createdt', dataType: 'date', isSystem: true, isAutoFilled: true }
+    time: { excelHeader: '{createdt}', dbField: 'createdt', dataType: 'date', isSystem: true, isAutoFilled: true },
+    path: { excelHeader: '{fullFilePath}', dbField: 'fullFilePath', dataType: 'string', isSystem: true, isAutoFilled: true },
   }
   const newItem = { ...specialMaps[type] }
 
@@ -371,7 +376,7 @@ function addSpecialField(type) {
     // ID 主键通常放在表的第一列
     fieldMappings.value.unshift(newItem)
   } else {
-    // row 和 createdt 追溯字段放在表的最后
+    // row, fullFilePath 和 createdt 追溯字段放在表的最后
     fieldMappings.value.push(newItem)
   }
 }
@@ -389,7 +394,7 @@ function removeMapping(idx) {
   fieldMappings.value.splice(idx, 1)
 }
 
-// ==================== 表结构检查 & 自动匹配（第二个版本原有） ====================
+// ==================== 表结构检查 & 自动匹配 ====================
 async function fetchTableSchema() {
   if (!targetTable.value) return
   tableChecked.value = true
@@ -420,7 +425,7 @@ function autoMatchMappings() {
   })
 }
 
-// ==================== 自动建表（合并两个版本的逻辑） ====================
+// ==================== 自动建表 ====================
 async function createTableFromMapping() {
   if (!targetTable.value) {
     alert('请先输入目标表名')
@@ -466,20 +471,25 @@ async function createTableFromMapping() {
   }
 }
 
-// ==================== 生成最终配置（合并两个版本） ====================
+// ==================== 生成最终配置 ====================
 function generateConfig() {
+  // 提取所有的扩展/追溯字段 (排除 Id 主键)
+  const extFieldsList = fieldMappings.value
+    .filter(m => m.isSystem && m.dbField.toLowerCase() !== 'id' && m.dbField.toLowerCase() !== 'date')
+    .map(m => m.dbField);
+
   const configData = {
     EqName: '',
     TableName: targetTable.value,
     FilePathPattern: '',
-    FileNamePattern: fileName.value,           // 来自第一个版本
-    FileType: fileType.value,                  // 来自第一个版本
+    FileNamePattern: fileName.value,
+    FileType: fileType.value,
     HeaderRow: headerRow.value,
     StartRow: dataStartRow.value,
     PostProcessingType: 0,
     ProcedureName: '',
     IsEnabled: true,
-    ExtFields: '',
+    ExtFields: extFieldsList.join(', '),
 
     _autoFilledFields: {
       TableName: !!targetTable.value,
@@ -487,7 +497,7 @@ function generateConfig() {
       FileType: !!fileType.value,
       HeaderRow: autoStates.value.headerRow,
       StartRow: autoStates.value.dataStartRow,
-      // 字段映射单独处理
+      ExtFields: extFieldsList.length > 0,
       FieldMappings: fieldMappings.value.filter(m => m.isAutoFilled).map(m => m.dbField)
     },
 
