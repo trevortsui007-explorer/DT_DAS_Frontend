@@ -42,8 +42,8 @@
               <div><strong>排序序号：</strong>{{ group.sortOrder ?? group.SortOrder ?? '-' }}</div>
               <div>
                 <strong>包含配置项：</strong>
-                <template v-if="group.AssociatedConfigs && group.AssociatedConfigs.length">
-                  {{ group.AssociatedConfigs.map(c => c.EqName || c.eqName).join(', ') }}
+                <template v-if="group.associatedConfigs && group.associatedConfigs.length">
+                  {{ group.associatedConfigs.map(c => c.eqName).join(', ') }}
                 </template>
                 <template v-else>
                   <span style="color: #999;">暂无关联配置</span>
@@ -354,7 +354,7 @@ const viewSourceDetail = (item) => {
   max-height: calc(100vh - 200px);
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 8px 8px 24px;
+  padding: 8px 8px 60px;
   cursor: crosshair;
 }
 
@@ -373,7 +373,6 @@ const viewSourceDetail = (item) => {
   background: #bfbfbf;
 }
 
-/* 原有的网格样式保持不变 */
 .config-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));

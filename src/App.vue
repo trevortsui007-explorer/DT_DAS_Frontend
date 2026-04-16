@@ -278,8 +278,8 @@ const openNewTask = () => taskModalRef.value?.open(false, null, groups.value)
 const editTask = (task) => taskModalRef.value?.open(true, task, groups.value)
 const onTaskSaved = () => loadAllData()
 
-const openNewGroup = () => groupModalRef.value?.open(false)
-const editGroup = (group) => groupModalRef.value?.open(true, group)
+const openNewGroup = () => groupModalRef.value?.open(false, null, configs.value)
+const editGroup = (group) => groupModalRef.value?.open(true, group, configs.value)
 const onGroupSaved = () => loadAllData()
 const batchSyncGroups = () => alert('同步中...')
 
