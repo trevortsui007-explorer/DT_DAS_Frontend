@@ -51,36 +51,69 @@
           <div class="form-item">
             <div class="label-with-extra">
               <label>关联配置项</label>
-              <span class="extra-info">
-                已选 {{ formData.configIds.length }} 个
-              </span>
             </div>
 
-            <div class="config-select-grid">
-              <div
-                v-for="conf in allConfigs"
-                :key="conf.eqName || conf.EqName"
-                class="config-checkbox-card"
-                :class="{
-                  'is-checked': formData.configIds.includes(conf.eqName || conf.EqName)
-                }"
-                @click="toggleConfig(conf.eqName || conf.EqName)"
-              >
-                <div class="checkbox-status">
-                  <div class="inner-dot"></div>
-                </div>
+            <div class="config-selector-wrapper">
+              <!-- 顶部工具栏 -->
+              <div class="config-toolbar">
+                <input
+                  v-model="searchKeyword"
+                  class="search-input"
+                  placeholder="搜索配置项名称..."
+                />
 
-                <div class="config-card-name">
-                  {{ conf.eqName || conf.EqName }}
+                <div class="select-actions">
+                  <label class="select-all-box" @click="toggleSelectAll">
+                    <input
+                      type="checkbox"
+                      :checked="isAllSelected"
+                      :indeterminate="isIndeterminate"
+                    />
+                    <span>
+                      {{
+                        isAllSelected
+                          ? '取消全选'
+                          : isIndeterminate
+                          ? '部分已选'
+                          : '全选'
+                      }}
+                    </span>
+                  </label>
+
+                  <span class="selected-count">
+                    已选 {{ formData.configIds.length }} 项
+                  </span>
                 </div>
               </div>
 
-              <div v-if="allConfigs.length === 0" class="empty-inline">
-                暂无可用配置项
+              <!-- 配置列表 -->
+              <div class="config-select-grid">
+                <div
+                  v-for="conf in filteredConfigs"
+                  :key="conf.eqName || conf.EqName"
+                  class="config-checkbox-card"
+                  :class="{
+                    'is-checked': formData.configIds.includes(
+                      conf.eqName || conf.EqName
+                    )
+                  }"
+                  @click="toggleConfig(conf.eqName || conf.EqName)"
+                >
+                  <div class="checkbox-status">
+                    <div class="inner-dot"></div>
+                  </div>
+
+                  <div class="config-card-name">
+                    {{ conf.eqName || conf.EqName }}
+                  </div>
+                </div>
+
+                <div v-if="filteredConfigs.length === 0" class="empty-inline">
+                  暂无匹配项
+                </div>
               </div>
             </div>
           </div>
-
         </div>
 
         <!-- Footer -->
@@ -95,12 +128,13 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 
 const emit = defineEmits(['saved'])
 
 const visible = ref(false)
 const isEdit = ref(false)
+const searchKeyword = ref('')
 
 const allConfigs = ref([])
 
@@ -113,6 +147,62 @@ const formData = ref({
   isEnabled: true,
   configIds: []
 })
+
+const filteredConfigs = computed(() => {
+  const keyword = searchKeyword.value.trim().toLowerCase()
+
+  if (!keyword) return allConfigs.value
+
+  return allConfigs.value.filter(conf =>
+    (conf.eqName || conf.EqName || '')
+      .toLowerCase()
+      .includes(keyword)
+  )
+})
+
+const isAllSelected = computed(() => {
+  return (
+    filteredConfigs.value.length > 0 &&
+    filteredConfigs.value.every(conf =>
+      formData.value.configIds.includes(
+        conf.eqName || conf.EqName
+      )
+    )
+  )
+})
+
+const isIndeterminate = computed(() => {
+  const selectedCount = filteredConfigs.value.filter(conf =>
+    formData.value.configIds.includes(
+      conf.eqName || conf.EqName
+    )
+  ).length
+
+  return (
+    selectedCount > 0 &&
+    selectedCount < filteredConfigs.value.length
+  )
+})
+
+const toggleSelectAll = () => {
+  const visibleIds = filteredConfigs.value.map(
+    conf => conf.eqName || conf.EqName
+  )
+
+  if (isAllSelected.value) {
+    formData.value.configIds =
+      formData.value.configIds.filter(
+        id => !visibleIds.includes(id)
+      )
+  } else {
+    const merged = new Set([
+      ...formData.value.configIds,
+      ...visibleIds
+    ])
+
+    formData.value.configIds = [...merged]
+  }
+}
 
 /* ========================
    选择配置项
@@ -196,6 +286,18 @@ defineExpose({ open })
 </script>
 
 <style scoped>
+.ant-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ant-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .scrollable-body {
   max-height: 70vh;
   overflow-y: auto;
@@ -300,5 +402,42 @@ defineExpose({ open })
 .close-btn {
   font-size: 20px;
   cursor: pointer;
+}
+
+.config-selector-wrapper {
+  border: 1px solid #eee;
+  border-radius: 8px;
+  background: #fafafa;
+  padding: 12px;
+}
+
+.config-toolbar {
+  margin-bottom: 12px;
+}
+
+.search-input {
+  width: 95%;
+  padding: 8px 12px;
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  margin-bottom: 10px;
+}
+
+.select-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.select-all-box {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.selected-count {
+  font-size: 12px;
+  color: #52c41a;
 }
 </style>
