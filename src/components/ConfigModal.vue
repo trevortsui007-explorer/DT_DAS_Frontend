@@ -293,8 +293,8 @@ async function save() {
     }
 
     // ================= 4. 处理结果 =================
-    if (result?.code === '1' || result?.info == "新增成功") {
-      alert(`保存成功！ID: ${result.data}`)
+    if (result?.code === '1' || result?.info == "新增成功" || result?.info == "更新成功" ) {
+      alert(`保存成功！ID: ${result.data || formData.value.id}`)
       close()
       emit('saved')
     } else {

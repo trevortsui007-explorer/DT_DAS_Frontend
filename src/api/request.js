@@ -5,7 +5,7 @@ import { mockRequest } from './mock'
 const USE_MOCK = false
 
 const request = axios.create({
-  baseURL: 'http://localhost:31173',
+  baseURL: '', // http://localhost:31173
   timeout: 15000
 })
 
