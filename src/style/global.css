@@ -12,8 +12,6 @@
   --ant-text-secondary: rgba(0, 0, 0, 0.45);
   --shadow-base: 0 4px 20px rgba(0, 0, 0, 0.04);
   --shadow-float: 0 6px 16px rgba(0, 0, 0, 0.08);
-  --ant-blue: #1677ff;
-  --ant-cyan: #13c2c2;
 }
 
 /* =================================================================
@@ -228,73 +226,148 @@ html, body {
   box-shadow: 0 2px 0 rgba(0, 0, 0, 0.015);
 }
 
+.ant-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+/* 如果只有图标没有文字，可以去掉 gap */
+.ant-btn:empty {
+  gap: 0;
+}
+
 /* --- 主色调：Ant 绿 (Primary) --- */
 .ant-btn-primary {
   color: #fff;
   background: #52c41a;
   border-color: #52c41a;
-  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.12);
 }
 .ant-btn-primary:hover {
   background: #73d13d;
   border-color: #73d13d;
 }
 
-/* --- 渐变紫色：用于“新增/重要” (更深邃专业) --- */
-.ant-btn-gradient-purple {
+/* --- 紫色 (Purple)：用于新增/重要 --- */
+.ant-btn-purple {
   color: #fff;
-  background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%); /* 蓝紫渐变 */
-  border: none;
+  background: #AC92EC;
+  border-color: #AC92EC;
 }
-.ant-btn-gradient-purple:hover {
-  opacity: 0.9;
-  transform: translateY(-1px);
+.ant-btn-purple:hover {
+  background: #967ADC;
+  border-color: #967ADC;
 }
 
-/* --- 极客蓝：用于“批量操作/同步” (沉稳) --- */
-.ant-btn-geekblue {
-  color: #2f54eb;
-  background: #f0f5ff;
-  border-color: #adc6ff;
-}
-.ant-btn-geekblue:hover {
+/* --- 蓝色 (Blue)：用于批量/同步 --- */
+.ant-btn-blue {
   color: #fff;
-  background: #2f54eb;
-  border-color: #2f54eb;
+  background: #5D9CEC;
+  border-color: #5D9CEC;
+}
+.ant-btn-blue:hover {
+  background: #4A89DC;
+  border-color: #4A89DC;
 }
 
-/* --- 青色：用于“数据刷新/导出/导入” (清爽) --- */
-.ant-btn-cyan {
-  color: #13c2c2;
-  background: #e6fffb;
-  border-color: #87e8de;
-}
-.ant-btn-cyan:hover {
+/* --- 青色 (Aqua)：用于数据操作/导出 --- */
+.ant-btn-aqua {
   color: #fff;
-  background: #13c2c2;
-  border-color: #13c2c2;
+  background: #4FC1E9;
+  border-color: #4FC1E9;
+}
+.ant-btn-aqua:hover {
+  background: #3BAFDA;
+  border-color: #3BAFDA;
 }
 
-/* --- 幽灵/边框模式：用于不那么重要的辅助按钮 --- */
-.ant-btn-ghost-cyan {
-  background: transparent;
-  color: #13c2c2;
-  border-color: #13c2c2;
-}
-.ant-btn-ghost-cyan:hover {
-  background: rgba(19, 194, 194, 0.1);
-}
-
-/* --- 危险色：保持克制 --- */
+/* --- 红色 (Red)：用于危险/删除 --- */
 .ant-btn-red {
-  color: #ff4d4f;
-  background: #fff1f0;
-  border-color: #ffccc7;
+  color: #fff;
+  background: #ED5565;
+  border-color: #ED5565;
 }
 .ant-btn-red:hover {
+  background: #DA4453;
+  border-color: #DA4453;
+}
+
+/* --- 薄荷绿 (Mint) --- */
+.ant-btn-mint {
   color: #fff;
-  background: #ff4d4f;
-  border-color: #ff4d4f;
+  background: #48CFAD;
+  border-color: #48CFAD;
+}
+.ant-btn-mint:hover {
+  background: #37BC9B;
+  border-color: #37BC9B;
+}
+
+/* --- 青草绿 (Green)：用于成功/完成 --- */
+.ant-btn-green {
+  color: #fff;
+  background: #A0D468;
+  border-color: #A0D468;
+}
+.ant-btn-green:hover {
+  background: #8CC152;
+  border-color: #8CC152;
+}
+
+/* --- 橙色 (Orange) --- */
+.ant-btn-orange {
+  color: #fff;
+  background: #FC6E51;
+  border-color: #FC6E51;
+}
+.ant-btn-orange:hover {
+  background: #E9573F;
+  border-color: #E9573F;
+}
+
+/* --- 黄色 (Yellow)：用于警告 --- */
+.ant-btn-yellow {
+  color: #fff;
+  background: #FFCE54;
+  border-color: #FFCE54;
+}
+.ant-btn-yellow:hover {
+  background: #F6BB42;
+  border-color: #F6BB42;
+}
+
+/* --- 浅灰色 (Light Gray) --- */
+.ant-btn-lightgray {
+  color: #fff;
+  background: #F5F7FA;
+  border-color: #F5F7FA;
+}
+.ant-btn-lightgray:hover {
+  background: #E6E9ED;
+  border-color: #E6E9ED;
+}
+
+/* --- 灰色 (Gray) --- */
+.ant-btn-gray {
+  color: #fff;
+  background: #CCD1D9;
+  border-color: #CCD1D9;
+}
+.ant-btn-gray:hover {
+  background: #AAB2BD;
+  border-color: #AAB2BD;
+}
+
+/* --- 浅灰色 (Dark Gray) --- */
+.ant-btn-darkgray {
+  color: #fff;
+  background: #656D78;
+  border-color: #656D78;
+}
+.ant-btn-darkgray:hover {
+  background: #434A54;
+  border-color: #434A54;
 }
 
 /* 按钮组容器 */

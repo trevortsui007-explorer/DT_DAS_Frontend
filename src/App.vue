@@ -25,7 +25,8 @@
                 :class="getBtnClass(btn)"
                 @click="btn.handler"
               >
-                {{ btn.text }}
+                <component v-if="btn.icon" :is="btn.icon" />
+                <span>{{ btn.text }}</span>
               </button>
             </div>
 
@@ -35,7 +36,8 @@
               :class="getBtnClass(item)"
               @click="item.handler"
             >
-              {{ item.text }}
+              <component v-if="item.icon" :is="item.icon" />
+              <span>{{ item.text }}</span>
             </button>
           </template>
         </div>
@@ -93,6 +95,20 @@ import message, {
   InspectionModal
 } from './components'
 
+import {
+  ReloadOutlined,
+  ExportOutlined,
+  PlayCircleOutlined,
+  PauseCircleOutlined,
+  PlusOutlined,
+  SyncOutlined,
+  CloudUploadOutlined,
+  PartitionOutlined,
+  DeleteOutlined,
+  SelectOutlined,
+  FieldTimeOutlined,
+} from '@ant-design/icons-vue';
+
 import * as api from './api'
 
 // ====================== refs ======================
@@ -146,7 +162,7 @@ const currentDesc = computed(() => ({
   config: '原子层级，展示最底层采集配置',
 }[activeTab.value]))
 
-// ====================== data loader ======================
+// ====================== Overview 界面 ======================
 const loadAllData = async () => {
   loading.value = true
   error.value = ''
@@ -168,11 +184,66 @@ const loadAllData = async () => {
   }
 }
 
-// ====================== inspection logic ======================
+const exportReport = () => message.success('导出功能开发中')
 
-/**
- * 核心方法：带缓存功能的获取数据
- */
+// ====================== Task 界面 ======================
+const openNewTask = () => taskModalRef.value?.open(false, null, groups.value)
+const editTask = (task) => taskModalRef.value?.open(true, task, groups.value)
+const onTaskSaved = () => {
+  message.success('任务保存成功')
+  loadAllData()
+}
+
+const deleteTask = () => console.log('删除任务')
+
+// ====================== Group 界面 ======================
+const openNewGroup = () => groupModalRef.value?.open(false, null, configs.value)
+const editGroup = (group) => groupModalRef.value?.open(true, group, configs.value)
+const onGroupSaved = () => {
+  message.success('分组保存成功')
+  loadAllData()
+}
+
+const deleteGroup = () => message.success('删除配置组')
+
+// 批量同步
+const batchSyncGroups = () => message.success('批量同步进行中')
+
+// ====================== Config 界面 ======================
+const openNewConfig = () => configModalRef.value?.open(false)
+const editConfig = (config) => configModalRef.value?.open(true, config)
+// 当配置保存成功后，建议清空缓存，防止显示旧的巡检状态
+const onConfigSaved = () => {
+  inspectionCache.value = {}
+  message.success('配置保存成功')
+  loadAllData()
+}
+const deleteConfig = () => console.log('删除配置')
+
+// 导入配置
+const importConfig = () => importConfigModalRef.value?.open(false)
+const handleImportSuccess = (data) => {
+  message.success('导入成功，请继续确认配置')
+  configModalRef.value?.open(false, data, true)
+}
+const handleGoBackToImport = () => importConfigModalRef.value?.open(true)
+
+// 批量归组
+const openAssignModal = () => {
+  if (!selectedIds.value.length) {
+    message.error('请先选择配置项')
+    return
+  }
+  assignModalRef.value.open(selectedIds.value, groups.value)
+}
+const handleAssignConfirm = () => {
+  message.success('批量分配完成')
+  loadAllData()
+  selectedIds.value = []
+}
+
+// ====================== 卡片功能（Config)：源路径检视 逻辑 ======================
+// 核心方法：带缓存功能的获取数据
 const fetchInspectionData = async (row, year, month) => {
   // 1. 生成唯一的缓存 Key
   const cacheKey = `${row.id}_${year}_${month}`
@@ -219,9 +290,7 @@ const fetchInspectionData = async (row, year, month) => {
 //   fetchInspectionData(row, year, month)
 // }
 
-/**
- * 首次打开弹窗
- */
+// 首次打开弹窗
 const openInspection = async (row) => {
   currentInspectingRow.value = row
   const now = new Date()
@@ -235,101 +304,93 @@ const openInspection = async (row) => {
   inspectionVisible.value = true
 }
 
-/**
- * 切换月份
- */
+// 切换月份
 const handleInspectionMonthChange = ({ year, month }) => {
   if (currentInspectingRow.value) {
     fetchInspectionData(currentInspectingRow.value, year, month)
   }
 }
 
-// ====================== 数据更新时清除缓存 ======================
-// 当配置保存成功后，建议清空缓存，防止显示旧的巡检状态
-const onConfigSaved = () => {
-  inspectionCache.value = {}
-  message.success('配置保存成功')
-  loadAllData()
-}
-
-// ====================== Other Handlers (Tab, Task, Group, etc.) ======================
+// ====================== Tab 切换 ======================
 const handleTabChange = (tab) => {
   activeTab.value = tab
   selectedIds.value = []
 }
 
-const openNewTask = () => taskModalRef.value?.open(false, null, groups.value)
-const editTask = (task) => taskModalRef.value?.open(true, task, groups.value)
-const onTaskSaved = () => {
-  message.success('任务保存成功')
-  loadAllData()
-}
+// ====================== 卡片 相关 ======================
+// 查看
+const viewDetail = (item) => drawerRef.value?.open(item.EqName || item.groupName || '详情', item)
 
-const startTask = () => console.log('任务开启...')
-const pauseTask = () => console.log('任务暂停...')
-
-const openNewGroup = () => groupModalRef.value?.open(false, null, configs.value)
-const editGroup = (group) => groupModalRef.value?.open(true, group, configs.value)
-const onGroupSaved = () => {
-  message.success('分组保存成功')
-  loadAllData()
-}
-const batchSyncGroups = () => message.success('批量同步进行中')
-
-const openNewConfig = () => configModalRef.value?.open(false)
-const editConfig = (config) => configModalRef.value?.open(true, config)
-
-const importConfig = () => importConfigModalRef.value?.open(false)
-const handleImportSuccess = (data) => {
-  message.success('导入成功，请继续确认配置')
-  configModalRef.value?.open(false, data, true)
-}
-const handleGoBackToImport = () => importConfigModalRef.value?.open(true)
-
-const openAssignModal = () => {
-  if (!selectedIds.value.length) {
-    message.error('请先选择配置项')
-    return
-  }
-  assignModalRef.value.open(selectedIds.value, groups.value)
-}
-
+// 选择
 const handleSelectionChange = (ids) => {
   selectedIds.value = ids
 }
 
-const handleAssignConfirm = () => {
-  message.success('批量分配完成')
-  loadAllData()
-  selectedIds.value = []
-}
+// ====================== 采集 相关 ======================
+const handleAcquisition = () => message.success('采集成功')
+const handleTimeRangeAcquisition = () => message.success('采集成功')
 
-const exportReport = () => message.success('导出功能开发中')
-const viewDetail = (item) => drawerRef.value?.open(item.EqName || item.groupName || '详情', item)
+// ====================== 启停 相关 ======================
+const startTask = () => message.success('任务开启...')
+const pauseTask = () => message.success('任务暂停...')
 
-// ====================== buttons ======================
+const startGroup = () => message.success('配置组开启...')
+const pauseGroup = () => message.success('配置组暂停...')
+
+const startConfig = () => message.success('配置开启')
+const pauseConfig = () => message.success('配置暂停')
+
+// ====================== 按钮 相关 ======================
 // 1. 按钮配置表
 const BUTTON_CONFIG_MAP = {
   overview: [
-    { text: '刷新大盘', handler: loadAllData, btnType: 'cyan' },
-    { text: '导出报告', handler: exportReport, btnType: 'ghost-cyan' },
+    { text: '刷新大盘', handler: loadAllData, btnType: 'primary', icon: ReloadOutlined },
+    { text: '导出报告', handler: exportReport, btnType: 'aqua', icon: ExportOutlined },
   ],
   task: [
-    // 按钮组：开启和暂停贴在一起
     [
-      { text: '开启', handler: startTask, btnType: 'primary' },
-      { text: '暂停', handler: pauseTask, btnType: 'default' },
+      { text: '新建任务', handler: openNewTask, btnType: 'primary', icon: PlusOutlined },
+      { text: '删除任务', handler: deleteTask, btnType: 'red', icon: DeleteOutlined },
     ],
-    { text: '+ 新建任务', handler: openNewTask, btnType: 'gradient-purple' },
+    [
+      { text: '开启', handler: startTask, btnType: 'primary', icon: PlayCircleOutlined },
+      { text: '暂停', handler: pauseTask, btnType: 'darkgray', icon: PauseCircleOutlined },
+    ],
+    [
+      { text: '今日采集', handler: handleAcquisition, btnType: 'aqua', icon: SelectOutlined },
+      { text: '时间段采集', handler: handleTimeRangeAcquisition, btnType: 'blue', icon: FieldTimeOutlined },
+    ],
   ],
   group: [
-    { text: '批量同步', handler: batchSyncGroups, btnType: 'geekblue' },
-    { text: '+ 新增组', handler: openNewGroup, btnType: 'primary' },
+    [
+      { text: '新增组', handler: openNewGroup, btnType: 'primary', icon: PlusOutlined },
+      { text: '删除组', handler: deleteGroup, btnType: 'red', icon: DeleteOutlined },
+    ],
+    [
+      { text: '开启', handler: startGroup, btnType: 'primary', icon: PlayCircleOutlined },
+      { text: '暂停', handler: pauseGroup, btnType: 'darkgray', icon: PauseCircleOutlined },
+    ],
+    [
+      { text: '今日采集', handler: handleAcquisition, btnType: 'aqua', icon: SelectOutlined },
+      { text: '时间段采集', handler: handleTimeRangeAcquisition, btnType: 'blue', icon: FieldTimeOutlined },
+    ],
+    { text: '批量同步', handler: batchSyncGroups, btnType: 'green', icon: SyncOutlined },
   ],
   config: [
-    { text: '批量分配', handler: openAssignModal, btnType: 'geekblue' },
-    { text: '导入配置', handler: importConfig, btnType: 'cyan' },
-    { text: '+ 新增配置', handler: openNewConfig, btnType: 'gradient-purple' },
+    [
+      { text: '导入配置', handler: importConfig, btnType: 'aqua', icon: CloudUploadOutlined },
+      { text: '新增配置', handler: openNewConfig, btnType: 'primary', icon: PlusOutlined },
+      { text: '删除配置', handler: deleteConfig, btnType: 'red', icon: DeleteOutlined },
+    ],
+    [
+      { text: '开启', handler: startConfig, btnType: 'primary', icon: PlayCircleOutlined },
+      { text: '暂停', handler: pauseConfig, btnType: 'darkgray', icon: PauseCircleOutlined },
+    ],
+    [
+      { text: '今日采集', handler: handleAcquisition, btnType: 'aqua', icon: SelectOutlined },
+      { text: '时间段采集', handler: handleTimeRangeAcquisition, btnType: 'blue', icon: FieldTimeOutlined },
+    ],
+    { text: '批量归组', handler: openAssignModal, btnType: 'green', icon: PartitionOutlined },
   ],
 };
 
