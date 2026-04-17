@@ -2,7 +2,7 @@
 const delay = (data, time = 300) =>
   new Promise(resolve => setTimeout(() => resolve(data), time))
 
-const getIdFromUrl = (url) => Number(url.split('/').pop())
+const getIdFromUrl = (url) => Number(url.split('?')[0].split('/').pop())
 
 // ====================== Mock 数据（扩展版） ======================
 
@@ -588,19 +588,24 @@ export const mockConfigs = {
 // ====================== Mock 核心请求处理 ======================
 export const mockRequest = (config) => {
   const { url, method, data } = config
+  const pathname = url.split('?')[0]
+
+  if (pathname === '/api/file-configs/group' && method === 'get') {
+    return delay({ data: mockGroups.data })
+  }
 
   // ====================== CONFIG ======================
-  if (url === '/api/file-configs' && method === 'get') {
+  if (pathname === '/api/file-configs' && method === 'get') {
     return delay({ data: mockConfigs.data })
   }
 
-  if (url.startsWith('/api/file-configs/') && method === 'get') {
+  if (pathname.startsWith('/api/file-configs/') && method === 'get') {
     const id = getIdFromUrl(url)
     const item = mockConfigs.data.find(i => i.Id === id)
     return delay({ data: item })
   }
 
-  if (url === '/api/file-configs' && method === 'post') {
+  if (pathname === '/api/file-configs' && method === 'post') {
     const newItem = {
       ...JSON.parse(data),
       Id: Date.now()
