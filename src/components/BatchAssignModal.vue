@@ -7,8 +7,8 @@
           <span class="ant-modal-title">分配至配置组</span>
           <span style="cursor:pointer; float:right;" @click="close">×</span>
         </div>
-        <div class="ant-modal-body">
-          <p style="margin-bottom: 12px; color: #666;">
+        <div class="ant-modal-body" style="padding-top: 10px;">
+          <p style="margin-bottom: 12px; margin-top: 8px; color: #666;">
             已选择 <strong style="color: #1677ff;">{{ targetItemIds.length }}</strong> 个配置项，请选择目标组：
           </p>
           <div class="group-list-selector">
@@ -88,4 +88,11 @@ defineExpose({ open })
 .group-select-item.active { background: #e6f7ff; border-left: 4px solid #1677ff; }
 .group-name { font-weight: 500; }
 .group-meta { font-size: 12px; color: #999; }
+
+.ant-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 </style>

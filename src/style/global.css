@@ -297,6 +297,41 @@ html, body {
   border-color: #ff4d4f;
 }
 
+/* 按钮组容器 */
+.ant-btn-group {
+  display: inline-flex;
+  vertical-align: middle;
+  margin-right: 12px; /* 组与组之间的间距 */
+}
+
+.ant-btn-group .ant-btn {
+  margin-right: 0; /* 消除单个按钮默认的间距 */
+  border-radius: 0; /* 先重置所有圆角 */
+  position: relative;
+}
+
+/* 处理第一个按钮的圆角 */
+.ant-btn-group .ant-btn:first-child {
+  border-top-left-radius: 6px;
+  border-bottom-left-radius: 6px;
+}
+
+/* 处理最后一个按钮的圆角 */
+.ant-btn-group .ant-btn:last-child {
+  border-top-right-radius: 6px;
+  border-bottom-right-radius: 6px;
+}
+
+/* 处理中间重合的边框（防止双倍边框） */
+.ant-btn-group .ant-btn:not(:first-child) {
+  margin-left: -1px;
+}
+
+/* 悬停处理：让当前激活的按钮边框层级更高，避免被遮挡 */
+.ant-btn-group .ant-btn:hover {
+  z-index: 1;
+}
+
 /* =================================================================
    7. 模态框 (Modal)
 ================================================================= */
