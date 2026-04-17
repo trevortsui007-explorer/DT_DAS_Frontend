@@ -3,8 +3,7 @@
     <div class="ant-modal-mask" :class="{ active: visible }" @click="close"></div>
 
     <div class="ant-modal-wrap" :class="{ active: visible }">
-      <div class="ant-modal" style="width: 640px;">
-
+      <div class="ant-modal" style="width: 640px">
         <!-- Header -->
         <div class="ant-modal-header">
           <span class="ant-modal-title">
@@ -70,19 +69,11 @@
                       :indeterminate="isIndeterminate"
                     />
                     <span>
-                      {{
-                        isAllSelected
-                          ? '取消全选'
-                          : isIndeterminate
-                          ? '部分已选'
-                          : '全选'
-                      }}
+                      {{ isAllSelected ? '取消全选' : isIndeterminate ? '部分已选' : '全选' }}
                     </span>
                   </label>
 
-                  <span class="selected-count">
-                    已选 {{ formData.configIds.length }} 项
-                  </span>
+                  <span class="selected-count"> 已选 {{ formData.configIds.length }} 项 </span>
                 </div>
               </div>
 
@@ -93,9 +84,7 @@
                   :key="conf.eqName || conf.EqName"
                   class="config-checkbox-card"
                   :class="{
-                    'is-checked': formData.configIds.includes(
-                      conf.eqName || conf.EqName
-                    )
+                    'is-checked': formData.configIds.includes(conf.eqName || conf.EqName),
                   }"
                   @click="toggleConfig(conf.eqName || conf.EqName)"
                 >
@@ -108,9 +97,7 @@
                   </div>
                 </div>
 
-                <div v-if="filteredConfigs.length === 0" class="empty-inline">
-                  暂无匹配项
-                </div>
+                <div v-if="filteredConfigs.length === 0" class="empty-inline">暂无匹配项</div>
               </div>
             </div>
           </div>
@@ -121,7 +108,6 @@
           <button class="ant-btn ant-btn-default" @click="close">取消</button>
           <button class="ant-btn ant-btn-primary" @click="save">保存</button>
         </div>
-
       </div>
     </div>
   </div>
@@ -129,6 +115,7 @@
 
 <script setup>
 import { ref, computed } from 'vue'
+import message from '@/components/index.js'
 
 const emit = defineEmits(['saved'])
 
@@ -145,7 +132,7 @@ const formData = ref({
   groupType: '',
   sortOrder: 0,
   isEnabled: true,
-  configIds: []
+  configIds: [],
 })
 
 const filteredConfigs = computed(() => {
@@ -153,52 +140,35 @@ const filteredConfigs = computed(() => {
 
   if (!keyword) return allConfigs.value
 
-  return allConfigs.value.filter(conf =>
-    (conf.eqName || conf.EqName || '')
-      .toLowerCase()
-      .includes(keyword)
+  return allConfigs.value.filter((conf) =>
+    (conf.eqName || conf.EqName || '').toLowerCase().includes(keyword),
   )
 })
 
 const isAllSelected = computed(() => {
   return (
     filteredConfigs.value.length > 0 &&
-    filteredConfigs.value.every(conf =>
-      formData.value.configIds.includes(
-        conf.eqName || conf.EqName
-      )
+    filteredConfigs.value.every((conf) =>
+      formData.value.configIds.includes(conf.eqName || conf.EqName),
     )
   )
 })
 
 const isIndeterminate = computed(() => {
-  const selectedCount = filteredConfigs.value.filter(conf =>
-    formData.value.configIds.includes(
-      conf.eqName || conf.EqName
-    )
+  const selectedCount = filteredConfigs.value.filter((conf) =>
+    formData.value.configIds.includes(conf.eqName || conf.EqName),
   ).length
 
-  return (
-    selectedCount > 0 &&
-    selectedCount < filteredConfigs.value.length
-  )
+  return selectedCount > 0 && selectedCount < filteredConfigs.value.length
 })
 
 const toggleSelectAll = () => {
-  const visibleIds = filteredConfigs.value.map(
-    conf => conf.eqName || conf.EqName
-  )
+  const visibleIds = filteredConfigs.value.map((conf) => conf.eqName || conf.EqName)
 
   if (isAllSelected.value) {
-    formData.value.configIds =
-      formData.value.configIds.filter(
-        id => !visibleIds.includes(id)
-      )
+    formData.value.configIds = formData.value.configIds.filter((id) => !visibleIds.includes(id))
   } else {
-    const merged = new Set([
-      ...formData.value.configIds,
-      ...visibleIds
-    ])
+    const merged = new Set([...formData.value.configIds, ...visibleIds])
 
     formData.value.configIds = [...merged]
   }
@@ -233,7 +203,7 @@ function open(edit = false, data = null, configs = []) {
       isEnabled: data.isEnabled ?? data.IsEnabled ?? true,
 
       // 回显
-      configIds: (data.associatedConfigs || []).map(c => c.eqName || c.EqName)
+      configIds: (data.associatedConfigs || []).map((c) => c.eqName || c.EqName),
     }
   } else {
     formData.value = {
@@ -243,7 +213,7 @@ function open(edit = false, data = null, configs = []) {
       groupType: '',
       sortOrder: 0,
       isEnabled: true,
-      configIds: []
+      configIds: [],
     }
   }
 
@@ -255,7 +225,7 @@ function open(edit = false, data = null, configs = []) {
 ======================== */
 function save() {
   if (!formData.value.groupName.trim()) {
-    alert('请输入配置组名称')
+    message('请输入配置组名称')
     return
   }
 
@@ -268,12 +238,11 @@ function save() {
     IsEnabled: formData.value.isEnabled,
 
     // 关键：关联配置
-    ConfigIds: formData.value.configIds
+    ConfigIds: formData.value.configIds,
   }
 
   console.log('提交数据:', payload)
 
-  alert('保存成功')
   close()
   emit('saved')
 }

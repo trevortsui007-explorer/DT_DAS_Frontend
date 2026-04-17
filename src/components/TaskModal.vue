@@ -2,31 +2,46 @@
   <div>
     <div class="ant-modal-mask" :class="{ active: visible }" @click="close"></div>
     <div class="ant-modal-wrap" :class="{ active: visible }">
-      <div class="ant-modal" style="width: 640px;"> <div class="ant-modal-header">
-        <span class="ant-modal-title">{{ isEdit ? '编辑任务' : '新建任务' }}</span>
-        <span class="close-btn" @click="close">×</span>
-      </div>
+      <div class="ant-modal" style="width: 640px">
+        <div class="ant-modal-header">
+          <span class="ant-modal-title">{{ isEdit ? '编辑任务' : '新建任务' }}</span>
+          <span class="close-btn" @click="close">×</span>
+        </div>
 
         <div class="ant-modal-body scrollable-body">
           <input type="hidden" v-model="formData.id" />
 
           <div class="form-item">
             <label class="required">任务名称</label>
-            <input type="text" class="ant-input" v-model="formData.taskName" placeholder="请输入任务名称" />
+            <input
+              type="text"
+              class="ant-input"
+              v-model="formData.taskName"
+              placeholder="请输入任务名称"
+            />
           </div>
 
           <div class="form-item">
             <label>描述</label>
-            <textarea class="ant-input" v-model="formData.description" rows="2" placeholder="描述任务用途"></textarea>
+            <textarea
+              class="ant-input"
+              v-model="formData.description"
+              rows="2"
+              placeholder="描述任务用途"
+            ></textarea>
           </div>
 
           <div class="form-item">
             <label>任务模式</label>
             <div class="custom-segmented">
-              <div class="custom-segmented__pill" :style="{ transform: `translateX(${modePillLeft})` }"></div>
+              <div
+                class="custom-segmented__pill"
+                :style="{ transform: `translateX(${modePillLeft})` }"
+              ></div>
               <div class="custom-segmented__options">
                 <div
-                  v-for="mode in taskModes" :key="mode.value"
+                  v-for="mode in taskModes"
+                  :key="mode.value"
                   class="custom-segmented__option"
                   :class="{ 'custom-segmented__option--active': formData.taskMode === mode.value }"
                   @click="formData.taskMode = mode.value"
@@ -106,6 +121,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { translateCron } from '@/utils/cron'
+import message from '@/components/index.js'
 
 const emit = defineEmits(['saved'])
 
@@ -132,7 +148,7 @@ const formData = ref({
   taskMode: 1,
   cronExpression: '',
   isEnabled: true,
-  groupIds: []
+  groupIds: [],
 })
 
 // 任务模式配置
@@ -161,14 +177,14 @@ function updateCronFromPreset() {
   let cron = ''
   switch (frequencyPreset.value) {
     case 'daily':
-      const [dHour, dMin] = dailyTime.value.split(':'); cron = `${dMin} ${dHour} * * *`
-      break
+      { const [dHour, dMin] = dailyTime.value.split(':'); cron = `${dMin} ${dHour} * * *`
+      break }
     case 'weekly':
-      const [wHour, wMin] = weeklyTime.value.split(':'); cron = `${wMin} ${wHour} * * ${weeklyDay.value}`
-      break
+      { const [wHour, wMin] = weeklyTime.value.split(':'); cron = `${wMin} ${wHour} * * ${weeklyDay.value}`
+      break }
     case 'monthly':
-      const [mHour, mMin] = monthlyTime.value.split(':'); cron = `${mMin} ${mHour} ${monthlyDay.value} * *`
-      break
+      { const [mHour, mMin] = monthlyTime.value.split(':'); cron = `${mMin} ${mHour} ${monthlyDay.value} * *`
+      break }
     case 'hourly': cron = `${hourlyMinute.value} * * * *`; break
     case 'minutes': cron = `*/${minutesInterval.value} * * * *`; break
     case 'custom': cron = customCron.value; break
@@ -189,7 +205,7 @@ function open(edit = false, data = null, groups = []) {
       taskMode: data.taskMode ?? data.TaskMode ?? 1,
       cronExpression: data.cronExpression || data.CronExpression,
       isEnabled: data.isEnabled ?? data.IsEnabled ?? true,
-      groupIds: data.groupIds || data.GroupIds || [] // 假设后端返回了已关联的ID
+      groupIds: data.groupIds || data.GroupIds || [], // 假设后端返回了已关联的ID
     }
   } else {
     formData.value = { id: null, taskName: '', description: '', taskMode: 1, cronExpression: '', isEnabled: true, groupIds: [] }
@@ -200,7 +216,7 @@ function open(edit = false, data = null, groups = []) {
 function close() { visible.value = false }
 
 async function save() {
-  if (!formData.value.taskName.trim()) return alert('请填写任务名称')
+  if (!formData.value.taskName.trim()) return message('请填写任务名称')
 
   const payload = {
     Id: formData.value.id,
@@ -209,11 +225,11 @@ async function save() {
     TaskMode: formData.value.taskMode,
     CronExpression: formData.value.cronExpression,
     IsEnabled: formData.value.isEnabled,
-    GroupIds: formData.value.groupIds // 发送选中的 ID 数组给后端
+    GroupIds: formData.value.groupIds, // 发送选中的 ID 数组给后端
   }
 
   console.log('提交任务数据:', payload)
-  alert('保存成功')
+  message('保存成功')
   close()
   emit('saved')
 }

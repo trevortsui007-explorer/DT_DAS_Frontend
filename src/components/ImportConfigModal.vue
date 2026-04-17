@@ -225,6 +225,7 @@
 import { ref } from 'vue'
 import * as XLSX from 'xlsx'
 import { checkTableExists, createTable } from '@/api/index.js'
+import message from '@/components/index.js'
 
 const emit = defineEmits(['imported'])
 
@@ -328,7 +329,7 @@ function parseSheet() {
   const dataStartIndex = dataStartRow.value - 1
 
   if (headerIndex < 0 || headerIndex >= rows.length) {
-    alert('表头行超出范围')
+    message('表头行超出范围')
     return
   }
 
@@ -411,7 +412,7 @@ async function fetchTableSchema() {
     }
   } catch (err) {
     console.error('检查表失败', err)
-    alert('检查表失败，请确保后端服务正常')
+    message('检查表失败，请确保后端服务正常')
   }
 }
 
@@ -428,7 +429,7 @@ function autoMatchMappings() {
 // ==================== 自动建表 ====================
 async function createTableFromMapping() {
   if (!targetTable.value) {
-    alert('请先输入目标表名')
+    message('请先输入目标表名')
     return
   }
 
@@ -451,7 +452,7 @@ async function createTableFromMapping() {
     })
 
   if (columns.length === 0) {
-    alert('至少需要一个有效的字段映射')
+    message('至少需要一个有效的字段映射')
     return
   }
 
@@ -460,14 +461,14 @@ async function createTableFromMapping() {
     if (success) {
       tableExists.value = true
       tableColumns.value = columns
-      alert('表创建成功！')
+      message('表创建成功！')
       autoMatchMappings()
     } else {
-      alert('创建表失败')
+      message('创建表失败')
     }
   } catch (err) {
     console.error('创建表失败', err)
-    alert('创建表失败，请检查后端服务')
+    message('创建表失败，请检查后端服务')
   }
 }
 
