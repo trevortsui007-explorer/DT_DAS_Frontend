@@ -12,15 +12,16 @@ export { default as ImportConfigModal } from './ImportConfigModal.vue'
 export { default as BatchAssignModal } from './BatchAssignModal.vue'
 export { default as InspectionModal } from './InspectionModal.vue'
 
-//封装命令式函数
+//封装bubble调用
 import { h, render } from 'vue'
 import MessageBubbleComponent from './MessageBubble.vue'
 
 let vnode = null
 let container = null
 
-const message = (content, type = 'info') => {
-  // 1. 如果还没有容器，先创建一个挂载点
+const message = (content, type = 'info', duration = 3000) => {
+  if (typeof document === 'undefined') return
+
   if (!container) {
     container = document.createElement('div')
     vnode = h(MessageBubbleComponent)
@@ -28,18 +29,19 @@ const message = (content, type = 'info') => {
     document.body.appendChild(container)
   }
 
-  // 2. 调用组件内部暴露的 add 方法
-  // vnode.component.exposed 对应上面 defineExpose 暴露出的方法
-  vnode.component.exposed.add({
+  // 调用 add 并获取销毁函数
+  return vnode.component.exposed.add({
     content,
     type,
-    duration: 3000,
+    duration,
   })
 }
 
 // 快捷调用
-message.success = (content) => message(content, 'success')
-message.error = (content) => message(content, 'error')
+message.success = (content, duration) => message(content, 'success', duration)
+message.info    = (content, duration) => message(content, 'info', duration)
+message.warning = (content, duration) => message(content, 'warning', duration)
+message.error   = (content, duration) => message(content, 'error', duration)
+message.loading = (content, duration = 0) => message(content, 'loading', duration)
 
 export default message;
-
