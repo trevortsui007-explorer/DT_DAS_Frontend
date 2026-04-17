@@ -16,28 +16,15 @@
         </div>
 
         <div class="header-actions">
-          <template v-for="(item, index) in actionButtons" :key="index">
-            <div v-if="Array.isArray(item)" class="ant-btn-group">
-              <button
-                v-for="btn in item"
-                :key="btn.text"
-                class="ant-btn"
-                :class="getBtnClass(btn)"
-                @click="btn.handler"
-              >
-                {{ btn.text }}
-              </button>
-            </div>
-
-            <button
-              v-else
-              class="ant-btn"
-              :class="getBtnClass(item)"
-              @click="item.handler"
-            >
-              {{ item.text }}
-            </button>
-          </template>
+          <button
+            v-for="btn in actionButtons"
+            :key="btn.text"
+            class="ant-btn"
+            :class="getBtnClass(btn)"
+            @click="btn.handler"
+          >
+            {{ btn.text }}
+          </button>
         </div>
       </div>
 
@@ -145,6 +132,38 @@ const currentDesc = computed(() => ({
   group: '分组层级，展示任务下的配置组信息',
   config: '原子层级，展示最底层采集配置',
 }[activeTab.value]))
+
+// ====================== buttons ======================
+const actionButtons = computed(() => {
+  switch (activeTab.value) {
+    case 'overview':
+      return [
+        { text: '刷新大盘', handler: loadAllData, btnType: 'cyan' },
+        { text: '导出报告', handler: exportReport, btnType: 'ghost-cyan' },
+      ]
+    case 'task':
+      return [
+        { text: '+ 新建任务', handler: openNewTask, btnType: 'gradient-purple' },
+      ]
+    case 'group':
+      return [
+        { text: '批量同步', handler: batchSyncGroups, btnType: 'geekblue' },
+        { text: '+ 新增组', handler: openNewGroup, btnType: 'primary' },
+      ]
+    case 'config':
+      return [
+        { text: '批量分配', handler: openAssignModal, btnType: 'geekblue' },
+        { text: '导入配置', handler: importConfig, btnType: 'cyan' },
+        { text: '+ 新增配置', handler: openNewConfig, btnType: 'gradient-purple' },
+      ]
+    default:
+      return []
+  }
+})
+
+const getBtnClass = (btn) => {
+  return btn.btnType ? `ant-btn-${btn.btnType}` : 'ant-btn-primary'
+}
 
 // ====================== data loader ======================
 const loadAllData = async () => {
@@ -265,9 +284,6 @@ const onTaskSaved = () => {
   loadAllData()
 }
 
-const startTask = () => console.log('任务开启...')
-const pauseTask = () => console.log('任务暂停...')
-
 const openNewGroup = () => groupModalRef.value?.open(false, null, configs.value)
 const editGroup = (group) => groupModalRef.value?.open(true, group, configs.value)
 const onGroupSaved = () => {
@@ -307,51 +323,6 @@ const handleAssignConfirm = () => {
 const exportReport = () => message.success('导出功能开发中')
 const viewDetail = (item) => drawerRef.value?.open(item.EqName || item.groupName || '详情', item)
 
-// ====================== buttons ======================
-// 1. 按钮配置表
-const BUTTON_CONFIG_MAP = {
-  overview: [
-    { text: '刷新大盘', handler: loadAllData, btnType: 'cyan' },
-    { text: '导出报告', handler: exportReport, btnType: 'ghost-cyan' },
-  ],
-  task: [
-    // 按钮组：开启和暂停贴在一起
-    [
-      { text: '开启', handler: startTask, btnType: 'primary' },
-      { text: '暂停', handler: pauseTask, btnType: 'default' },
-    ],
-    { text: '+ 新建任务', handler: openNewTask, btnType: 'gradient-purple' },
-  ],
-  group: [
-    { text: '批量同步', handler: batchSyncGroups, btnType: 'geekblue' },
-    { text: '+ 新增组', handler: openNewGroup, btnType: 'primary' },
-  ],
-  config: [
-    { text: '批量分配', handler: openAssignModal, btnType: 'geekblue' },
-    { text: '导入配置', handler: importConfig, btnType: 'cyan' },
-    { text: '+ 新增配置', handler: openNewConfig, btnType: 'gradient-purple' },
-  ],
-};
-
-const actionButtons = computed(() => {
-  return BUTTON_CONFIG_MAP[activeTab.value] || []
-})
-
-const getBtnClass = (btn) => {
-  const classes = [];
-
-  if (btn.btnType) {
-    if (btn.btnType.startsWith('gradient-')) {
-      classes.push(`btn-${btn.btnType}`);
-    } else {
-      classes.push(`ant-btn-${btn.btnType}`);
-    }
-  }
-
-  return classes;
-};
-
-// ====================== 初始化数据 ======================
 onMounted(() => {
   loadAllData()
 })
