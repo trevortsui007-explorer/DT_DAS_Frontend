@@ -24,7 +24,7 @@ export const setConfigStatus = (ids, isEnabled) => {
   formData.append('ids', ids)
   formData.append('isEnabled', isEnabled)
 
-  return request.patch('/api/data-acquisition/tasks/status', formData, {
+  return request.patch('/api/file-configs/status', formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
   })
 }

@@ -337,8 +337,52 @@ const pauseTask = () => message.success('任务暂停...')
 const startGroup = () => message.success('配置组开启...')
 const pauseGroup = () => message.success('配置组暂停...')
 
-const startConfig = () => message.success('配置开启')
-const pauseConfig = () => message.success('配置暂停')
+const startConfig = () => {
+  if (selectedIds.value.length === 0) {
+    message.warning('请先选择配置')
+    return
+  }
+  const idsToUpdate = [...selectedIds.value]
+
+  try {
+    api.setConfigStatus(idsToUpdate, true)
+    message.success('开启成功')
+
+    configs.value.forEach(cfg => {
+      if (idsToUpdate.includes(cfg.id)) {
+        cfg.isEnabled = true
+      }
+    })
+
+    selectedIds.value = []
+  } catch (err) {
+    message.error('操作失败',err)
+  }
+}
+
+const pauseConfig = () => {
+  if (selectedIds.value.length === 0) {
+    message.warning('请先选择配置')
+    return
+  }
+
+  const idsToUpdate = [...selectedIds.value]
+
+  try {
+    api.setConfigStatus(idsToUpdate, false)
+    message.success('暂停成功')
+
+    configs.value.forEach(cfg => {
+      if (idsToUpdate.includes(cfg.id)) {
+        cfg.isEnabled = false
+      }
+    })
+
+    selectedIds.value = []
+  } catch (err) {
+    message.error('操作失败',err)
+  }
+}
 
 // ====================== 按钮 相关 ======================
 // 1. 按钮配置表
