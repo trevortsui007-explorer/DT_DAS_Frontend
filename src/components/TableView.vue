@@ -3,7 +3,7 @@
     <div v-if="loading" class="loading-placeholder">加载中...</div>
     <div v-else-if="error" class="error-placeholder">{{ error }}</div>
     <div v-else>
-      <table v-if="type === 'overview'" class="ant-table">
+      <table v-if="type === 'overview'" class="ant-table ant-table-overview">
         <thead>
         <tr><th>指标</th><th>当前值</th><th>状态</th></tr>
         </thead>
@@ -139,6 +139,16 @@ const editTask = (task) => {
   transition: background 0.2s;
 }
 
+.ant-table-overview th {
+  padding: 12px 20px;
+  font-size: 14px;
+}
+
+.ant-table-overview td {
+  padding: 12px 20px;
+  font-size: 16px;
+}
+
 /* 2. 展开按钮 & 链接交互 */
 .expand-toggle {
   cursor: pointer;
@@ -232,8 +242,13 @@ const editTask = (task) => {
 .table-view {
   width: 100%;
   overflow-x: auto;
+  overflow-y: hidden;
   border: 1px solid #f0f0f0;
-  border-radius: 8px;
+  border-radius: 20px;
+}
+
+.ant-table-overview {
+  min-height: auto;
 }
 
 .font-600 {
@@ -254,6 +269,11 @@ code {
   color: #52c41a;
   font-size: 18px;
   font-family: "Helvetica Neue", Arial, sans-serif;
+}
+
+.ant-table-overview .text-primary {
+  font-size: 20px;
+  font-weight: 700;
 }
 
 .ant-table > thead > tr > th,

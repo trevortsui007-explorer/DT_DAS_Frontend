@@ -586,6 +586,26 @@ export const mockConfigs = {
 }
 
 // ====================== Mock 核心请求处理 ======================
+export const mockOverviewTrend = {
+  data: [
+    { time: '08:00', value: 120 },
+    { time: '10:00', value: 168 },
+    { time: '12:00', value: 150 },
+    { time: '14:00', value: 268 },
+    { time: '16:00', value: 232 },
+  ],
+}
+
+export const mockOverviewActivities = {
+  data: [
+    { time: '16:20', text: '任务 018 完成年度 KPI 计算', level: 'success' },
+    { time: '15:45', text: '配置组“能源管理组”完成批量同步', level: 'info' },
+    { time: '14:30', text: '配置项“总电表”采集完成并写入 total_energy', level: 'success' },
+    { time: '13:15', text: '任务 010 当前处于禁用状态，未参与采集', level: 'warning' },
+    { time: '11:40', text: '配置项“锅炉压力表”状态异常，等待人工复核', level: 'error' },
+  ],
+}
+
 export const mockRequest = (config) => {
   const { url, method, data } = config
   const pathname = url.split('?')[0]
@@ -632,6 +652,14 @@ export const mockRequest = (config) => {
   // ====================== TASK ======================
   if (url === '/api/data-acquisition/tasks' && method === 'get') {
     return delay({ data: mockTasks.data })
+  }
+
+  if (pathname === '/api/dashboard/trend' && method === 'get') {
+    return delay({ data: mockOverviewTrend.data })
+  }
+
+  if (pathname === '/api/dashboard/activities' && method === 'get') {
+    return delay({ data: mockOverviewActivities.data })
   }
 
   // ====================== GROUP ======================
