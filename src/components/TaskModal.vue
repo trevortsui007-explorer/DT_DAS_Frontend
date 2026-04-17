@@ -229,7 +229,6 @@ async function save() {
   }
 
   console.log('提交任务数据:', payload)
-  message('保存成功')
   close()
   emit('saved')
 }
