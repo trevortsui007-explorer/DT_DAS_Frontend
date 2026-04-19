@@ -229,3 +229,11 @@ export const fetchInspection = ({ configId, startTime, endTime, user, pass }) =>
     }
   })
 }
+
+export const fetchOverviewTrend = () => {
+  return request.get('/api/dashboard/trend')
+}
+
+export const fetchOverviewActivities = () => {
+  return request.get('/api/dashboard/activities')
+}

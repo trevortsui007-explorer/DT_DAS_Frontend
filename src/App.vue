@@ -1,14 +1,8 @@
 ﻿<template>
   <div class="app-form-wrapper">
+    <StatCards :activeTab="activeTab" :stats="stats" @update:activeTab="handleTabChange" />
 
-    <StatCards
-      :activeTab="activeTab"
-      :stats="stats"
-      @update:activeTab="handleTabChange"
-    />
-
-    <div class="module-card">
-
+    <div class="module-card" :class="{ 'module-card-overview': activeTab === 'overview' }">
       <div class="header-section">
         <div>
           <h3 class="header-title">{{ currentTitle }}</h3>
@@ -66,7 +60,14 @@
         @selection-change="handleSelectionChange"
         @inspect-source="openInspection"
       />
-
+      <OverviewDashboard
+        v-if="activeTab === 'overview'"
+        :status-distribution="taskStatusDistribution"
+        :trend-data="overviewTrend"
+        :latest-activities="overviewActivities"
+        :loading="dashboardLoading"
+        :error="dashboardError"
+      />
     </div>
   </div>
 
@@ -111,6 +112,8 @@ import {
 
 import * as api from './api'
 
+import OverviewDashboard from './components/OverviewDashboard.vue'
+
 // ====================== refs ======================
 const configModalRef = ref(null)
 const drawerRef = ref(null)
@@ -128,8 +131,12 @@ const error = ref('')
 const tasks = ref([])
 const groups = ref([])
 const configs = ref([])
+const overviewTrend = ref([])
+const overviewActivities = ref([])
 
 const selectedIds = ref([])
+const dashboardLoading = ref(false)
+const dashboardError = ref('')
 
 // 巡检相关状态
 const inspectionVisible = ref(false)
@@ -144,44 +151,77 @@ const stats = computed(() => ({
   configs: configs.value.length,
 }))
 
-const isTableView = computed(() =>
-  activeTab.value === 'overview' || activeTab.value === 'task'
+const taskStatusDistribution = computed(() => {
+  const enabledTasks = tasks.value.filter((task) => task.isEnabled ?? task.IsEnabled).length
+  const disabledTasks = tasks.value.length - enabledTasks
+
+  return [
+    { name: '启用任务', value: enabledTasks, color: '#10b981' },
+    { name: '禁用任务', value: disabledTasks, color: '#94a3b8' },
+  ]
+})
+
+const isTableView = computed(() => activeTab.value === 'overview' || activeTab.value === 'task')
+
+const currentTitle = computed(
+  () =>
+    ({
+      overview: '全量采集总览',
+      task: '任务监控详情',
+      group: '配置组管理',
+      config: '具体配置项',
+    })[activeTab.value],
 )
 
-const currentTitle = computed(() => ({
-  overview: '全量采集总览',
-  task: '任务监控详情',
-  group: '配置组管理',
-  config: '具体配置项',
-}[activeTab.value]))
-
-const currentDesc = computed(() => ({
-  overview: '概览大盘，展示系统整体运行状态与采集指标',
-  task: '任务层级，用于管理采集任务，每个任务可关联多个配置组',
-  group: '分组层级，展示任务下的配置组信息',
-  config: '原子层级，展示最底层采集配置',
-}[activeTab.value]))
+const currentDesc = computed(
+  () =>
+    ({
+      overview: '概览大盘，展示系统整体运行状态与采集指标',
+      task: '任务层级，用于管理采集任务，每个任务可关联多个配置组',
+      group: '分组层级，展示任务下的配置组信息',
+      config: '原子层级，展示最底层采集配置',
+    })[activeTab.value],
+)
 
 // ====================== Overview 界面 ======================
 const loadAllData = async () => {
   loading.value = true
+  dashboardLoading.value = true
   error.value = ''
-  try {
-    const [t, g, c] = await Promise.all([
+  dashboardError.value = ''
+
+  const [tasksResult, groupsResult, configsResult, trendResult, activitiesResult] =
+    await Promise.allSettled([
       api.fetchTasks(),
       api.fetchGroups(),
       api.fetchConfigs(),
+      api.fetchOverviewTrend(),
+      api.fetchOverviewActivities(),
     ])
 
-    tasks.value = t.data || []
-    groups.value = g.data || []
-    configs.value = c.data || []
-  } catch  {
+  const baseDataFailed = [tasksResult, groupsResult, configsResult].some(
+    (result) => result.status === 'rejected',
+  )
+
+  if (baseDataFailed) {
     error.value = '数据加载失败'
     message.error(error.value)
-  } finally {
-    loading.value = false
+  } else {
+    tasks.value = tasksResult.value.data || []
+    groups.value = groupsResult.value.data || []
+    configs.value = configsResult.value.data || []
   }
+
+  overviewTrend.value = trendResult.status === 'fulfilled' ? trendResult.value.data || [] : []
+  overviewActivities.value =
+    activitiesResult.status === 'fulfilled' ? activitiesResult.value.data || [] : []
+
+  if (trendResult.status === 'rejected' || activitiesResult.status === 'rejected') {
+    dashboardError.value = '部分总览数据加载失败'
+  }
+
+  loading.value = false
+  dashboardLoading.value = false
 }
 
 const exportReport = () => message.success('导出功能开发中')
@@ -266,7 +306,7 @@ const fetchInspectionData = async (row, year, month) => {
       startTime: startTime,
       endTime: endTime,
       user: 'et1',
-      pass: 'dt123456#'
+      pass: 'dt123456#',
     })
 
     const result = res.data[0] || { files: [] }
@@ -274,7 +314,6 @@ const fetchInspectionData = async (row, year, month) => {
     // 4. 存入缓存
     inspectionCache.value[cacheKey] = result
     inspectionData.value = result
-
   } catch (e) {
     console.error('获取巡检数据失败:', e)
     message.error('巡检数据获取失败')
@@ -474,25 +513,35 @@ onMounted(() => {
   padding: 24px;
   box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
 }
+.module-card-overview {
+  padding: 28px 28px 32px;
+}
 .header-section {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   margin-bottom: 24px;
 }
+.module-card-overview .header-section {
+  margin-bottom: 28px;
+}
 .header-title {
   font-size: 18px;
   font-weight: 600;
   margin: 0 0 4px 0;
 }
+.module-card-overview .header-title {
+  font-size: 20px;
+}
 .header-desc {
   font-size: 14px;
   color: #8c8c8c;
+}
+.module-card-overview .header-desc {
+  font-size: 15px;
 }
 .header-actions {
   display: flex;
   gap: 8px;
 }
 </style>
-
-
