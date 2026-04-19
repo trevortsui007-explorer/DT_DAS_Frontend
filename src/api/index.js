@@ -230,6 +230,8 @@ export const fetchInspection = ({ configId, startTime, endTime, user, pass }) =>
   })
 }
 
+// ====================== 大屏显示 ======================
+
 export const fetchOverviewTrend = () => {
   return request.get('/api/dashboard/trend')
 }
