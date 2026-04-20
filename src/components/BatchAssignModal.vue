@@ -61,7 +61,6 @@ function handleConfirm() {
     groupId: selectedGroupId.value,
     configIds: targetItemIds.value
   }
-  console.log('执行批量分配 API:', payload)
   emit('confirm', payload)
   close()
 }
