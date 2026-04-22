@@ -109,7 +109,7 @@
                   <div class="segment-pill" :style="{ left: pillLeft }"></div>
                   <div class="segment-options">
                     <div
-                      v-for="(opt, idx) in postTypes"
+                      v-for="(opt) in postTypes"
                       :key="opt.value"
                       class="segment-option"
                       :class="{ active: formData.postProcessingType === opt.value }"

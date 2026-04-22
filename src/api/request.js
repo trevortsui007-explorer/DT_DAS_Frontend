@@ -29,11 +29,27 @@ request.interceptors.request.use((config) => {
 request.interceptors.response.use(
   (res) => res.data,
   async (error) => {
-    // 处理 mock 返回
+// 1. 处理请求拦截器里抛出的强制 Mock
     if (error.__MOCK__) {
       return await error.data
     }
 
+    const { config, response } = error
+
+    // 2. 核心逻辑：当返回 404 时，尝试匹配 Mock
+    if (response && response.status === 404) {
+      console.warn(`接口 ${config.url} 404，正在尝试降级至 Mock...`)
+
+      const mockRes = mockRequest(config)
+      if (mockRes) {
+        console.log(`成功匹配 Mock 数据: ${config.url}`)
+        return await mockRes // 直接返回 Mock 内容
+      }
+
+      console.error(`Mock 库中也未找到该接口: ${config.url}`)
+    }
+
+    // 3. 其他错误处理
     console.error('API Error:', error)
     return Promise.reject(error)
   }

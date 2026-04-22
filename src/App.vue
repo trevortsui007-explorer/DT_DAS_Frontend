@@ -76,13 +76,8 @@
   <TaskModal ref="taskModalRef" @saved="onTaskSaved" />
   <ImportConfigModal ref="importConfigModalRef" @imported="handleImportSuccess" />
   <BatchAssignModal ref="assignModalRef" @confirm="handleAssignConfirm" />
-
-  <InspectionModal
-    ref="inspectionModalRef"
-    v-model:visible="inspectionVisible"
-    :data="inspectionData"
-    @change="handleInspectionMonthChange"
-  />
+  <InspectionModal ref="inspectionModalRef" v-model:visible="inspectionVisible" :data="inspectionData" @change="handleInspectionMonthChange" />
+  <AcquisitionModal v-model:visible="acquisitionActionVisible" :task-data="currentConfig" @confirm="handleTaskStartConfirm" />
 
   <DetailDrawer ref="drawerRef" />
 </template>
@@ -93,7 +88,7 @@ import message, {
   StatCards, TableView, CardsView,
   ConfigModal, DetailDrawer, GroupModal,
   TaskModal, ImportConfigModal, BatchAssignModal,
-  InspectionModal
+  InspectionModal, AcquisitionModal,
 } from './components'
 
 import {
@@ -143,6 +138,10 @@ const inspectionVisible = ref(false)
 const inspectionData = ref(null)
 const currentInspectingRow = ref(null)
 const inspectionCache = ref({})
+
+// 采集Modal相关
+const acquisitionActionVisible = ref(false)
+const currentConfig = ref(null)
 
 // ====================== computed ======================
 const stats = computed(() => ({
@@ -276,10 +275,44 @@ const openAssignModal = () => {
   }
   assignModalRef.value.open(selectedIds.value, groups.value)
 }
-const handleAssignConfirm = () => {
-  message.success('批量分配完成')
-  loadAllData()
-  selectedIds.value = []
+const handleAssignConfirm = async (data) => {
+  const hideLoading = message.loading('正在同步关联关系，请稍候...')
+
+  try {
+    // 获取当前原始状态（假设从 groups 列表里拿到的该组现有 ids）
+    const currentGroup = groups.value.find(g => g.id === data.groupId);
+    const originIds = currentGroup?.configIds || [];
+
+    // 用户当前选择的最新列表（先做个内部去重）
+    const selectedIds = [...new Set(data.configIds)];
+
+    // 1. 找出真正需要新增的：在 selected 里，但不在 origin 里
+    const idsToAdd = selectedIds.filter(id => !originIds.includes(id));
+
+    // 2. 找出真正需要删除的：在 origin 里，但不在 selected 里
+    const idsToRemove = originIds.filter(id => !selectedIds.includes(id));
+
+    // 如果没有任何变化，直接结束
+    if (idsToAdd.length === 0 && idsToRemove.length === 0) {
+      message.info('数据未发生变化');
+      return;
+    }
+
+    // 3. 按序发送请求
+    if (idsToRemove.length > 0) {
+      await api.removeConfigsFromGroup(data.groupId, idsToRemove);
+    }
+    if (idsToAdd.length > 0) {
+      await api.bindConfigsToGroup(data.groupId, idsToAdd);
+    }
+
+    message.success('更新成功');
+    await loadAllData();
+  } catch (error) {
+    console.error("处理失败", error);
+  } finally {
+    hideLoading()
+  }
 }
 
 // ====================== 卡片功能（Config)：源路径检视 逻辑 ======================
@@ -361,13 +394,34 @@ const handleTabChange = (tab) => {
 const viewDetail = (item) => drawerRef.value?.open(item.EqName || item.groupName || '详情', item)
 
 // 选择
-const handleSelectionChange = (ids) => {
-  selectedIds.value = ids
+const handleSelectionChange = (items) => {
+  selectedIds.value = items
 }
 
 // ====================== 采集 相关 ======================
+// 触发弹窗（例如点击表格中的启动按钮）
+const handleTimeRangeAcquisition = () => {
+  if (!selectedIds.value.length) {
+    message.warning("请先选择配置")
+    return
+  }
+  currentConfig.value = selectedIds.value
+  acquisitionActionVisible.value = true
+}
+
+// 确认提交
+const handleTaskStartConfirm = (data) => {
+  const hide = message.loading('正在下发采集任务...', 0)
+  console.log('下发数据:', data)
+
+  // 模拟请求
+  setTimeout(() => {
+    hide()
+    message.success(`任务已启动，采集配置数：[${currentConfig.value.length}] ，采集区间：${data.startTime} 至 ${data.endTime}`)
+  }, 1000)
+}
+
 const handleAcquisition = () => message.success('采集成功')
-const handleTimeRangeAcquisition = () => message.success('采集成功')
 
 // ====================== 启停 相关 ======================
 const startTask = () => message.success('任务开启...')

@@ -63,10 +63,13 @@ export const setGroupStatus = (ids, isEnabled) => {
 
 // group-config relation
 export const bindConfigsToGroup = (groupId, ids) => {
+  const params = new URLSearchParams();
+  ids.forEach(id => params.append('ids', id));
+
   return request.post(
     `/api/file-configs/group/${groupId}/configs`,
     null,
-    { params: { ids } }
+    { params }
   )
 }
 
@@ -229,6 +232,8 @@ export const fetchInspection = ({ configId, startTime, endTime, user, pass }) =>
     }
   })
 }
+
+// ====================== 大屏显示 ======================
 
 export const fetchOverviewTrend = () => {
   return request.get('/api/dashboard/trend')
