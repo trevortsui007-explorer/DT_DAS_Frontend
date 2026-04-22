@@ -11,6 +11,7 @@ export { default as TaskModal } from './TaskModal.vue'
 export { default as ImportConfigModal } from './ImportConfigModal.vue'
 export { default as BatchAssignModal } from './BatchAssignModal.vue'
 export { default as InspectionModal } from './InspectionModal.vue'
+export { default as AcquisitionModal } from './AcquisitionModal.vue'
 
 //封装bubble调用
 import { h, render } from 'vue'

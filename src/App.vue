@@ -76,13 +76,8 @@
   <TaskModal ref="taskModalRef" @saved="onTaskSaved" />
   <ImportConfigModal ref="importConfigModalRef" @imported="handleImportSuccess" />
   <BatchAssignModal ref="assignModalRef" @confirm="handleAssignConfirm" />
-
-  <InspectionModal
-    ref="inspectionModalRef"
-    v-model:visible="inspectionVisible"
-    :data="inspectionData"
-    @change="handleInspectionMonthChange"
-  />
+  <InspectionModal ref="inspectionModalRef" v-model:visible="inspectionVisible" :data="inspectionData" @change="handleInspectionMonthChange" />
+  <AcquisitionModal v-model:visible="acquisitionActionVisible" :task-data="currentConfig" @confirm="handleTaskStartConfirm" />
 
   <DetailDrawer ref="drawerRef" />
 </template>
@@ -93,7 +88,7 @@ import message, {
   StatCards, TableView, CardsView,
   ConfigModal, DetailDrawer, GroupModal,
   TaskModal, ImportConfigModal, BatchAssignModal,
-  InspectionModal
+  InspectionModal, AcquisitionModal,
 } from './components'
 
 import {
@@ -143,6 +138,10 @@ const inspectionVisible = ref(false)
 const inspectionData = ref(null)
 const currentInspectingRow = ref(null)
 const inspectionCache = ref({})
+
+// 采集Modal相关
+const acquisitionActionVisible = ref(false)
+const currentConfig = ref(null)
 
 // ====================== computed ======================
 const stats = computed(() => ({
@@ -395,13 +394,34 @@ const handleTabChange = (tab) => {
 const viewDetail = (item) => drawerRef.value?.open(item.EqName || item.groupName || '详情', item)
 
 // 选择
-const handleSelectionChange = (ids) => {
-  selectedIds.value = ids
+const handleSelectionChange = (items) => {
+  selectedIds.value = items
 }
 
 // ====================== 采集 相关 ======================
+// 触发弹窗（例如点击表格中的启动按钮）
+const handleTimeRangeAcquisition = () => {
+  if (!selectedIds.value.length) {
+    message.warning("请先选择配置")
+    return
+  }
+  currentConfig.value = selectedIds.value
+  acquisitionActionVisible.value = true
+}
+
+// 确认提交
+const handleTaskStartConfirm = (data) => {
+  const hide = message.loading('正在下发采集任务...', 0)
+  console.log('下发数据:', data)
+
+  // 模拟请求
+  setTimeout(() => {
+    hide()
+    message.success(`任务已启动，采集配置数：[${currentConfig.value.length}] ，采集区间：${data.startTime} 至 ${data.endTime}`)
+  }, 1000)
+}
+
 const handleAcquisition = () => message.success('采集成功')
-const handleTimeRangeAcquisition = () => message.success('采集成功')
 
 // ====================== 启停 相关 ======================
 const startTask = () => message.success('任务开启...')

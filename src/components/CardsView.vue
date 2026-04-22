@@ -1,5 +1,5 @@
 <template>
-  <div class="cards-view"  @mousedown="onMouseDown">
+  <div class="cards-view" @mousedown="onMouseDown">
     <div v-if="loading" class="loading-placeholder">加载中...</div>
     <div v-else-if="error" class="error-placeholder">{{ error }}</div>
     <div v-else-if="items.length === 0" class="empty-placeholder">暂无数据</div>
@@ -19,7 +19,7 @@
                'selected': selectedIds.has(group.id || group.Id)
              }"
              :data-id="group.id || group.Id"
-             @click="handleCardClick(group, 'group')">
+             @click="handleCardClick($event, group, 'group')">
 
           <div class="card-header">
             <h4 class="clickable-title" @click.stop="viewDetail(group)">{{ group.groupName || group.GroupName || `配置组 ${group.id}` }}</h4>
@@ -62,7 +62,7 @@
                'selected': selectedIds.has(config.id || config.Id)
              }"
              :data-id="config.id || config.Id"
-             @click="handleCardClick(config, 'config')">
+             @click="handleCardClick($event, config, 'config')">
           <div class="card-header">
             <h4 class="clickable-title" @click.stop="viewDetail(config)">{{ config.EqName || config.eqName || '未命名设备' }}</h4>
             <span :style="{ color: (config.IsEnabled ?? config.isEnabled) ? '#52c41a' : '#ff4d4f', fontSize: '12px' }">
@@ -128,16 +128,18 @@ watch(() => props.items, () => {
 
 // ================= 交互逻辑 =================
 
-const handleCardClick = (item, typeStr) => {
+const handleCardClick = (event, item, typeStr) => {
   if (hasDragged.value) return
 
   const id = formatId(item.id || item.Id)
 
-  // 如果点击时按住了 Ctrl 键，或者该卡片已经被选中，则切换选中状态
-  // 否则执行默认的编辑/详情跳转
-  if (selectedIds.value.has(id)) {
-    selectedIds.value.delete(id)
-    emit('selection-change', Array.from(selectedIds.value))
+  if (event.ctrlKey || event.metaKey) {
+    if (selectedIds.value.has(id)) {
+      selectedIds.value.delete(id)
+    } else {
+      selectedIds.value.add(id)
+    }
+    emitSelection() // 使用统一发射方法
   } else {
     if (typeStr === 'group') emit('edit-group', item)
     else emit('edit-config', item)
@@ -145,7 +147,6 @@ const handleCardClick = (item, typeStr) => {
 }
 
 const onMouseDown = (e) => {
-  // 排除点击按钮或链接的情况
   if (e.target.tagName === 'A' || e.target.closest('.card-actions')) return
 
   const grid = gridRef.value
@@ -174,29 +175,24 @@ const onMouseMove = (e) => {
   const gridRect = grid.getBoundingClientRect()
   const containerRect = container.getBoundingClientRect()
 
-  // 1. 处理自动滚动逻辑
-  const threshold = 40 // 触发距离边缘的距离
-  const scrollSpeed = 15 // 滚动速度
+  const threshold = 40
+  const scrollSpeed = 15
 
   if (e.clientY > containerRect.bottom - threshold) {
-    container.scrollTop += scrollSpeed // 向下滚
+    container.scrollTop += scrollSpeed
   } else if (e.clientY < containerRect.top + threshold) {
-    container.scrollTop -= scrollSpeed // 向上滚
+    container.scrollTop -= scrollSpeed
   }
 
-  // 2. 计算当前鼠标在内容区的位置
-  // 获取 Grid 的实际物理尺寸作为最高/最低限制
   const maxX = grid.offsetWidth
   const maxY = grid.offsetHeight
 
-  // 将当前鼠标坐标严格限制在 [0, max] 范围内，绝不超界
   const currentX = Math.max(0, Math.min(e.clientX - gridRect.left, maxX))
   const currentY = Math.max(0, Math.min(e.clientY - gridRect.top, maxY))
 
   const safeStartX = Math.max(0, Math.min(startPos.x, maxX))
   const safeStartY = Math.max(0, Math.min(startPos.y, maxY))
 
-  // 3. 更新框选框尺寸
   box.value.left = Math.min(safeStartX, currentX)
   box.value.top = Math.min(safeStartY, currentY)
   box.value.width = Math.abs(currentX - safeStartX)
@@ -206,12 +202,10 @@ const onMouseMove = (e) => {
     hasDragged.value = true
   }
 
-  // 4. 碰撞检测（直接比对“内容坐标”）
   const cards = grid.querySelectorAll('.config-card')
   previewIds.value.clear()
 
   cards.forEach(card => {
-    // 获取卡片相对于 Grid 内容顶部的偏移
     const cardTop = card.offsetTop
     const cardLeft = card.offsetLeft
     const cardWidth = card.offsetWidth
@@ -238,7 +232,6 @@ const onMouseUp = () => {
 
   if (!hasDragged.value) return
 
-  // 合并预览到选中
   previewIds.value.forEach(id => {
     if (selectedIds.value.has(id)) {
       selectedIds.value.delete(id)
@@ -247,47 +240,80 @@ const onMouseUp = () => {
     }
   })
   previewIds.value.clear()
-  // 通知父组件
-  emit('selection-change', Array.from(selectedIds.value))
+  emitSelection()
 }
 
-// 查看详情
 const viewDetail = (item) => {
-  // 阻止冒泡，防止触发卡片的点击选中逻辑
   emit('view-detail', item)
 }
 
-// 编辑组
 const editGroup = (item) => {
   emit('edit-group', item)
 }
 
-// 查看源路径情况
 const viewSourceDetail = (item) => {
   emit('inspect-source', item)
+}
+
+const emitSelection = () => {
+  const selectedData = props.items
+    .filter(item => {
+      const id = formatId(item.id || item.Id)
+      return selectedIds.value.has(id)
+    })
+    .map(item => {
+      const id = formatId(item.id || item.Id)
+      if (props.type === 'group') {
+        return {
+          id,
+          groupName: item.groupName || item.GroupName || `配置组 ${id}`
+        }
+      } else {
+        return {
+          id,
+          eqName: item.EqName || item.eqName || '未命名设备'
+        }
+      }
+    })
+
+  emit('selection-change', selectedData)
 }
 </script>
 
 <style scoped>
-.cards-view { width: 100%; }
+/* 1. 容器层：修正 cursor 和布局 */
+.cards-view {
+  width: 100%;
+  /* 确保父容器有定位，否则 box-sizing 或 offset 计算可能在某些浏览器下偏移 */
+  position: relative;
+  max-height: calc(100vh - 200px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px 8px 60px;
+  cursor: crosshair;
+}
+
+/* 2. 网格层 */
 .config-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 16px;
   position: relative;
   user-select: none;
+  min-height: 100%;
+  width: 100%;
 }
 
-/* ================= 框选工具样式 ================= */
+/* 3. 框选工具 */
 .selection-box {
   position: absolute;
   border: 1px dashed #52c41a;
   background-color: rgba(82, 196, 26, 0.15);
-  z-index: 999;
+  z-index: 100;
   pointer-events: none;
 }
 
-/* 卡片基础样式 */
+/* 4. 卡片基础：增加 cursor 覆盖 */
 .config-card {
   background: #fff;
   border: 1px solid #f0f0f0;
@@ -301,7 +327,8 @@ const viewSourceDetail = (item) => {
   box-sizing: border-box;
 }
 
-/* 碰到的预览样式 */
+/* 5. 状态样式：预览与选中 */
+/* 碰到但还没松手时 */
 .config-card.preview-toggle {
   border-color: #52c41a;
   box-shadow: 0 0 0 2px rgba(82, 196, 26, 0.2);
@@ -311,21 +338,39 @@ const viewSourceDetail = (item) => {
 .config-card.selected {
   border-color: #52c41a;
   background-color: #f6ffed;
-  box-shadow: inset 0 0 0 1px #52c41a;
+  border-width: 1px;
+  box-shadow: inset 0 0 0 1px #52c41a, 0 2px 8px rgba(82, 196, 26, 0.15);
 }
 
-/* 悬停浮起效果，如果是选中状态就不浮起了，避免乱飞 */
+/* 6. 交互细节 */
 .config-card:not(.selected):hover {
   box-shadow: 0 4px 12px rgba(0,0,0,0.08);
 }
 
 .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
-.clickable-title { color: var(--ant-primary, #1677ff); margin: 0; }
-.card-body p { margin: 8px 0; font-size: 13px; color: #666; }
-.card-actions { margin-top: 12px; padding-top: 12px; border-top: 1px solid #f0f0f0; display: flex; justify-content: space-between; }
-.card-actions a { color: var(--ant-primary, #1677ff); font-size: 13px; text-decoration: none; }
+.clickable-title {
+  color: #52c41a;
+  margin: 0;
+  cursor: pointer;
+}
+.clickable-title:hover {
+  text-decoration: underline;
+}
 
-/* 悬停详细信息面板 */
+.card-body p { margin: 8px 0; font-size: 13px; color: #666; line-height: 1.5; }
+.card-actions {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #f0f0f0;
+  display: flex;
+  justify-content: space-between;
+  position: relative;
+  z-index: 2;
+}
+.card-actions a { color: #52c41a; font-size: 13px; text-decoration: none; cursor: pointer; }
+.card-actions a:hover { opacity: 0.8; }
+
+/* 7. 悬停详细信息面板 */
 .hover-detail {
   max-height: 0;
   opacity: 0;
@@ -337,49 +382,30 @@ const viewSourceDetail = (item) => {
   box-sizing: border-box;
   transition: max-height 0.4s cubic-bezier(0.33, 1, 0.68, 1), opacity 0.3s ease, margin 0.2s ease;
 }
-/* 注意：为了防止拖拽框选时弹出一大片详情，加了 :not(.preview-toggle) */
-.config-card:hover:not(.preview-toggle) .hover-detail {
-  max-height: 200px;
+
+/* 防止拖拽框选时弹出一大片详情，同时选中状态建议也关闭详情展示以保持界面整洁 */
+.config-card:hover:not(.preview-toggle):not(.selected) .hover-detail {
+  max-height: 250px;
   opacity: 1;
   margin-top: 12px;
   padding: 12px;
 }
+
 .hover-detail-content { font-size: 12px; color: #555; line-height: 1.6; }
 .hover-detail-content div { margin-bottom: 6px; word-break: break-all; }
 .hover-detail-content strong { color: #333; margin-right: 6px; }
 
-/* 1. 给最外层容器增加高度限制和滚动条 */
-.cards-view {
-  width: 100%;
-  max-height: calc(100vh - 200px);
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 8px 8px 60px;
-  cursor: crosshair;
-}
+/* 8. 滚动条美化 */
+.cards-view::-webkit-scrollbar { width: 6px; }
+.cards-view::-webkit-scrollbar-track { background: transparent; }
+.cards-view::-webkit-scrollbar-thumb { background: #d9d9d9; border-radius: 10px; }
+.cards-view::-webkit-scrollbar-thumb:hover { background: #bfbfbf; }
 
-/* 2. 顺手把滚动条美化一下（应用问题2里的拓展样式） */
-.cards-view::-webkit-scrollbar {
-  width: 6px;
-}
-.cards-view::-webkit-scrollbar-track {
-  background: transparent;
-}
-.cards-view::-webkit-scrollbar-thumb {
-  background: #d9d9d9;
-  border-radius: 10px;
-}
-.cards-view::-webkit-scrollbar-thumb:hover {
-  background: #bfbfbf;
-}
-
-.config-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 16px;
-  position: relative;
-  user-select: none;
-  min-height: 100%;
+/* 9. 状态占位符样式 */
+.loading-placeholder, .error-placeholder, .empty-placeholder {
+  padding: 40px;
+  text-align: center;
+  color: #999;
   width: 100%;
 }
 </style>
