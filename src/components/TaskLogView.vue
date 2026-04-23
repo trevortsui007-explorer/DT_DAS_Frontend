@@ -1,14 +1,25 @@
 <template>
   <div class="task-log-view">
-
     <div class="task-log-layout">
       <section class="task-log-card">
         <div class="task-log-card__header">
-          <div>
+          <div class="task-log-card__header-left">
             <h3 class="task-log-card__title">当前任务</h3>
-            <p class="task-log-card__desc">
-              查看当前选中任务的状态、进度和明细
-            </p>
+            <p class="task-log-card__desc">查看当前选中任务的状态、进度和明细</p>
+          </div>
+          <div class="task-log-card__header-right">
+            <div class="task-log-filter-row">
+              <button
+                v-for="tag in detailFilterTags"
+                :key="tag"
+                type="button"
+                class="status-tag status-tag--filter"
+                :class="[getStatusClass(tag), { 'status-tag--active': activeDetailTag === tag }]"
+                @click="setActiveDetailTag(tag)"
+              >
+                {{ tag }}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -66,10 +77,7 @@
             </div>
 
             <div class="task-progress-bar">
-              <div
-                class="task-progress-bar__inner"
-                :style="{ width: `${progressPercent}%` }"
-              />
+              <div class="task-progress-bar__inner" :style="{ width: `${progressPercent}%` }" />
             </div>
 
             <div class="task-progress-foot">
@@ -78,49 +86,49 @@
           </div>
 
           <div class="task-log-detail">
-            <div v-if="detailsLoading" class="loading-placeholder">
-              正在加载任务明细...
-            </div>
+            <div v-if="detailsLoading" class="loading-placeholder">正在加载任务明细...</div>
 
-            <div v-else-if="!taskDetails.length" class="empty-placeholder">
-              暂无任务明细
-            </div>
+            <div v-else class="task-log-detail-content">
+              <div v-if="!taskDetails.length" class="empty-placeholder">暂无任务明细</div>
 
-            <div v-else class="task-log-detail-list">
-              <div
-                v-for="item in taskDetails"
-                :key="item.id || `${item.fileName}-${item.startTime}`"
-                class="task-log-detail-item"
-              >
-                <div class="task-log-detail-item__top">
-                  <span class="task-log-file">{{ item.fileName || '--' }}</span>
-                  <span class="status-tag" :class="getStatusClass(item.status)">
-                    {{ item.status || '--' }}
-                  </span>
-                </div>
+              <div v-else-if="!filteredTaskDetails.length" class="empty-placeholder">
+                当前筛选条件下暂无记录
+              </div>
 
-                <div class="task-log-detail-item__meta">
-                  <span>配置ID：{{ item.configId ?? '--' }}</span>
-                  <span>起始行：{{ item.startRow ?? 0 }}</span>
-                  <span>处理行数：{{ item.processedRows ?? 0 }}</span>
-                </div>
+              <div v-else class="task-log-detail-list">
+                <div
+                  v-for="item in filteredTaskDetails"
+                  :key="item.id || `${item.fileName}-${item.startTime}`"
+                  class="task-log-detail-item"
+                >
+                  <div class="task-log-detail-item__top">
+                    <span class="task-log-file">{{ item.fileName || '--' }}</span>
+                    <span class="status-tag" :class="getStatusClass(item.status)">
+                      {{ item.status || '--' }}
+                    </span>
+                  </div>
 
-                <div class="task-log-detail-item__meta">
-                  <span>开始：{{ formatDateTime(item.startTime) }}</span>
-                  <span>结束：{{ formatDateTime(item.endTime) }}</span>
-                </div>
+                  <div class="task-log-detail-item__meta">
+                    <span>配置ID：{{ item.configId ?? '--' }}</span>
+                    <span>起始行：{{ item.startRow ?? 0 }}</span>
+                    <span>处理行数：{{ item.processedRows ?? 0 }}</span>
+                  </div>
 
-                <div v-if="item.errorMessage" class="task-log-error">
-                  {{ item.errorMessage }}
+                  <div class="task-log-detail-item__meta">
+                    <span>开始：{{ formatDateTime(item.startTime) }}</span>
+                    <span>结束：{{ formatDateTime(item.endTime) }}</span>
+                  </div>
+
+                  <div v-if="item.errorMessage" class="task-log-error">
+                    {{ item.errorMessage }}
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        <div v-else class="empty-placeholder">
-          暂无任务日志。请先执行采集任务。
-        </div>
+        <div v-else class="empty-placeholder">暂无任务日志。请先执行采集任务。</div>
       </section>
 
       <aside class="task-log-card task-log-history">
@@ -131,13 +139,9 @@
           </div>
         </div>
 
-        <div v-if="listLoading" class="loading-placeholder">
-          正在加载历史任务...
-        </div>
+        <div v-if="listLoading" class="loading-placeholder">正在加载历史任务...</div>
 
-        <div v-else-if="!taskList.length" class="empty-placeholder">
-          暂无历史任务
-        </div>
+        <div v-else-if="!taskList.length" class="empty-placeholder">暂无历史任务</div>
 
         <div v-else class="task-log-history-list">
           <div
@@ -199,6 +203,9 @@ const emit = defineEmits(['task-selected'])
 const currentTask = ref(null)
 const taskList = ref([])
 const taskDetails = ref([])
+const detailCacheByTaskId = ref({})
+const detailFilterTags = ['All', 'Running', 'Success',  'Failed']
+const activeDetailTag = ref('All')
 
 const listLoading = ref(false)
 const detailsLoading = ref(false)
@@ -215,13 +222,28 @@ const progressPercent = computed(() => {
   }
 
   const total = item.totalConfigs ?? 0
-  const processed =
-    item.processedCount ??
-    ((item.successCount ?? 0) + (item.failureCount ?? 0))
+  const processed = item.processedCount ?? (item.successCount ?? 0) + (item.failureCount ?? 0)
 
   if (!total) return 0
   return Math.max(0, Math.min(100, Math.round((processed / total) * 100)))
 })
+
+const normalizeStatus = (status) =>
+  String(status || '')
+    .replace(/\s+/g, '')
+    .toLowerCase()
+
+const filteredTaskDetails = computed(() => {
+  const selectedTag = normalizeStatus(activeDetailTag.value)
+  if (selectedTag === 'all') return taskDetails.value
+
+  return taskDetails.value.filter((item) => normalizeStatus(item.status) === selectedTag)
+})
+
+const setActiveDetailTag = (tag) => {
+  if (!detailFilterTags.includes(tag)) return
+  activeDetailTag.value = tag
+}
 
 const normalizeTask = (raw = {}) => ({
   taskLogId: raw.taskLogId || raw.id || raw.Id || '',
@@ -234,8 +256,7 @@ const normalizeTask = (raw = {}) => ({
   processedCount:
     raw.processedCount ??
     raw.ProcessedCount ??
-    ((raw.successCount ?? raw.SuccessCount ?? 0) +
-      (raw.failureCount ?? raw.FailureCount ?? 0)),
+    (raw.successCount ?? raw.SuccessCount ?? 0) + (raw.failureCount ?? raw.FailureCount ?? 0),
   progress: raw.progress ?? raw.Progress,
 })
 
@@ -263,7 +284,7 @@ const formatDateTime = (value) => {
 }
 
 const getStatusClass = (status) => {
-  const s = String(status || '').toLowerCase()
+  const s = normalizeStatus(status)
 
   if (s === 'success') return 'status-tag--success'
   if (s === 'failed') return 'status-tag--failed'
@@ -307,9 +328,7 @@ const loadTaskStatus = async (taskLogId) => {
     lastRefreshTime.value = new Date()
 
     taskList.value = taskList.value.map((item) =>
-      item.taskLogId === currentTask.value.taskLogId
-        ? { ...item, ...currentTask.value }
-        : item
+      item.taskLogId === currentTask.value.taskLogId ? { ...item, ...currentTask.value } : item,
     )
   } catch (err) {
     console.error('加载任务状态失败', err)
@@ -317,13 +336,24 @@ const loadTaskStatus = async (taskLogId) => {
   }
 }
 
-const loadTaskDetails = async (taskLogId) => {
+const loadTaskDetails = async (taskLogId, { force = false } = {}) => {
   if (!taskLogId) return
+
+  const cachedDetails = detailCacheByTaskId.value[taskLogId]
+  if (!force && cachedDetails) {
+    taskDetails.value = cachedDetails.map((item) => ({ ...item }))
+    return
+  }
 
   detailsLoading.value = true
   try {
     const res = await api.fetchTaskLogDetails(taskLogId)
-    taskDetails.value = (res?.data || res || []).map(normalizeDetail)
+    const normalizedDetails = (res?.data || res || []).map(normalizeDetail)
+    detailCacheByTaskId.value = {
+      ...detailCacheByTaskId.value,
+      [taskLogId]: normalizedDetails,
+    }
+    taskDetails.value = normalizedDetails
   } catch (err) {
     console.error('加载任务明细失败', err)
     notify.error('加载任务明细失败')
@@ -334,6 +364,7 @@ const loadTaskDetails = async (taskLogId) => {
 
 const selectTask = async (item) => {
   currentTask.value = normalizeTask(item)
+  activeDetailTag.value = 'All'
   emit('task-selected', currentTask.value)
 
   await Promise.all([
@@ -350,7 +381,7 @@ const refreshCurrentTask = async () => {
 
   await Promise.all([
     loadTaskStatus(currentTask.value.taskLogId),
-    loadTaskDetails(currentTask.value.taskLogId),
+    loadTaskDetails(currentTask.value.taskLogId, { force: true }),
   ])
 }
 
@@ -374,9 +405,9 @@ const startPolling = () => {
   pollingTimer.value = setInterval(async () => {
     await loadTaskStatus(currentTask.value.taskLogId)
 
-    const status = String(currentTask.value?.status || '').toLowerCase()
+    const status = normalizeStatus(currentTask.value?.status)
     if (['success', 'failed', 'partialsuccess'].includes(status)) {
-      await loadTaskDetails(currentTask.value.taskLogId)
+      await loadTaskDetails(currentTask.value.taskLogId, { force: true })
       stopPolling()
     }
   }, 3000)
@@ -398,7 +429,7 @@ watch(
     if (matched) {
       await selectTask(matched)
     }
-  }
+  },
 )
 
 onMounted(async () => {
@@ -473,10 +504,24 @@ onBeforeUnmount(() => {
 .task-log-card__header {
   display: flex;
   justify-content: flex-start;
-  align-items: flex-start;
-  gap: 12px;
+  align-items: center;
+  gap: 0;
   margin-bottom: 16px;
   flex-shrink: 0;
+}
+.task-log-card__header-left,
+.task-log-card__header-right {
+  flex: 0 0 50%;
+  min-width: 0;
+}
+
+.task-log-card__header-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-left: 20px;
+  border-left: 1px solid #eef2f6;
+  box-sizing: border-box;
 }
 
 .task-log-card__title {
@@ -580,6 +625,24 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
+.task-log-detail-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.task-log-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin-bottom: 0;
+}
+
 .task-log-section-title {
   font-size: 14px;
   font-weight: 600;
@@ -674,6 +737,21 @@ onBeforeUnmount(() => {
   font-weight: 600;
   box-sizing: border-box;
   flex-shrink: 0;
+}
+
+.status-tag--filter {
+  cursor: pointer;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.status-tag--filter:hover {
+  transform: translateY(-1px);
+}
+
+.status-tag--active {
+  box-shadow: 0 0 0 2px rgba(82, 196, 26, 0.18);
 }
 
 .status-tag--success {
