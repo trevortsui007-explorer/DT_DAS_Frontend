@@ -410,15 +410,31 @@ const handleTimeRangeAcquisition = () => {
 }
 
 // 确认提交
-const handleTaskStartConfirm = (data) => {
+const handleTaskStartConfirm = async (data) => {
   const hide = message.loading('正在下发采集任务...', 0)
-  console.log('下发数据:', data)
 
-  // 模拟请求
-  setTimeout(() => {
+  try {
+    // 1. 提取 ID 列表，并转为逗号分隔的字符串 "20,21"
+    const idsString = data.tasks.map(item => item.id).join(',')
+
+    // 2. 格式化日期：将 '2026-04-22T17:10' 转换为 '2026.04.22'
+    const formatDate = (dateStr) => {
+      if (!dateStr) return ''
+      return dateStr.split('T')[0].replace(/-/g, '.')
+    }
+
+    const startDate = formatDate(data.startTime)
+    const endDate = formatDate(data.endTime)
+
+    // 3. 调用 API
+    await api.executeConfigsRange(idsString, startDate, endDate)
     hide()
-    message.success(`任务已启动，采集配置数：[${currentConfig.value.length}] ，采集区间：${data.startTime} 至 ${data.endTime}`)
-  }, 1000)
+    message.success(`任务已成功下发！采集配置数：${data.tasks.length}`)
+  } catch (error) {
+    hide()
+    message.error('任务下发失败，请重试')
+    console.error(error)
+  }
 }
 
 const handleAcquisition = () => message.success('采集成功')
