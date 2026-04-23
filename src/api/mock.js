@@ -4,6 +4,17 @@ const delay = (data, time = 300) =>
 
 const getIdFromUrl = (url) => Number(url.split('?')[0].split('/').pop())
 
+const getTaskLogIdFromUrl = (url) => {
+  const pathname = url.split('?')[0]
+  const parts = pathname.split('/')
+  const taskLogId = parts[parts.indexOf('task-log') + 1]
+  return taskLogId || ''
+}
+
+const createMockTaskLogId = () => {
+  return `TL${Date.now()}`
+}
+
 // ====================== Mock 数据（扩展版） ======================
 
 // 任务数据 - 共18个
@@ -453,7 +464,6 @@ export const mockConfigs = {
       IsEnabled: true,
       FieldMappings: { "波长": "wavelength", "吸光度": "absorbance" }
     },
-    // 新增配置项
     {
       Id: 215,
       EqName: '有功功率表',
@@ -585,7 +595,7 @@ export const mockConfigs = {
   ]
 }
 
-// ====================== Mock 核心请求处理 ======================
+// ====================== 总览数据 ======================
 export const mockOverviewTrend = {
   data: [
     { time: '08:00', value: 120 },
@@ -606,10 +616,289 @@ export const mockOverviewActivities = {
   ],
 }
 
+// ====================== 任务日志数据 ======================
+export const mockTaskLogs = {
+  data: [
+    {
+      taskLogId: 'TL202604230001',
+      status: 'Running',
+      startTime: '2026-04-23T09:30:00',
+      endTime: '',
+      totalConfigs: 6,
+      successCount: 2,
+      failureCount: 1,
+      processedCount: 3,
+      progress: 50,
+    },
+    {
+      taskLogId: 'TL202604220003',
+      status: 'Success',
+      startTime: '2026-04-22T14:10:00',
+      endTime: '2026-04-22T14:15:36',
+      totalConfigs: 4,
+      successCount: 4,
+      failureCount: 0,
+      processedCount: 4,
+      progress: 100,
+    },
+    {
+      taskLogId: 'TL202604220002',
+      status: 'PartialSuccess',
+      startTime: '2026-04-22T10:20:00',
+      endTime: '2026-04-22T10:29:12',
+      totalConfigs: 5,
+      successCount: 3,
+      failureCount: 2,
+      processedCount: 5,
+      progress: 100,
+    },
+    {
+      taskLogId: 'TL202604210001',
+      status: 'Failed',
+      startTime: '2026-04-21T08:00:00',
+      endTime: '2026-04-21T08:02:10',
+      totalConfigs: 3,
+      successCount: 0,
+      failureCount: 3,
+      processedCount: 3,
+      progress: 100,
+    },
+  ],
+}
+
+export const mockTaskLogDetailsMap = {
+  TL202604230001: [
+    {
+      id: 'DTL-001',
+      taskLogId: 'TL202604230001',
+      configId: 201,
+      fileName: 'temperature_2026-04-23.csv',
+      status: 'Success',
+      startRow: 0,
+      processedRows: 120,
+      startTime: '2026-04-23T09:30:02',
+      endTime: '2026-04-23T09:30:18',
+      errorMessage: '',
+    },
+    {
+      id: 'DTL-002',
+      taskLogId: 'TL202604230001',
+      configId: 203,
+      fileName: 'voltage_2026-04-23.csv',
+      status: 'Success',
+      startRow: 0,
+      processedRows: 96,
+      startTime: '2026-04-23T09:30:04',
+      endTime: '2026-04-23T09:30:16',
+      errorMessage: '',
+    },
+    {
+      id: 'DTL-003',
+      taskLogId: 'TL202604230001',
+      configId: 207,
+      fileName: 'current_2026-04-23.csv',
+      status: 'Failed',
+      startRow: 80,
+      processedRows: 0,
+      startTime: '2026-04-23T09:30:05',
+      endTime: '2026-04-23T09:30:08',
+      errorMessage: '文件格式校验失败：缺少列“功率”',
+    },
+    {
+      id: 'DTL-004',
+      taskLogId: 'TL202604230001',
+      configId: 215,
+      fileName: 'power_2026-04-23.csv',
+      status: 'Running',
+      startRow: 0,
+      processedRows: 40,
+      startTime: '2026-04-23T09:30:10',
+      endTime: '',
+      errorMessage: '',
+    },
+  ],
+
+  TL202604220003: [
+    {
+      id: 'DTL-005',
+      taskLogId: 'TL202604220003',
+      configId: 223,
+      fileName: 'steam_flow_2026-04-22.csv',
+      status: 'Success',
+      startRow: 0,
+      processedRows: 88,
+      startTime: '2026-04-22T14:10:02',
+      endTime: '2026-04-22T14:10:20',
+      errorMessage: '',
+    },
+    {
+      id: 'DTL-006',
+      taskLogId: 'TL202604220003',
+      configId: 224,
+      fileName: 'boiler_pressure_2026-04-22.json',
+      status: 'Success',
+      startRow: 0,
+      processedRows: 60,
+      startTime: '2026-04-22T14:10:22',
+      endTime: '2026-04-22T14:10:40',
+      errorMessage: '',
+    },
+  ],
+
+  TL202604220002: [
+    {
+      id: 'DTL-007',
+      taskLogId: 'TL202604220002',
+      configId: 210,
+      fileName: 'cod_2026-04-22.json',
+      status: 'Success',
+      startRow: 0,
+      processedRows: 32,
+      startTime: '2026-04-22T10:20:00',
+      endTime: '2026-04-22T10:20:12',
+      errorMessage: '',
+    },
+    {
+      id: 'DTL-008',
+      taskLogId: 'TL202604220002',
+      configId: 211,
+      fileName: 'ammonia_2026-04-22.csv',
+      status: 'Failed',
+      startRow: 0,
+      processedRows: 0,
+      startTime: '2026-04-22T10:20:15',
+      endTime: '2026-04-22T10:20:17',
+      errorMessage: '远程文件不存在',
+    },
+  ],
+
+  TL202604210001: [
+    {
+      id: 'DTL-009',
+      taskLogId: 'TL202604210001',
+      configId: 228,
+      fileName: 'plc_2026-04-21.json',
+      status: 'Failed',
+      startRow: 0,
+      processedRows: 0,
+      startTime: '2026-04-21T08:00:00',
+      endTime: '2026-04-21T08:00:02',
+      errorMessage: 'FTP 连接失败',
+    },
+  ],
+}
+
+// ====================== 执行任务模拟 ======================
+const createMockExecutionTask = ({ ids, startDate, endDate }) => {
+  const configIds = String(ids || '')
+    .split(',')
+    .map(item => Number(item.trim()))
+    .filter(Boolean)
+
+  const taskLogId = createMockTaskLogId()
+
+  const taskLog = {
+    taskLogId,
+    status: 'Running',
+    startTime: new Date().toISOString(),
+    endTime: '',
+    totalConfigs: configIds.length || 1,
+    successCount: 0,
+    failureCount: 0,
+    processedCount: 0,
+    progress: 0,
+    startDate,
+    endDate,
+  }
+
+  mockTaskLogs.data.unshift(taskLog)
+
+  mockTaskLogDetailsMap[taskLogId] = configIds.map((configId, index) => {
+    const config = mockConfigs.data.find(item => item.Id === configId)
+
+    return {
+      id: `${taskLogId}-DETAIL-${index + 1}`,
+      taskLogId,
+      configId,
+      fileName: `${config?.TableName || 'unknown'}_${startDate || 'today'}.${config?.FileType || 'csv'}`,
+      status: index === 0 ? 'Running' : 'Pending',
+      startRow: 0,
+      processedRows: 0,
+      startTime: index === 0 ? new Date().toISOString() : '',
+      endTime: '',
+      errorMessage: '',
+    }
+  })
+
+  setTimeout(() => {
+    const target = mockTaskLogs.data.find(item => item.taskLogId === taskLogId)
+    const details = mockTaskLogDetailsMap[taskLogId] || []
+    if (!target) return
+
+    const runningIndex = details.findIndex(item => item.status === 'Running')
+    if (runningIndex !== -1) {
+      details[runningIndex].status = 'Success'
+      details[runningIndex].processedRows = 80 + runningIndex * 10
+      details[runningIndex].endTime = new Date().toISOString()
+
+      if (details[runningIndex + 1]) {
+        details[runningIndex + 1].status = 'Running'
+        details[runningIndex + 1].startTime = new Date().toISOString()
+      }
+
+      target.successCount += 1
+      target.processedCount += 1
+      target.progress = Math.round((target.processedCount / target.totalConfigs) * 100)
+    }
+  }, 2500)
+
+  setTimeout(() => {
+    const target = mockTaskLogs.data.find(item => item.taskLogId === taskLogId)
+    const details = mockTaskLogDetailsMap[taskLogId] || []
+    if (!target) return
+
+    details.forEach((item, index) => {
+      if (item.status === 'Pending' || item.status === 'Running') {
+        item.status = index % 4 === 3 ? 'Failed' : 'Success'
+        item.processedRows = item.status === 'Success' ? 100 + index * 5 : 0
+        item.startTime = item.startTime || new Date().toISOString()
+        item.endTime = new Date().toISOString()
+        item.errorMessage = item.status === 'Failed' ? '模拟异常：文件内容缺失' : ''
+      }
+    })
+
+    const successCount = details.filter(item => item.status === 'Success').length
+    const failureCount = details.filter(item => item.status === 'Failed').length
+    const processedCount = successCount + failureCount
+
+    target.successCount = successCount
+    target.failureCount = failureCount
+    target.processedCount = processedCount
+    target.progress = 100
+    target.endTime = new Date().toISOString()
+    target.status =
+      failureCount === 0 ? 'Success' :
+      successCount === 0 ? 'Failed' :
+      'PartialSuccess'
+  }, 6500)
+
+  return {
+    success: true,
+    data: {
+      taskLogId,
+      status: 'Running',
+      startDate,
+      endDate,
+    },
+  }
+}
+
+// ====================== Mock 核心请求处理 ======================
 export const mockRequest = (config) => {
   const { url, method, data } = config
   const pathname = url.split('?')[0]
 
+  // ====================== GROUP ======================
   if (pathname === '/api/file-configs/group' && method === 'get') {
     return delay({ data: mockGroups.data })
   }
@@ -654,6 +943,7 @@ export const mockRequest = (config) => {
     return delay({ data: mockTasks.data })
   }
 
+  // ====================== DASHBOARD ======================
   if (pathname === '/api/dashboard/trend' && method === 'get') {
     return delay({ data: mockOverviewTrend.data })
   }
@@ -662,9 +952,41 @@ export const mockRequest = (config) => {
     return delay({ data: mockOverviewActivities.data })
   }
 
-  // ====================== GROUP ======================
-  if (url === '/api/file-configs/group' && method === 'get') {
-    return delay({ data: mockGroups.data })
+  // ====================== TASK LOG ======================
+  if (pathname === '/api/data-acquisition/task-log' && method === 'get') {
+    return delay({ data: mockTaskLogs.data }, 400)
+  }
+
+  if (
+    pathname.startsWith('/api/data-acquisition/task-log/') &&
+    pathname.endsWith('/details') &&
+    method === 'get'
+  ) {
+    const taskLogId = getTaskLogIdFromUrl(url)
+    return delay({ data: mockTaskLogDetailsMap[taskLogId] || [] }, 350)
+  }
+
+  if (
+    pathname.startsWith('/api/data-acquisition/task-log/') &&
+    !pathname.endsWith('/details') &&
+    method === 'get'
+  ) {
+    const taskLogId = getTaskLogIdFromUrl(url)
+    const item = mockTaskLogs.data.find(log => log.taskLogId === taskLogId)
+    return delay({ data: item || null }, 300)
+  }
+
+  // ====================== EXECUTION ======================
+  if (pathname === '/api/data-acquisition/execute-configs-range' && method === 'post') {
+    const params = config.params || {}
+    return delay(
+      createMockExecutionTask({
+        ids: params.ids,
+        startDate: params.startDate,
+        endDate: params.endDate,
+      }),
+      500
+    )
   }
 
   // 未匹配的请求返回 null

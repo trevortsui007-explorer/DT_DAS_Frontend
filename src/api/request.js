@@ -5,7 +5,7 @@ import { mockRequest } from './mock'
 const USE_MOCK = false
 
 const request = axios.create({
-  baseURL: '', // http://localhost:31173
+  baseURL: '',
   timeout: 15000
 })
 
@@ -37,8 +37,8 @@ request.interceptors.response.use(
     const { config, response } = error
 
     // 2. 核心逻辑：当返回 404 时，尝试匹配 Mock
-    if (response && response.status === 404) {
-      console.warn(`接口 ${config.url} 404，正在尝试降级至 Mock...`)
+    if (response && (response.status === 404 || response.status === 405)) {
+      console.warn(`接口 ${config.url} ${response.status}，正在尝试降级至 Mock...`)
 
       const mockRes = mockRequest(config)
       if (mockRes) {

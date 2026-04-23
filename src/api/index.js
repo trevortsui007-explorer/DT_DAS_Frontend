@@ -152,6 +152,17 @@ export const updateTaskLog = (id, data) => {
   return request.put(`/api/data-acquisition/task-log/${id}`, data)
 }
 
+export const fetchTaskLogs = () => {
+  return request.get('/api/data-acquisition/task-log')
+}
+
+export const fetchTaskLogStatus = (taskLogId) => {
+  return request.get(`/api/data-acquisition/task-log/${taskLogId}`)
+}
+
+export const fetchTaskLogDetails = (taskLogId) => {
+  return request.get(`/api/data-acquisition/task-log/${taskLogId}/details`)
+}
 // ====================== EXECUTION ======================
 export const executeById = (id, processDate) => {
   return request.post(`/api/data-acquisition/execute-by-id/${id}`, null, {
