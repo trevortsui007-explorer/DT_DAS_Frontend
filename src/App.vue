@@ -39,6 +39,7 @@
 
       <TaskLogView
         v-if="activeTab === 'log'"
+        ref="taskLogViewRef"
       />
 
       <OverviewDashboard
@@ -122,6 +123,7 @@ const taskModalRef = ref(null)
 const importConfigModalRef = ref(null)
 const assignModalRef = ref(null)
 const inspectionModalRef = ref(null)
+const taskLogViewRef = ref(null)
 
 // ====================== state ======================
 const activeTab = ref('overview')
@@ -480,6 +482,25 @@ const pauseConfig = () => {
   }
 }
 
+const handleRefreshTaskStatus = async () => {
+  if (!taskLogViewRef.value?.refreshCurrentTask) {
+    message.warning('日志视图尚未就绪')
+    return
+  }
+
+  await taskLogViewRef.value.refreshCurrentTask()
+}
+
+const handleRefreshHistoryLogs = async () => {
+  if (!taskLogViewRef.value?.refreshHistoryList) {
+    message.warning('日志视图尚未就绪')
+    return
+  }
+
+  await taskLogViewRef.value.refreshHistoryList()
+  message.success('历史记录刷新成功')
+}
+
 // ====================== 按钮相关 ======================
 const BUTTON_CONFIG_MAP = {
   overview: [
@@ -533,10 +554,10 @@ const BUTTON_CONFIG_MAP = {
   ],
   log: [
     [
-      { text: '刷新任务状态', handler: loadAllData, btnType: 'blue', icon: ReloadOutlined },
+      { text: '刷新任务状态', handler: handleRefreshTaskStatus, btnType: 'blue', icon: ReloadOutlined },
     ],
     [
-      { text: '刷新历史记录', handler: loadAllData, btnType: 'primary', icon: ReloadOutlined },
+      { text: '刷新历史记录', handler: handleRefreshHistoryLogs, btnType: 'primary', icon: ReloadOutlined },
     ],
   ],
 }
