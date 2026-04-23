@@ -132,20 +132,57 @@
       </section>
 
       <aside class="task-log-card task-log-history">
-        <div class="task-log-card__header">
-          <div>
+        <div class="task-log-card__header task-log-history-header">
+          <div class="task-log-history-header__left">
             <h3 class="task-log-card__title">历史任务</h3>
             <p class="task-log-card__desc">点击切换查看不同任务</p>
           </div>
+          <div class="task-log-history-header__right">
+            <div class="history-date-filter">
+              <label class="history-date-filter__item">
+                <span>开始日期</span>
+                <input
+                  v-model="historyStartDateInput"
+                  type="date"
+                  class="history-date-filter__input ant-input"
+                  @change="applyHistoryDateFilter"
+                />
+              </label>
+              <label class="history-date-filter__item">
+                <span>结束日期</span>
+                <input
+                  v-model="historyEndDateInput"
+                  type="date"
+                  class="history-date-filter__input ant-input"
+                  @change="applyHistoryDateFilter"
+                />
+              </label>
+              <button
+                type="button"
+                class="ant-btn ant-btn-gray history-date-filter__clear"
+                :disabled="!historyStartDateInput && !historyEndDateInput"
+                @click="clearHistoryDateFilter"
+              >
+                清空
+              </button>
+            </div>
+          </div>
+        </div>
+        <div v-if="historyDateFilterError" class="history-date-filter__error">
+          {{ historyDateFilterError }}
         </div>
 
         <div v-if="listLoading" class="loading-placeholder">正在加载历史任务...</div>
 
         <div v-else-if="!taskList.length" class="empty-placeholder">暂无历史任务</div>
 
+        <div v-else-if="!filteredHistoryTaskList.length" class="empty-placeholder">
+          当前筛选条件下暂无历史任务记录
+        </div>
+
         <div v-else class="task-log-history-list">
           <div
-            v-for="item in taskList"
+            v-for="item in filteredHistoryTaskList"
             :key="item.taskLogId"
             class="task-log-history-item"
             :class="{ active: currentTask?.taskLogId === item.taskLogId }"
@@ -204,8 +241,13 @@ const currentTask = ref(null)
 const taskList = ref([])
 const taskDetails = ref([])
 const detailCacheByTaskId = ref({})
-const detailFilterTags = ['All', 'Running', 'Success',  'Failed']
+const detailFilterTags = ['All', 'Running', 'Success', 'PartialSuccess', 'Failed']
 const activeDetailTag = ref('All')
+const historyStartDateInput = ref('')
+const historyEndDateInput = ref('')
+const effectiveHistoryStartDate = ref('')
+const effectiveHistoryEndDate = ref('')
+const historyDateFilterError = ref('')
 
 const listLoading = ref(false)
 const detailsLoading = ref(false)
@@ -240,9 +282,66 @@ const filteredTaskDetails = computed(() => {
   return taskDetails.value.filter((item) => normalizeStatus(item.status) === selectedTag)
 })
 
+const getStartOfDayMs = (dateString) => {
+  if (!dateString) return null
+  const date = new Date(`${dateString}T00:00:00`)
+  return Number.isNaN(date.getTime()) ? null : date.getTime()
+}
+
+const getEndOfDayMs = (dateString) => {
+  if (!dateString) return null
+  const date = new Date(`${dateString}T23:59:59.999`)
+  return Number.isNaN(date.getTime()) ? null : date.getTime()
+}
+
+const getTaskStartTimeMs = (task) => {
+  const date = new Date(task?.startTime || '')
+  return Number.isNaN(date.getTime()) ? null : date.getTime()
+}
+
+const filteredHistoryTaskList = computed(() => {
+  const startBoundary = getStartOfDayMs(effectiveHistoryStartDate.value)
+  const endBoundary = getEndOfDayMs(effectiveHistoryEndDate.value)
+
+  return taskList.value.filter((item) => {
+    const taskStartTimeMs = getTaskStartTimeMs(item)
+    if (taskStartTimeMs === null) {
+      return startBoundary === null && endBoundary === null
+    }
+    if (startBoundary !== null && taskStartTimeMs < startBoundary) return false
+    if (endBoundary !== null && taskStartTimeMs > endBoundary) return false
+    return true
+  })
+})
+
 const setActiveDetailTag = (tag) => {
   if (!detailFilterTags.includes(tag)) return
   activeDetailTag.value = tag
+}
+
+const applyHistoryDateFilter = () => {
+  const startDateValue = historyStartDateInput.value
+  const endDateValue = historyEndDateInput.value
+  const nextStartMs = getStartOfDayMs(startDateValue)
+  const nextEndMs = getEndOfDayMs(endDateValue)
+
+  if (nextStartMs !== null && nextEndMs !== null && nextStartMs > nextEndMs) {
+    historyDateFilterError.value = '开始日期不能晚于结束日期'
+    notify.warning('开始日期不能晚于结束日期')
+    return
+  }
+
+  historyDateFilterError.value = ''
+  effectiveHistoryStartDate.value = startDateValue
+  effectiveHistoryEndDate.value = endDateValue
+}
+
+const clearHistoryDateFilter = () => {
+  historyStartDateInput.value = ''
+  historyEndDateInput.value = ''
+  effectiveHistoryStartDate.value = ''
+  effectiveHistoryEndDate.value = ''
+  historyDateFilterError.value = ''
 }
 
 const normalizeTask = (raw = {}) => ({
@@ -281,6 +380,12 @@ const formatDateTime = (value) => {
 
   const pad = (n) => String(n).padStart(2, '0')
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+}
+
+const getTodayDateString = () => {
+  const today = new Date()
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`
 }
 
 const getStatusClass = (status) => {
@@ -385,6 +490,10 @@ const refreshCurrentTask = async () => {
   ])
 }
 
+const refreshHistoryList = async () => {
+  await loadTaskList()
+}
+
 const stopPolling = () => {
   if (pollingTimer.value) {
     clearInterval(pollingTimer.value)
@@ -433,11 +542,19 @@ watch(
 )
 
 onMounted(async () => {
+  const todayDate = getTodayDateString()
+  historyEndDateInput.value = todayDate
+  effectiveHistoryEndDate.value = todayDate
   await loadTaskList()
 })
 
 onBeforeUnmount(() => {
   stopPolling()
+})
+
+defineExpose({
+  refreshHistoryList,
+  refreshCurrentTask,
 })
 </script>
 
@@ -522,6 +639,52 @@ onBeforeUnmount(() => {
   padding-left: 20px;
   border-left: 1px solid #eef2f6;
   box-sizing: border-box;
+}
+
+.task-log-history-header {
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.task-log-history-header__left {
+  min-width: 0;
+}
+
+.task-log-history-header__right {
+  margin-left: auto;
+}
+
+.history-date-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 8px 12px;
+}
+
+.history-date-filter__item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--ant-text-secondary, rgba(0, 0, 0, 0.45));
+}
+
+.history-date-filter__input {
+  min-width: 150px;
+  height: 30px;
+}
+
+.history-date-filter__clear {
+  height: 30px;
+  min-width: 64px;
+}
+
+.history-date-filter__error {
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: #cf1322;
 }
 
 .task-log-card__title {
@@ -819,6 +982,14 @@ onBeforeUnmount(() => {
 
   .task-log-summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .task-log-history-header {
+    align-items: stretch;
+  }
+
+  .history-date-filter {
+    justify-content: flex-start;
   }
 }
 </style>
