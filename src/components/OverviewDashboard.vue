@@ -162,7 +162,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .dashboard-container {
-  margin-top: 20px;
+  margin-top: 0;
   padding: 20px;
   background: #ffffff;
   border: 1px solid #f0f0f0;

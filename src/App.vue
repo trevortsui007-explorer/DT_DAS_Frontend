@@ -42,14 +42,21 @@
         ref="taskLogViewRef"
       />
 
-      <OverviewDashboard
-        v-else-if="activeTab === 'overview'"
-        :status-distribution="taskStatusDistribution"
-        :trend-data="overviewTrend"
-        :latest-activities="overviewActivities"
-        :loading="dashboardLoading"
-        :error="dashboardError"
-      />
+      <div v-else-if="activeTab === 'overview'" class="overview-stack">
+        <CornTimeFrame
+          :items="cronTimelineItems"
+          :loading="loading"
+          :error="error"
+          :max-height="210"
+        />
+        <OverviewDashboard
+          :status-distribution="taskStatusDistribution"
+          :trend-data="overviewTrend"
+          :latest-activities="overviewActivities"
+          :loading="dashboardLoading"
+          :error="dashboardError"
+        />
+      </div>
 
       <TableView
         v-else-if="activeTab === 'task'"
@@ -114,6 +121,8 @@ import {
 
 import * as api from './api'
 import OverviewDashboard from './components/OverviewDashboard.vue'
+import CornTimeFrame from './components/CronTimeFramePanel.vue'
+import { buildCronTimelineItems } from './utils/cronTimeline'
 
 // ====================== refs ======================
 const configModalRef = ref(null)
@@ -166,6 +175,8 @@ const taskStatusDistribution = computed(() => {
     { name: '禁用任务', value: disabledTasks, color: '#94a3b8' },
   ]
 })
+
+const cronTimelineItems = computed(() => buildCronTimelineItems(tasks.value))
 
 const currentTitle = computed(
   () =>
@@ -637,5 +648,11 @@ onMounted(() => {
 .header-actions {
   display: flex;
   gap: 8px;
+}
+
+.overview-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 </style>
