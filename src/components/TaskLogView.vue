@@ -168,6 +168,7 @@
             </div>
           </div>
         </div>
+
         <div v-if="historyDateFilterError" class="history-date-filter__error">
           {{ historyDateFilterError }}
         </div>
@@ -189,7 +190,7 @@
             @click="selectTask(item)"
           >
             <div class="task-log-history-item__top">
-              <span class="mono">{{ item.taskLogId || '--' }}</span>
+              <span class="mono task-log-history-id">{{ item.taskLogId || '--' }}</span>
               <span class="status-tag" :class="getStatusClass(item.status)">
                 {{ item.status || '--' }}
               </span>
@@ -204,6 +205,44 @@
             <div class="task-log-history-item__meta">
               <span>{{ formatDateTime(item.startTime) }}</span>
             </div>
+          </div>
+        </div>
+
+        <div v-if="taskListTotal > 0" class="task-log-history-footer">
+          <div class="task-log-history-footer__summary">
+            共 {{ taskListTotal }} 条，第 {{ taskListPageNo }} / {{ totalPages }} 页
+          </div>
+
+          <div class="task-log-history-pagination">
+            <button
+              type="button"
+              class="ant-btn ant-btn-gray"
+              :disabled="taskListPageNo <= 1 || listLoading"
+              @click="changeTaskListPage(taskListPageNo - 1)"
+            >
+              上一页
+            </button>
+
+            <button
+              v-for="page in visiblePageNumbers"
+              :key="page"
+              type="button"
+              class="ant-btn"
+              :class="page === taskListPageNo ? 'ant-btn-primary' : 'ant-btn-gray'"
+              :disabled="listLoading"
+              @click="changeTaskListPage(page)"
+            >
+              {{ page }}
+            </button>
+
+            <button
+              type="button"
+              class="ant-btn ant-btn-gray"
+              :disabled="taskListPageNo >= totalPages || listLoading"
+              @click="changeTaskListPage(taskListPageNo + 1)"
+            >
+              下一页
+            </button>
           </div>
         </div>
       </aside>
@@ -249,6 +288,10 @@ const effectiveHistoryStartDate = ref('')
 const effectiveHistoryEndDate = ref('')
 const historyDateFilterError = ref('')
 
+const taskListTotal = ref(0)
+const taskListPageNo = ref(1)
+const taskListPageSize = ref(10)
+
 const listLoading = ref(false)
 const detailsLoading = ref(false)
 const polling = ref(false)
@@ -268,6 +311,26 @@ const progressPercent = computed(() => {
 
   if (!total) return 0
   return Math.max(0, Math.min(100, Math.round((processed / total) * 100)))
+})
+
+const totalPages = computed(() => {
+  const total = Number(taskListTotal.value || 0)
+  const pageSize = Number(taskListPageSize.value || 10)
+  return Math.max(1, Math.ceil(total / pageSize))
+})
+
+const visiblePageNumbers = computed(() => {
+  const total = totalPages.value
+  const current = taskListPageNo.value
+  const start = Math.max(1, current - 2)
+  const end = Math.min(total, start + 4)
+  const adjustedStart = Math.max(1, end - 4)
+
+  const pages = []
+  for (let i = adjustedStart; i <= end; i += 1) {
+    pages.push(i)
+  }
+  return pages
 })
 
 const normalizeStatus = (status) =>
@@ -319,7 +382,8 @@ const setActiveDetailTag = (tag) => {
   activeDetailTag.value = tag
 }
 
-const applyHistoryDateFilter = () => {
+const applyHistoryDateFilter = async () => {
+
   const startDateValue = historyStartDateInput.value
   const endDateValue = historyEndDateInput.value
   const nextStartMs = getStartOfDayMs(startDateValue)
@@ -334,14 +398,16 @@ const applyHistoryDateFilter = () => {
   historyDateFilterError.value = ''
   effectiveHistoryStartDate.value = startDateValue
   effectiveHistoryEndDate.value = endDateValue
+  await loadTaskList(1)
 }
 
-const clearHistoryDateFilter = () => {
+const clearHistoryDateFilter = async () => {
   historyStartDateInput.value = ''
   historyEndDateInput.value = ''
   effectiveHistoryStartDate.value = ''
   effectiveHistoryEndDate.value = ''
   historyDateFilterError.value = ''
+  await loadTaskList(1)
 }
 
 const normalizeTask = (raw = {}) => ({
@@ -398,12 +464,25 @@ const getStatusClass = (status) => {
   return 'status-tag--default'
 }
 
-const loadTaskList = async () => {
+const loadTaskList = async (pageNo = taskListPageNo.value) => {
   listLoading.value = true
   try {
-    const res = await api.fetchTaskLogs()
-    const list = (res?.data || res || []).map(normalizeTask)
+    const params = {
+      pageNo,
+      pageSize: taskListPageSize.value,
+    }
+
+    if (effectiveHistoryStartDate.value) params.startDate = effectiveHistoryStartDate.value
+    if (effectiveHistoryEndDate.value) params.endDate = effectiveHistoryEndDate.value
+
+    const res = await api.fetchTaskLogs(params)
+    const rawList = res?.data?.items || res?.data || res || []
+    const list = Array.isArray(rawList) ? rawList.map(normalizeTask) : []
+
     taskList.value = list
+    taskListTotal.value = res?.data?.total ?? list.length
+    taskListPageNo.value = res?.data?.pageNo ?? pageNo
+    taskListPageSize.value = res?.data?.pageSize ?? taskListPageSize.value
 
     if (props.initialTaskLogId) {
       const matched = list.find((item) => item.taskLogId === props.initialTaskLogId)
@@ -413,8 +492,19 @@ const loadTaskList = async () => {
       }
     }
 
-    if (!currentTask.value && list.length) {
+    if (currentTask.value?.taskLogId) {
+      const currentInPage = list.find((item) => item.taskLogId === currentTask.value.taskLogId)
+      if (currentInPage) {
+        currentTask.value = normalizeTask(currentInPage)
+        return
+      }
+    }
+
+    if (list.length) {
       await selectTask(list[0])
+    } else {
+      currentTask.value = null
+      taskDetails.value = []
     }
   } catch (err) {
     console.error('加载任务日志列表失败', err)
@@ -422,6 +512,11 @@ const loadTaskList = async () => {
   } finally {
     listLoading.value = false
   }
+}
+
+const changeTaskListPage = async (page) => {
+  if (page < 1 || page > totalPages.value || page === taskListPageNo.value) return
+  await loadTaskList(page)
 }
 
 const loadTaskStatus = async (taskLogId) => {
@@ -491,7 +586,7 @@ const refreshCurrentTask = async () => {
 }
 
 const refreshHistoryList = async () => {
-  await loadTaskList()
+  await loadTaskList(taskListPageNo.value)
 }
 
 const stopPolling = () => {
@@ -568,35 +663,6 @@ defineExpose({
   overflow: hidden;
 }
 
-.task-log-page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
-  margin-bottom: 16px;
-  flex-shrink: 0;
-}
-
-.task-log-page-title {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--ant-text-primary, rgba(0, 0, 0, 0.85));
-}
-
-.task-log-page-desc {
-  margin: 4px 0 0;
-  font-size: 13px;
-  color: var(--ant-text-secondary, rgba(0, 0, 0, 0.45));
-}
-
-.task-log-page-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
 .task-log-layout {
   display: grid;
   grid-template-columns: 1.6fr 1fr;
@@ -639,6 +705,73 @@ defineExpose({
   padding-left: 20px;
   border-left: 1px solid #eef2f6;
   box-sizing: border-box;
+}
+
+.task-log-history-header {
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.task-log-history-header__left {
+  min-width: 0;
+}
+
+.task-log-history-header__right {
+  margin-left: auto;
+}
+
+.history-date-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 8px 12px;
+}
+
+.history-date-filter__item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--ant-text-secondary, rgba(0, 0, 0, 0.45));
+}
+
+.history-date-filter__input {
+  min-width: 150px;
+  height: 30px;
+}
+
+.history-date-filter__clear {
+  height: 30px;
+  min-width: 64px;
+}
+
+.history-date-filter__error {
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: #cf1322;
+}
+
+.task-log-card__header-left,
+.task-log-card__header-right {
+  flex: 0 0 50%;
+  min-width: 0;
+}
+
+.task-log-card__header-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-left: 20px;
+  border-left: 1px solid #eef2f6;
+  box-sizing: border-box;
+}
+
+.task-log-history {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .task-log-history-header {
@@ -823,7 +956,11 @@ defineExpose({
   min-height: 0;
   flex: 1;
   padding-right: 4px;
-  padding-bottom: 30px;
+  padding-bottom: 36px;
+}
+
+.task-log-history-list {
+  padding-bottom: 12px;
 }
 
 .task-log-detail-item,
@@ -847,7 +984,6 @@ defineExpose({
 }
 
 .task-log-detail-item__top,
-.task-log-history-item__top,
 .task-log-detail-item__meta,
 .task-log-history-item__meta {
   display: flex;
@@ -855,6 +991,13 @@ defineExpose({
   align-items: center;
   gap: 12px 24px;
   flex-wrap: wrap;
+}
+
+.task-log-history-item__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
 }
 
 .task-log-detail-item__top,
@@ -870,7 +1013,7 @@ defineExpose({
 }
 
 .task-log-file {
-  font-weight: 600;
+  font-weight: 700;
   color: var(--ant-text-primary, rgba(0, 0, 0, 0.85));
   word-break: break-all;
   flex: 1;
@@ -886,6 +1029,39 @@ defineExpose({
   color: #cf1322;
   font-size: 12px;
   word-break: break-word;
+}
+
+.task-log-history-id {
+  flex: 1;
+  min-width: 0;
+  word-break: break-all;
+  font-weight: 600;
+}
+
+.task-log-history-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0 4px;
+  margin-top: 12px;
+  border-top: 1px solid #eef2f6;
+  flex-shrink: 0;
+  background: #fafafa;
+  padding-bottom: 25px;
+}
+
+.task-log-history-footer__summary {
+  font-size: 12px;
+  color: var(--ant-text-secondary, rgba(0, 0, 0, 0.45));
+}
+
+.task-log-history-pagination {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
 }
 
 .status-tag {
@@ -967,15 +1143,6 @@ defineExpose({
 }
 
 @media (max-width: 1280px) {
-  .task-log-page-header {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .task-log-page-actions {
-    justify-content: flex-start;
-  }
-
   .task-log-layout {
     grid-template-columns: 1fr;
   }
@@ -989,6 +1156,15 @@ defineExpose({
   }
 
   .history-date-filter {
+    justify-content: flex-start;
+  }
+
+  .task-log-history-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .task-log-history-pagination {
     justify-content: flex-start;
   }
 }
