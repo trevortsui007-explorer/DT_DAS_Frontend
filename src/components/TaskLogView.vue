@@ -383,6 +383,7 @@ const setActiveDetailTag = (tag) => {
 }
 
 const applyHistoryDateFilter = async () => {
+
   const startDateValue = historyStartDateInput.value
   const endDateValue = historyEndDateInput.value
   const nextStartMs = getStartOfDayMs(startDateValue)
@@ -691,6 +692,66 @@ defineExpose({
   margin-bottom: 16px;
   flex-shrink: 0;
 }
+.task-log-card__header-left,
+.task-log-card__header-right {
+  flex: 0 0 50%;
+  min-width: 0;
+}
+
+.task-log-card__header-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-left: 20px;
+  border-left: 1px solid #eef2f6;
+  box-sizing: border-box;
+}
+
+.task-log-history-header {
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.task-log-history-header__left {
+  min-width: 0;
+}
+
+.task-log-history-header__right {
+  margin-left: auto;
+}
+
+.history-date-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 8px 12px;
+}
+
+.history-date-filter__item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--ant-text-secondary, rgba(0, 0, 0, 0.45));
+}
+
+.history-date-filter__input {
+  min-width: 150px;
+  height: 30px;
+}
+
+.history-date-filter__clear {
+  height: 30px;
+  min-width: 64px;
+}
+
+.history-date-filter__error {
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: #cf1322;
+}
 
 .task-log-card__header-left,
 .task-log-card__header-right {
@@ -876,6 +937,14 @@ defineExpose({
   gap: 10px;
   width: 100%;
   margin-bottom: 0;
+}
+
+.task-log-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: var(--ant-text-primary, rgba(0, 0, 0, 0.85));
+  flex-shrink: 0;
 }
 
 .task-log-detail-list,
