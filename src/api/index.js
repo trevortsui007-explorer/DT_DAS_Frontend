@@ -152,16 +152,25 @@ export const updateTaskLog = (id, data) => {
   return request.put(`/api/data-acquisition/task-log/${id}`, data)
 }
 
-export const fetchTaskLogs = () => {
-  return request.get('/api/data-acquisition/task-log')
+export const fetchTaskLogs = (params = {}) => {
+  return request.get('/api/data-acquisition/execution/task-logs', {
+    params: {
+      pageNo: params.pageNo ?? 1,
+      pageSize: params.pageSize ?? 10,
+      status: params.status ?? undefined,
+      taskId: params.taskId ?? undefined,
+      startTime: params.startTime ?? undefined,
+      endTime: params.endTime ?? undefined
+    }
+  })
 }
 
 export const fetchTaskLogStatus = (taskLogId) => {
-  return request.get(`/api/data-acquisition/task-log/${taskLogId}`)
+  return request.get(`/api/data-acquisition/execution/${taskLogId}/status`)
 }
 
 export const fetchTaskLogDetails = (taskLogId) => {
-  return request.get(`/api/data-acquisition/task-log/${taskLogId}/details`)
+  return request.get(`/api/data-acquisition/execution/${taskLogId}/details`)
 }
 // ====================== EXECUTION ======================
 export const executeById = (id, processDate) => {

@@ -1,14 +1,25 @@
 <template>
   <div class="task-log-view">
-
     <div class="task-log-layout">
       <section class="task-log-card">
         <div class="task-log-card__header">
-          <div>
+          <div class="task-log-card__header-left">
             <h3 class="task-log-card__title">当前任务</h3>
-            <p class="task-log-card__desc">
-              查看当前选中任务的状态、进度和明细
-            </p>
+            <p class="task-log-card__desc">查看当前选中任务的状态、进度和明细</p>
+          </div>
+          <div class="task-log-card__header-right">
+            <div class="task-log-filter-row">
+              <button
+                v-for="tag in detailFilterTags"
+                :key="tag"
+                type="button"
+                class="status-tag status-tag--filter"
+                :class="[getStatusClass(tag), { 'status-tag--active': activeDetailTag === tag }]"
+                @click="setActiveDetailTag(tag)"
+              >
+                {{ tag }}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -66,10 +77,7 @@
             </div>
 
             <div class="task-progress-bar">
-              <div
-                class="task-progress-bar__inner"
-                :style="{ width: `${progressPercent}%` }"
-              />
+              <div class="task-progress-bar__inner" :style="{ width: `${progressPercent}%` }" />
             </div>
 
             <div class="task-progress-foot">
@@ -78,77 +86,111 @@
           </div>
 
           <div class="task-log-detail">
-            <div v-if="detailsLoading" class="loading-placeholder">
-              正在加载任务明细...
-            </div>
+            <div v-if="detailsLoading" class="loading-placeholder">正在加载任务明细...</div>
 
-            <div v-else-if="!taskDetails.length" class="empty-placeholder">
-              暂无任务明细
-            </div>
+            <div v-else class="task-log-detail-content">
+              <div v-if="!taskDetails.length" class="empty-placeholder">暂无任务明细</div>
 
-            <div v-else class="task-log-detail-list">
-              <div
-                v-for="item in taskDetails"
-                :key="item.id || `${item.fileName}-${item.startTime}`"
-                class="task-log-detail-item"
-              >
-                <div class="task-log-detail-item__top">
-                  <span class="task-log-file">{{ item.fileName || '--' }}</span>
-                  <span class="status-tag" :class="getStatusClass(item.status)">
-                    {{ item.status || '--' }}
-                  </span>
-                </div>
+              <div v-else-if="!filteredTaskDetails.length" class="empty-placeholder">
+                当前筛选条件下暂无记录
+              </div>
 
-                <div class="task-log-detail-item__meta">
-                  <span>配置ID：{{ item.configId ?? '--' }}</span>
-                  <span>起始行：{{ item.startRow ?? 0 }}</span>
-                  <span>处理行数：{{ item.processedRows ?? 0 }}</span>
-                </div>
+              <div v-else class="task-log-detail-list">
+                <div
+                  v-for="item in filteredTaskDetails"
+                  :key="item.id || `${item.fileName}-${item.startTime}`"
+                  class="task-log-detail-item"
+                >
+                  <div class="task-log-detail-item__top">
+                    <span class="task-log-file">{{ item.fileName || '--' }}</span>
+                    <span class="status-tag" :class="getStatusClass(item.status)">
+                      {{ item.status || '--' }}
+                    </span>
+                  </div>
 
-                <div class="task-log-detail-item__meta">
-                  <span>开始：{{ formatDateTime(item.startTime) }}</span>
-                  <span>结束：{{ formatDateTime(item.endTime) }}</span>
-                </div>
+                  <div class="task-log-detail-item__meta">
+                    <span>配置ID：{{ item.configId ?? '--' }}</span>
+                    <span>起始行：{{ item.startRow ?? 0 }}</span>
+                    <span>处理行数：{{ item.processedRows ?? 0 }}</span>
+                  </div>
 
-                <div v-if="item.errorMessage" class="task-log-error">
-                  {{ item.errorMessage }}
+                  <div class="task-log-detail-item__meta">
+                    <span>开始：{{ formatDateTime(item.startTime) }}</span>
+                    <span>结束：{{ formatDateTime(item.endTime) }}</span>
+                  </div>
+
+                  <div v-if="item.errorMessage" class="task-log-error">
+                    {{ item.errorMessage }}
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        <div v-else class="empty-placeholder">
-          暂无任务日志。请先执行采集任务。
-        </div>
+        <div v-else class="empty-placeholder">暂无任务日志。请先执行采集任务。</div>
       </section>
 
       <aside class="task-log-card task-log-history">
-        <div class="task-log-card__header">
-          <div>
+        <div class="task-log-card__header task-log-history-header">
+          <div class="task-log-history-header__left">
             <h3 class="task-log-card__title">历史任务</h3>
             <p class="task-log-card__desc">点击切换查看不同任务</p>
           </div>
+          <div class="task-log-history-header__right">
+            <div class="history-date-filter">
+              <label class="history-date-filter__item">
+                <span>开始日期</span>
+                <input
+                  v-model="historyStartDateInput"
+                  type="date"
+                  class="history-date-filter__input ant-input"
+                  @change="applyHistoryDateFilter"
+                />
+              </label>
+              <label class="history-date-filter__item">
+                <span>结束日期</span>
+                <input
+                  v-model="historyEndDateInput"
+                  type="date"
+                  class="history-date-filter__input ant-input"
+                  @change="applyHistoryDateFilter"
+                />
+              </label>
+              <button
+                type="button"
+                class="ant-btn ant-btn-gray history-date-filter__clear"
+                :disabled="!historyStartDateInput && !historyEndDateInput"
+                @click="clearHistoryDateFilter"
+              >
+                清空
+              </button>
+            </div>
+          </div>
         </div>
 
-        <div v-if="listLoading" class="loading-placeholder">
-          正在加载历史任务...
+        <div v-if="historyDateFilterError" class="history-date-filter__error">
+          {{ historyDateFilterError }}
         </div>
 
-        <div v-else-if="!taskList.length" class="empty-placeholder">
-          暂无历史任务
+        <div v-if="listLoading" class="loading-placeholder">正在加载历史任务...</div>
+
+        <div v-else-if="!taskList.length" class="empty-placeholder">暂无历史任务</div>
+
+        <div v-else-if="!filteredHistoryTaskList.length" class="empty-placeholder">
+          当前筛选条件下暂无历史任务记录
         </div>
 
         <div v-else class="task-log-history-list">
           <div
-            v-for="item in taskList"
+            v-for="item in filteredHistoryTaskList"
             :key="item.taskLogId"
             class="task-log-history-item"
             :class="{ active: currentTask?.taskLogId === item.taskLogId }"
             @click="selectTask(item)"
           >
             <div class="task-log-history-item__top">
-              <span class="mono">{{ item.taskLogId || '--' }}</span>
+              <span class="mono task-log-history-id">{{ item.taskLogId || '--' }}</span>
               <span class="status-tag" :class="getStatusClass(item.status)">
                 {{ item.status || '--' }}
               </span>
@@ -163,6 +205,44 @@
             <div class="task-log-history-item__meta">
               <span>{{ formatDateTime(item.startTime) }}</span>
             </div>
+          </div>
+        </div>
+
+        <div v-if="taskListTotal > 0" class="task-log-history-footer">
+          <div class="task-log-history-footer__summary">
+            共 {{ taskListTotal }} 条，第 {{ taskListPageNo }} / {{ totalPages }} 页
+          </div>
+
+          <div class="task-log-history-pagination">
+            <button
+              type="button"
+              class="ant-btn ant-btn-gray"
+              :disabled="taskListPageNo <= 1 || listLoading"
+              @click="changeTaskListPage(taskListPageNo - 1)"
+            >
+              上一页
+            </button>
+
+            <button
+              v-for="page in visiblePageNumbers"
+              :key="page"
+              type="button"
+              class="ant-btn"
+              :class="page === taskListPageNo ? 'ant-btn-primary' : 'ant-btn-gray'"
+              :disabled="listLoading"
+              @click="changeTaskListPage(page)"
+            >
+              {{ page }}
+            </button>
+
+            <button
+              type="button"
+              class="ant-btn ant-btn-gray"
+              :disabled="taskListPageNo >= totalPages || listLoading"
+              @click="changeTaskListPage(taskListPageNo + 1)"
+            >
+              下一页
+            </button>
           </div>
         </div>
       </aside>
@@ -199,6 +279,18 @@ const emit = defineEmits(['task-selected'])
 const currentTask = ref(null)
 const taskList = ref([])
 const taskDetails = ref([])
+const detailCacheByTaskId = ref({})
+const detailFilterTags = ['All', 'Running', 'Success', 'Failed']
+const activeDetailTag = ref('All')
+const historyStartDateInput = ref('')
+const historyEndDateInput = ref('')
+const effectiveHistoryStartDate = ref('')
+const effectiveHistoryEndDate = ref('')
+const historyDateFilterError = ref('')
+
+const taskListTotal = ref(0)
+const taskListPageNo = ref(1)
+const taskListPageSize = ref(10)
 
 const listLoading = ref(false)
 const detailsLoading = ref(false)
@@ -215,13 +307,107 @@ const progressPercent = computed(() => {
   }
 
   const total = item.totalConfigs ?? 0
-  const processed =
-    item.processedCount ??
-    ((item.successCount ?? 0) + (item.failureCount ?? 0))
+  const processed = item.processedCount ?? (item.successCount ?? 0) + (item.failureCount ?? 0)
 
   if (!total) return 0
   return Math.max(0, Math.min(100, Math.round((processed / total) * 100)))
 })
+
+const totalPages = computed(() => {
+  const total = Number(taskListTotal.value || 0)
+  const pageSize = Number(taskListPageSize.value || 10)
+  return Math.max(1, Math.ceil(total / pageSize))
+})
+
+const visiblePageNumbers = computed(() => {
+  const total = totalPages.value
+  const current = taskListPageNo.value
+  const start = Math.max(1, current - 2)
+  const end = Math.min(total, start + 4)
+  const adjustedStart = Math.max(1, end - 4)
+
+  const pages = []
+  for (let i = adjustedStart; i <= end; i += 1) {
+    pages.push(i)
+  }
+  return pages
+})
+
+const normalizeStatus = (status) =>
+  String(status || '')
+    .replace(/\s+/g, '')
+    .toLowerCase()
+
+const filteredTaskDetails = computed(() => {
+  const selectedTag = normalizeStatus(activeDetailTag.value)
+  if (selectedTag === 'all') return taskDetails.value
+
+  return taskDetails.value.filter((item) => normalizeStatus(item.status) === selectedTag)
+})
+
+const getStartOfDayMs = (dateString) => {
+  if (!dateString) return null
+  const date = new Date(`${dateString}T00:00:00`)
+  return Number.isNaN(date.getTime()) ? null : date.getTime()
+}
+
+const getEndOfDayMs = (dateString) => {
+  if (!dateString) return null
+  const date = new Date(`${dateString}T23:59:59.999`)
+  return Number.isNaN(date.getTime()) ? null : date.getTime()
+}
+
+const getTaskStartTimeMs = (task) => {
+  const date = new Date(task?.startTime || '')
+  return Number.isNaN(date.getTime()) ? null : date.getTime()
+}
+
+const filteredHistoryTaskList = computed(() => {
+  const startBoundary = getStartOfDayMs(effectiveHistoryStartDate.value)
+  const endBoundary = getEndOfDayMs(effectiveHistoryEndDate.value)
+
+  return taskList.value.filter((item) => {
+    const taskStartTimeMs = getTaskStartTimeMs(item)
+    if (taskStartTimeMs === null) {
+      return startBoundary === null && endBoundary === null
+    }
+    if (startBoundary !== null && taskStartTimeMs < startBoundary) return false
+    if (endBoundary !== null && taskStartTimeMs > endBoundary) return false
+    return true
+  })
+})
+
+const setActiveDetailTag = (tag) => {
+  if (!detailFilterTags.includes(tag)) return
+  activeDetailTag.value = tag
+}
+
+const applyHistoryDateFilter = async () => {
+  const startDateValue = historyStartDateInput.value
+  const endDateValue = historyEndDateInput.value
+  const nextStartMs = getStartOfDayMs(startDateValue)
+  const nextEndMs = getEndOfDayMs(endDateValue)
+
+  if (nextStartMs !== null && nextEndMs !== null && nextStartMs > nextEndMs) {
+    historyDateFilterError.value = '开始日期不能晚于结束日期'
+    notify.warning('开始日期不能晚于结束日期')
+    return
+  }
+
+  historyDateFilterError.value = ''
+  effectiveHistoryStartDate.value = startDateValue
+  effectiveHistoryEndDate.value = endDateValue
+  await loadTaskList(1)
+}
+
+const clearHistoryDateFilter = async () => {
+  historyStartDateInput.value = ''
+  historyEndDateInput.value = ''
+  effectiveHistoryStartDate.value = ''
+  effectiveHistoryEndDate.value = ''
+  historyDateFilterError.value = ''
+  await loadTaskList(1)
+}
 
 const normalizeTask = (raw = {}) => ({
   taskLogId: raw.taskLogId || raw.id || raw.Id || '',
@@ -234,8 +420,7 @@ const normalizeTask = (raw = {}) => ({
   processedCount:
     raw.processedCount ??
     raw.ProcessedCount ??
-    ((raw.successCount ?? raw.SuccessCount ?? 0) +
-      (raw.failureCount ?? raw.FailureCount ?? 0)),
+    (raw.successCount ?? raw.SuccessCount ?? 0) + (raw.failureCount ?? raw.FailureCount ?? 0),
   progress: raw.progress ?? raw.Progress,
 })
 
@@ -262,8 +447,14 @@ const formatDateTime = (value) => {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
 }
 
+const getTodayDateString = () => {
+  const today = new Date()
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`
+}
+
 const getStatusClass = (status) => {
-  const s = String(status || '').toLowerCase()
+  const s = normalizeStatus(status)
 
   if (s === 'success') return 'status-tag--success'
   if (s === 'failed') return 'status-tag--failed'
@@ -272,12 +463,25 @@ const getStatusClass = (status) => {
   return 'status-tag--default'
 }
 
-const loadTaskList = async () => {
+const loadTaskList = async (pageNo = taskListPageNo.value) => {
   listLoading.value = true
   try {
-    const res = await api.fetchTaskLogs()
-    const list = (res?.data || res || []).map(normalizeTask)
+    const params = {
+      pageNo,
+      pageSize: taskListPageSize.value,
+    }
+
+    if (effectiveHistoryStartDate.value) params.startDate = effectiveHistoryStartDate.value
+    if (effectiveHistoryEndDate.value) params.endDate = effectiveHistoryEndDate.value
+
+    const res = await api.fetchTaskLogs(params)
+    const rawList = res?.data?.items || res?.data || res || []
+    const list = Array.isArray(rawList) ? rawList.map(normalizeTask) : []
+
     taskList.value = list
+    taskListTotal.value = res?.data?.total ?? list.length
+    taskListPageNo.value = res?.data?.pageNo ?? pageNo
+    taskListPageSize.value = res?.data?.pageSize ?? taskListPageSize.value
 
     if (props.initialTaskLogId) {
       const matched = list.find((item) => item.taskLogId === props.initialTaskLogId)
@@ -287,8 +491,19 @@ const loadTaskList = async () => {
       }
     }
 
-    if (!currentTask.value && list.length) {
+    if (currentTask.value?.taskLogId) {
+      const currentInPage = list.find((item) => item.taskLogId === currentTask.value.taskLogId)
+      if (currentInPage) {
+        currentTask.value = normalizeTask(currentInPage)
+        return
+      }
+    }
+
+    if (list.length) {
       await selectTask(list[0])
+    } else {
+      currentTask.value = null
+      taskDetails.value = []
     }
   } catch (err) {
     console.error('加载任务日志列表失败', err)
@@ -296,6 +511,11 @@ const loadTaskList = async () => {
   } finally {
     listLoading.value = false
   }
+}
+
+const changeTaskListPage = async (page) => {
+  if (page < 1 || page > totalPages.value || page === taskListPageNo.value) return
+  await loadTaskList(page)
 }
 
 const loadTaskStatus = async (taskLogId) => {
@@ -307,9 +527,7 @@ const loadTaskStatus = async (taskLogId) => {
     lastRefreshTime.value = new Date()
 
     taskList.value = taskList.value.map((item) =>
-      item.taskLogId === currentTask.value.taskLogId
-        ? { ...item, ...currentTask.value }
-        : item
+      item.taskLogId === currentTask.value.taskLogId ? { ...item, ...currentTask.value } : item,
     )
   } catch (err) {
     console.error('加载任务状态失败', err)
@@ -317,13 +535,24 @@ const loadTaskStatus = async (taskLogId) => {
   }
 }
 
-const loadTaskDetails = async (taskLogId) => {
+const loadTaskDetails = async (taskLogId, { force = false } = {}) => {
   if (!taskLogId) return
+
+  const cachedDetails = detailCacheByTaskId.value[taskLogId]
+  if (!force && cachedDetails) {
+    taskDetails.value = cachedDetails.map((item) => ({ ...item }))
+    return
+  }
 
   detailsLoading.value = true
   try {
     const res = await api.fetchTaskLogDetails(taskLogId)
-    taskDetails.value = (res?.data || res || []).map(normalizeDetail)
+    const normalizedDetails = (res?.data || res || []).map(normalizeDetail)
+    detailCacheByTaskId.value = {
+      ...detailCacheByTaskId.value,
+      [taskLogId]: normalizedDetails,
+    }
+    taskDetails.value = normalizedDetails
   } catch (err) {
     console.error('加载任务明细失败', err)
     notify.error('加载任务明细失败')
@@ -334,6 +563,7 @@ const loadTaskDetails = async (taskLogId) => {
 
 const selectTask = async (item) => {
   currentTask.value = normalizeTask(item)
+  activeDetailTag.value = 'All'
   emit('task-selected', currentTask.value)
 
   await Promise.all([
@@ -350,8 +580,12 @@ const refreshCurrentTask = async () => {
 
   await Promise.all([
     loadTaskStatus(currentTask.value.taskLogId),
-    loadTaskDetails(currentTask.value.taskLogId),
+    loadTaskDetails(currentTask.value.taskLogId, { force: true }),
   ])
+}
+
+const refreshHistoryList = async () => {
+  await loadTaskList(taskListPageNo.value)
 }
 
 const stopPolling = () => {
@@ -374,9 +608,9 @@ const startPolling = () => {
   pollingTimer.value = setInterval(async () => {
     await loadTaskStatus(currentTask.value.taskLogId)
 
-    const status = String(currentTask.value?.status || '').toLowerCase()
+    const status = normalizeStatus(currentTask.value?.status)
     if (['success', 'failed', 'partialsuccess'].includes(status)) {
-      await loadTaskDetails(currentTask.value.taskLogId)
+      await loadTaskDetails(currentTask.value.taskLogId, { force: true })
       stopPolling()
     }
   }, 3000)
@@ -398,15 +632,23 @@ watch(
     if (matched) {
       await selectTask(matched)
     }
-  }
+  },
 )
 
 onMounted(async () => {
+  const todayDate = getTodayDateString()
+  historyEndDateInput.value = todayDate
+  effectiveHistoryEndDate.value = todayDate
   await loadTaskList()
 })
 
 onBeforeUnmount(() => {
   stopPolling()
+})
+
+defineExpose({
+  refreshHistoryList,
+  refreshCurrentTask,
 })
 </script>
 
@@ -418,35 +660,6 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-}
-
-.task-log-page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
-  margin-bottom: 16px;
-  flex-shrink: 0;
-}
-
-.task-log-page-title {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--ant-text-primary, rgba(0, 0, 0, 0.85));
-}
-
-.task-log-page-desc {
-  margin: 4px 0 0;
-  font-size: 13px;
-  color: var(--ant-text-secondary, rgba(0, 0, 0, 0.45));
-}
-
-.task-log-page-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
 }
 
 .task-log-layout {
@@ -473,10 +686,77 @@ onBeforeUnmount(() => {
 .task-log-card__header {
   display: flex;
   justify-content: flex-start;
-  align-items: flex-start;
-  gap: 12px;
+  align-items: center;
+  gap: 0;
   margin-bottom: 16px;
   flex-shrink: 0;
+}
+
+.task-log-card__header-left,
+.task-log-card__header-right {
+  flex: 0 0 50%;
+  min-width: 0;
+}
+
+.task-log-card__header-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-left: 20px;
+  border-left: 1px solid #eef2f6;
+  box-sizing: border-box;
+}
+
+.task-log-history {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.task-log-history-header {
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.task-log-history-header__left {
+  min-width: 0;
+}
+
+.task-log-history-header__right {
+  margin-left: auto;
+}
+
+.history-date-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 8px 12px;
+}
+
+.history-date-filter__item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--ant-text-secondary, rgba(0, 0, 0, 0.45));
+}
+
+.history-date-filter__input {
+  min-width: 150px;
+  height: 30px;
+}
+
+.history-date-filter__clear {
+  height: 30px;
+  min-width: 64px;
+}
+
+.history-date-filter__error {
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: #cf1322;
 }
 
 .task-log-card__title {
@@ -580,12 +860,22 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
-.task-log-section-title {
-  font-size: 14px;
-  font-weight: 600;
-  margin-bottom: 12px;
-  color: var(--ant-text-primary, rgba(0, 0, 0, 0.85));
-  flex-shrink: 0;
+.task-log-detail-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.task-log-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin-bottom: 0;
 }
 
 .task-log-detail-list,
@@ -597,7 +887,11 @@ onBeforeUnmount(() => {
   min-height: 0;
   flex: 1;
   padding-right: 4px;
-  padding-bottom: 30px;
+  padding-bottom: 36px;
+}
+
+.task-log-history-list {
+  padding-bottom: 12px;
 }
 
 .task-log-detail-item,
@@ -621,7 +915,6 @@ onBeforeUnmount(() => {
 }
 
 .task-log-detail-item__top,
-.task-log-history-item__top,
 .task-log-detail-item__meta,
 .task-log-history-item__meta {
   display: flex;
@@ -629,6 +922,13 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 12px 24px;
   flex-wrap: wrap;
+}
+
+.task-log-history-item__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
 }
 
 .task-log-detail-item__top,
@@ -644,7 +944,7 @@ onBeforeUnmount(() => {
 }
 
 .task-log-file {
-  font-weight: 600;
+  font-weight: 700;
   color: var(--ant-text-primary, rgba(0, 0, 0, 0.85));
   word-break: break-all;
   flex: 1;
@@ -662,6 +962,39 @@ onBeforeUnmount(() => {
   word-break: break-word;
 }
 
+.task-log-history-id {
+  flex: 1;
+  min-width: 0;
+  word-break: break-all;
+  font-weight: 600;
+}
+
+.task-log-history-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0 4px;
+  margin-top: 12px;
+  border-top: 1px solid #eef2f6;
+  flex-shrink: 0;
+  background: #fafafa;
+  padding-bottom: 25px;
+}
+
+.task-log-history-footer__summary {
+  font-size: 12px;
+  color: var(--ant-text-secondary, rgba(0, 0, 0, 0.45));
+}
+
+.task-log-history-pagination {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+}
+
 .status-tag {
   display: inline-flex;
   align-items: center;
@@ -674,6 +1007,21 @@ onBeforeUnmount(() => {
   font-weight: 600;
   box-sizing: border-box;
   flex-shrink: 0;
+}
+
+.status-tag--filter {
+  cursor: pointer;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.status-tag--filter:hover {
+  transform: translateY(-1px);
+}
+
+.status-tag--active {
+  box-shadow: 0 0 0 2px rgba(82, 196, 26, 0.18);
 }
 
 .status-tag--success {
@@ -726,21 +1074,29 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 1280px) {
-  .task-log-page-header {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .task-log-page-actions {
-    justify-content: flex-start;
-  }
-
   .task-log-layout {
     grid-template-columns: 1fr;
   }
 
   .task-log-summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .task-log-history-header {
+    align-items: stretch;
+  }
+
+  .history-date-filter {
+    justify-content: flex-start;
+  }
+
+  .task-log-history-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .task-log-history-pagination {
+    justify-content: flex-start;
   }
 }
 </style>
