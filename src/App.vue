@@ -44,10 +44,15 @@
 
       <div v-else-if="activeTab === 'overview'" class="overview-stack">
         <CornTimeFrame
-          :items="cronTimelineItems"
+          :items="timelinePanelItems"
           :loading="loading"
           :error="error"
-          :max-height="210"
+          :max-height="160"
+          :reference-time="timelineEffectiveNow"
+          :is-test-mode="Boolean(timelineTestNow)"
+          @set-reference-time="handleSetTimelineReferenceTime"
+          @reset-reference-time="handleResetTimelineReferenceTime"
+          @open-log="handleOpenLogFromTimeline"
         />
         <OverviewDashboard
           :status-distribution="taskStatusDistribution"
@@ -96,7 +101,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import message, {
   StatCards, TableView, CardsView,
   ConfigModal, DetailDrawer, GroupModal,
@@ -158,6 +163,9 @@ const inspectionCache = ref({})
 // 采集Modal相关
 const acquisitionActionVisible = ref(false)
 const currentConfig = ref(null)
+const timelineRealNow = ref(new Date())
+const timelineTestNow = ref(null)
+let timelineNowTimer = null
 
 // ====================== computed ======================
 const stats = computed(() => ({
@@ -176,7 +184,57 @@ const taskStatusDistribution = computed(() => {
   ]
 })
 
-const cronTimelineItems = computed(() => buildCronTimelineItems(tasks.value))
+const DEFAULT_TIMELINE_COLORS = [
+  '#10b981',
+  '#3b82f6',
+  '#8b5cf6',
+  '#f59e0b',
+  '#14b8a6',
+  '#6366f1',
+  '#ef4444',
+]
+
+const pickTimelineColor = (taskName, index) => {
+  const key = String(taskName || index || '')
+  let hash = 0
+
+  for (let i = 0; i < key.length; i += 1) {
+    hash = (hash << 5) - hash + key.charCodeAt(i)
+    hash |= 0
+  }
+
+  return DEFAULT_TIMELINE_COLORS[Math.abs(hash) % DEFAULT_TIMELINE_COLORS.length]
+}
+
+const timelineEffectiveNow = computed(() => timelineTestNow.value || timelineRealNow.value)
+
+const rawCronTimelineItems = computed(() =>
+  buildCronTimelineItems(tasks.value, timelineEffectiveNow.value),
+)
+
+const timelinePanelItems = computed(() =>
+  rawCronTimelineItems.value.map((task, index) => {
+    const points = Array.isArray(task.rollingPoints)
+      ? task.rollingPoints.map((point) => ({
+          timestamp: point.timestamp,
+          time: point.timestamp,
+          type: point.type,
+          kind: point.kind,
+          status: point.status,
+        }))
+      : []
+
+    return {
+      id: task.id,
+      taskName: task.taskName,
+      isEnabled: task.isEnabled,
+      cronExpression: task.cronExpression,
+      color: pickTimelineColor(task.taskName, index),
+      points,
+      nextPoint: task.nextPoint || null,
+    }
+  }),
+)
 
 const currentTitle = computed(
   () =>
@@ -512,6 +570,45 @@ const handleRefreshHistoryLogs = async () => {
   message.success('历史记录刷新成功')
 }
 
+const handleOpenLogFromTimeline = async () => {
+  activeTab.value = 'log'
+  await nextTick()
+  await taskLogViewRef.value?.refreshHistoryList?.()
+}
+
+const toDateSafe = (value) => {
+  if (!value && value !== 0) return null
+  if (value instanceof Date) return value
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
+const handleSetTimelineReferenceTime = (value) => {
+  const parsed = toDateSafe(value)
+  if (!parsed) return
+  timelineTestNow.value = parsed
+}
+
+const handleResetTimelineReferenceTime = () => {
+  timelineTestNow.value = null
+  timelineRealNow.value = new Date()
+}
+
+const syncTimelineNow = () => {
+  timelineRealNow.value = new Date()
+}
+
+const startTimelineClock = () => {
+  syncTimelineNow()
+  timelineNowTimer = setInterval(syncTimelineNow, 60000)
+}
+
+const stopTimelineClock = () => {
+  if (!timelineNowTimer) return
+  clearInterval(timelineNowTimer)
+  timelineNowTimer = null
+}
+
 // ====================== 按钮相关 ======================
 const BUTTON_CONFIG_MAP = {
   overview: [
@@ -593,66 +690,30 @@ const getBtnClass = (btn) => {
 
 // ====================== 初始化数据 ======================
 onMounted(() => {
+  startTimelineClock()
   loadAllData()
+})
+
+onBeforeUnmount(() => {
+  stopTimelineClock()
 })
 </script>
 
-<style>
-.app-form-wrapper {
-  padding: 24px;
-  background: #f5f5f5;
-  min-height: 100vh;
-}
-
-.module-card {
-  background: #fff;
-  border-radius: 12px;
-  padding: 24px;
-  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
-}
-
+<style scoped>
 .module-card-overview {
-  padding: 28px 28px 32px;
-}
-
-.header-section {
+  padding: 16px 16px 14px;
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 24px;
-}
-
-.module-card-overview .header-section {
-  margin-bottom: 28px;
-}
-
-.header-title {
-  font-size: 18px;
-  font-weight: 600;
-  margin: 0 0 4px 0;
-}
-
-.module-card-overview .header-title {
-  font-size: 20px;
-}
-
-.header-desc {
-  font-size: 14px;
-  color: #8c8c8c;
-}
-
-.module-card-overview .header-desc {
-  font-size: 15px;
-}
-
-.header-actions {
-  display: flex;
-  gap: 8px;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .overview-stack {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 6px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 </style>
