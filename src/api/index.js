@@ -172,6 +172,10 @@ export const fetchTaskLogStatus = (taskLogId) => {
 export const fetchTaskLogDetails = (taskLogId) => {
   return request.get(`/api/data-acquisition/execution/${taskLogId}/details`)
 }
+
+export const fetchExecutionStatus = (taskLogId) => fetchTaskLogStatus(taskLogId)
+export const fetchExecutionDetails = (taskLogId) => fetchTaskLogDetails(taskLogId)
+
 // ====================== EXECUTION ======================
 export const executeById = (id, processDate) => {
   return request.post(`/api/data-acquisition/execute-by-id/${id}`, null, {
@@ -201,6 +205,64 @@ export const executeConfigsRange = (ids, startDate, endDate) => {
   return request.post('/api/data-acquisition/execute-configs-range', null, {
     params: { ids, startDate, endDate }
   })
+}
+
+// ====================== EXECUTION START ======================
+
+// 按配置 IDs 启动
+export const startExecutionByIds = (ids, processDate) => {
+  const params = new URLSearchParams()
+
+  ;(ids || []).forEach((id) => {
+    params.append('ids', id)
+  })
+
+  if (processDate) {
+    params.append('processDate', processDate)
+  }
+
+  return request.post('/api/data-acquisition/execution/start/by-ids', null, {
+    params
+  })
+}
+
+// 按组 IDs 启动
+export const startExecutionByGroups = (groupIds, processDate) => {
+  return request.post('/api/data-acquisition/execution/start/by-groups', null, {
+    params: { groupIds, processDate }
+  })
+}
+
+// 按任务 IDs 启动
+export const startExecutionByTasks = (taskIds, processDate) => {
+  return request.post('/api/data-acquisition/execution/start/by-tasks', null, {
+    params: { taskIds, processDate }
+  })
+}
+
+// 按单个配置 + 时间范围启动
+export const startExecutionByRange = (id, startDate, endDate) => {
+  return request.post(`/api/data-acquisition/execution/start/by-range/${id}`, null, {
+    params: { startDate, endDate }
+  })
+}
+
+// 按条件批量时间范围启动
+export const startExecutionConfigsRange = (params = {}) => {
+  return request.post(
+    '/api/data-acquisition/execution/start/configs-range',
+    {
+      ids: params.ids,
+      groupIds: params.groupIds,
+      taskIds: params.taskIds
+    },
+    {
+      params: {
+        startDate: params.startDate,
+        endDate: params.endDate
+      }
+    }
+  )
 }
 
 // ====================== SQL ======================
