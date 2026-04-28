@@ -40,6 +40,7 @@
       <TaskLogView
         v-if="activeTab === 'log'"
         ref="taskLogViewRef"
+        :initial-task-log-id="currentTaskLogId"
       />
 
       <div v-else-if="activeTab === 'overview'" class="overview-stack">
@@ -94,8 +95,17 @@
   <TaskModal ref="taskModalRef" @saved="onTaskSaved" />
   <ImportConfigModal ref="importConfigModalRef" @imported="handleImportSuccess" />
   <BatchAssignModal ref="assignModalRef" @confirm="handleAssignConfirm" />
-  <InspectionModal ref="inspectionModalRef" v-model:visible="inspectionVisible" :data="inspectionData" @change="handleInspectionMonthChange" />
-  <AcquisitionModal v-model:visible="acquisitionActionVisible" :task-data="currentConfig" @confirm="handleTaskStartConfirm" />
+  <InspectionModal
+    ref="inspectionModalRef"
+    v-model:visible="inspectionVisible"
+    :data="inspectionData"
+    @change="handleInspectionMonthChange"
+  />
+  <AcquisitionModal
+    v-model:visible="acquisitionActionVisible"
+    :task-data="currentConfig"
+    @confirm="handleTaskStartConfirm"
+  />
 
   <DetailDrawer ref="drawerRef" />
 </template>
@@ -150,9 +160,14 @@ const configs = ref([])
 const overviewTrend = ref([])
 const overviewActivities = ref([])
 
-const selectedIds = ref([])
 const dashboardLoading = ref(false)
 const dashboardError = ref('')
+
+// 统一用“选中的对象数组”保存，避免 modal 里拿不到名称
+const selectedItems = ref([])
+
+// 当前最新启动的任务日志 ID，传给 TaskLogView 聚焦
+const currentTaskLogId = ref('')
 
 // 巡检相关状态
 const inspectionVisible = ref(false)
@@ -160,7 +175,7 @@ const inspectionData = ref(null)
 const currentInspectingRow = ref(null)
 const inspectionCache = ref({})
 
-// 采集Modal相关
+// 采集 Modal 相关
 const acquisitionActionVisible = ref(false)
 const currentConfig = ref(null)
 const timelineRealNow = ref(new Date())
@@ -168,6 +183,13 @@ const timelineTestNow = ref(null)
 let timelineNowTimer = null
 
 // ====================== computed ======================
+const selectedItemIds = computed(() =>
+  (selectedItems.value || [])
+    .map((item) => item?.id)
+    .filter((id) => id !== undefined && id !== null && id !== '')
+    .map((id) => String(id)),
+)
+
 const stats = computed(() => ({
   tasks: tasks.value.length,
   groups: groups.value.length,
@@ -258,6 +280,33 @@ const currentDesc = computed(
     })[activeTab.value],
 )
 
+// ====================== helpers ======================
+const unwrapResult = (res) => res?.data ?? res
+
+const formatApiDate = (dateStr) => {
+  if (!dateStr) return ''
+  return String(dateStr).split('T')[0].replace(/-/g, '.')
+}
+
+const getTodayForApi = () => {
+  const now = new Date()
+  const yyyy = now.getFullYear()
+  const mm = String(now.getMonth() + 1).padStart(2, '0')
+  const dd = String(now.getDate()).padStart(2, '0')
+  return `${yyyy}.${mm}.${dd}`
+}
+
+const openLogTabForTask = async (taskLogId) => {
+  currentTaskLogId.value = taskLogId
+  activeTab.value = 'log'
+
+  await nextTick()
+
+  if (taskLogViewRef.value?.refreshCurrentTask) {
+    await taskLogViewRef.value.refreshCurrentTask()
+  }
+}
+
 // ====================== Overview 界面 ======================
 const loadAllData = async () => {
   loading.value = true
@@ -282,14 +331,14 @@ const loadAllData = async () => {
     error.value = '数据加载失败'
     message.error(error.value)
   } else {
-    tasks.value = tasksResult.value.data || []
-    groups.value = groupsResult.value.data || []
-    configs.value = configsResult.value.data || []
+    tasks.value = unwrapResult(tasksResult.value) || []
+    groups.value = unwrapResult(groupsResult.value) || []
+    configs.value = unwrapResult(configsResult.value) || []
   }
 
-  overviewTrend.value = trendResult.status === 'fulfilled' ? trendResult.value.data || [] : []
+  overviewTrend.value = trendResult.status === 'fulfilled' ? (unwrapResult(trendResult.value) || []) : []
   overviewActivities.value =
-    activitiesResult.status === 'fulfilled' ? activitiesResult.value.data || [] : []
+    activitiesResult.status === 'fulfilled' ? (unwrapResult(activitiesResult.value) || []) : []
 
   if (trendResult.status === 'rejected' || activitiesResult.status === 'rejected') {
     dashboardError.value = '部分总览数据加载失败'
@@ -328,7 +377,7 @@ const batchSyncGroups = () => message.success('批量同步进行中')
 const openNewConfig = () => configModalRef.value?.open(false)
 const editConfig = (config) => configModalRef.value?.open(true, config)
 
-// 当配置保存成功后，建议清空缓存，防止显示旧的巡检状态
+// 当配置保存成功后，清空巡检缓存，防止显示旧状态
 const onConfigSaved = () => {
   inspectionCache.value = {}
   message.success('配置保存成功')
@@ -347,31 +396,24 @@ const handleGoBackToImport = () => importConfigModalRef.value?.open(true)
 
 // 批量归组
 const openAssignModal = () => {
-  if (!selectedIds.value.length) {
+  if (!selectedItemIds.value.length) {
     message.error('请先选择配置项')
     return
   }
-  assignModalRef.value.open(selectedIds.value, groups.value)
+  assignModalRef.value.open(selectedItemIds.value, groups.value)
 }
 
 const handleAssignConfirm = async (data) => {
   const hideLoading = message.loading('正在同步关联关系，请稍候...')
 
   try {
-    // 获取当前原始状态（假设从 groups 列表里拿到的该组现有 ids）
-    const currentGroup = groups.value.find(g => g.id === data.groupId);
-    const originIds = currentGroup?.configIds || [];
+    const currentGroup = groups.value.find((g) => g.id === data.groupId)
+    const originIds = currentGroup?.configIds || []
 
-    // 用户当前选择的最新列表（先做个内部去重）
-    const selectedIds = [...new Set(data.configIds)];
+    const selectedIds = [...new Set(data.configIds)]
+    const idsToAdd = selectedIds.filter((id) => !originIds.includes(id))
+    const idsToRemove = originIds.filter((id) => !selectedIds.includes(id))
 
-    // 1. 找出真正需要新增的：在 selected 里，但不在 origin 里
-    const idsToAdd = selectedIds.filter(id => !originIds.includes(id));
-
-    // 2. 找出真正需要删除的：在 origin 里，但不在 selected 里
-    const idsToRemove = originIds.filter(id => !selectedIds.includes(id));
-
-    // 如果没有任何变化，直接结束
     if (idsToAdd.length === 0 && idsToRemove.length === 0) {
       message.info('数据未发生变化')
       return
@@ -388,12 +430,13 @@ const handleAssignConfirm = async (data) => {
     await loadAllData()
   } catch (error) {
     console.error('处理失败', error)
+    message.error('更新失败')
   } finally {
     hideLoading()
   }
 }
 
-// ====================== 卡片功能（Config)：源路径检视 逻辑 ======================
+// ====================== 卡片功能（Config)：源路径检视 ======================
 const fetchInspectionData = async (row, year, month) => {
   const cacheKey = `${row.id}_${year}_${month}`
 
@@ -416,7 +459,7 @@ const fetchInspectionData = async (row, year, month) => {
       pass: 'dt123456#',
     })
 
-    const result = res.data[0] || { files: [] }
+    const result = unwrapResult(res)?.[0] || { files: [] }
 
     inspectionCache.value[cacheKey] = result
     inspectionData.value = result
@@ -447,46 +490,56 @@ const handleInspectionMonthChange = ({ year, month }) => {
 }
 
 // ====================== Tab 切换 ======================
-const handleTabChange = (tab) => {
+const handleTabChange = async (tab) => {
   activeTab.value = tab
-  selectedIds.value = []
+  selectedItems.value = []
 }
 
 // ====================== 卡片相关 ======================
 const viewDetail = (item) => drawerRef.value?.open(item.EqName || item.groupName || '详情', item)
 
 const handleSelectionChange = (items) => {
-  selectedIds.value = items
+  selectedItems.value = Array.isArray(items) ? items : []
 }
 
 // ====================== 采集相关 ======================
 const handleTimeRangeAcquisition = () => {
-  if (!selectedIds.value.length) {
+  if (!selectedItems.value.length) {
     message.warning('请先选择配置')
     return
   }
-  currentConfig.value = selectedIds.value
+
+  currentConfig.value = [...selectedItems.value]
   acquisitionActionVisible.value = true
 }
 
+// 时间段采集
 const handleTaskStartConfirm = async (data) => {
   const hide = message.loading('正在下发采集任务...', 0)
 
   try {
-    const idsString = data.tasks.map(item => item.id).join(',')
+    const ids = (data.tasks || []).map((item) => String(item.id))
+    const startDate = formatApiDate(data.startTime)
+    const endDate = formatApiDate(data.endTime)
 
-    const formatDate = (dateStr) => {
-      if (!dateStr) return ''
-      return dateStr.split('T')[0].replace(/-/g, '.')
+    const res = await api.startExecutionConfigsRange({
+      ids,
+      startDate,
+      endDate,
+    })
+
+    const result = unwrapResult(res)
+    const taskLogId = result?.taskLogId || ''
+
+    hide()
+
+    if (!taskLogId) {
+      message.warning(result?.message || '未生成任务日志，请检查条件')
+      return
     }
 
-    const startDate = formatDate(data.startTime)
-    const endDate = formatDate(data.endTime)
-
-    await api.executeConfigsRange(idsString, startDate, endDate)
-    hide()
-    message.success(`任务已成功下发！采集配置数：${data.tasks.length}`)
-    activeTab.value = 'log'
+    message.success(`任务已成功下发！采集配置数：${ids.length}`)
+    await openLogTabForTask(taskLogId)
   } catch (error) {
     hide()
     message.error('任务下发失败，请重试')
@@ -494,7 +547,36 @@ const handleTaskStartConfirm = async (data) => {
   }
 }
 
-const handleAcquisition = () => message.success('采集成功')
+// 单时间采集
+const handleAcquisition = async () => {
+  if (!selectedItemIds.value.length) {
+    message.warning('请先选择配置')
+    return
+  }
+
+  const hide = message.loading('正在下发采集任务...', 0)
+
+  try {
+    const processDate = getTodayForApi()
+    const res = await api.startExecutionByIds(selectedItemIds.value, processDate)
+    const result = unwrapResult(res)
+    const taskLogId = result?.taskLogId || ''
+
+    hide()
+
+    if (!taskLogId) {
+      message.warning(result?.message || '未生成任务日志，请检查所选配置')
+      return
+    }
+
+    message.success('采集任务已启动')
+    await openLogTabForTask(taskLogId)
+  } catch (error) {
+    hide()
+    message.error('采集任务下发失败')
+    console.error(error)
+  }
+}
 
 // ====================== 启停相关 ======================
 const startTask = () => message.success('任务开启...')
@@ -503,51 +585,53 @@ const pauseTask = () => message.success('任务暂停...')
 const startGroup = () => message.success('配置组开启...')
 const pauseGroup = () => message.success('配置组暂停...')
 
-const startConfig = () => {
-  if (selectedIds.value.length === 0) {
+const startConfig = async () => {
+  if (selectedItemIds.value.length === 0) {
     message.warning('请先选择配置')
     return
   }
 
-  const idsToUpdate = [...selectedIds.value]
+  const idsToUpdate = [...selectedItemIds.value]
 
   try {
-    api.setConfigStatus(idsToUpdate, true)
+    await api.setConfigStatus(idsToUpdate, true)
     message.success('开启成功')
 
-    configs.value.forEach(cfg => {
-      if (idsToUpdate.includes(cfg.id)) {
+    configs.value.forEach((cfg) => {
+      if (idsToUpdate.includes(String(cfg.id))) {
         cfg.isEnabled = true
       }
     })
 
-    selectedIds.value = []
+    selectedItems.value = []
   } catch (err) {
-    message.error('操作失败', err)
+    message.error('操作失败')
+    console.error(err)
   }
 }
 
-const pauseConfig = () => {
-  if (selectedIds.value.length === 0) {
+const pauseConfig = async () => {
+  if (selectedItemIds.value.length === 0) {
     message.warning('请先选择配置')
     return
   }
 
-  const idsToUpdate = [...selectedIds.value]
+  const idsToUpdate = [...selectedItemIds.value]
 
   try {
-    api.setConfigStatus(idsToUpdate, false)
+    await api.setConfigStatus(idsToUpdate, false)
     message.success('暂停成功')
 
-    configs.value.forEach(cfg => {
-      if (idsToUpdate.includes(cfg.id)) {
+    configs.value.forEach((cfg) => {
+      if (idsToUpdate.includes(String(cfg.id))) {
         cfg.isEnabled = false
       }
     })
 
-    selectedIds.value = []
+    selectedItems.value = []
   } catch (err) {
-    message.error('操作失败', err)
+    message.error('操作失败')
+    console.error(err)
   }
 }
 

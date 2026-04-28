@@ -26,8 +26,17 @@
         <div v-if="currentTask" class="task-log-current">
           <div class="task-log-summary-grid">
             <div class="task-log-summary-item">
-              <span class="label">任务ID</span>
-              <span class="value mono">{{ currentTask.taskLogId || '--' }}</span>
+              <span class="label">任务编号</span>
+              <span class="value mono">{{ currentTask.taskCode || currentTask.taskLogId || '--' }}</span>
+            </div>
+
+            <div class="task-log-summary-item">
+              <span class="label">触发类型</span>
+              <span class="value">
+                <span class="trigger-tag" :class="getTriggerTypeClass(currentTask.triggerType)">
+                  {{ formatTriggerType(currentTask.triggerType) }}
+                </span>
+              </span>
             </div>
 
             <div class="task-log-summary-item">
@@ -190,7 +199,7 @@
             @click="selectTask(item)"
           >
             <div class="task-log-history-item__top">
-              <span class="mono task-log-history-id">{{ item.taskLogId || '--' }}</span>
+              <span class="mono task-log-history-id">{{ item.taskCode || item.taskLogId || '--' }}</span>
               <span class="status-tag" :class="getStatusClass(item.status)">
                 {{ item.status || '--' }}
               </span>
@@ -200,6 +209,14 @@
               <span>总数 {{ item.totalConfigs ?? 0 }}</span>
               <span>成功 {{ item.successCount ?? 0 }}</span>
               <span>失败 {{ item.failureCount ?? 0 }}</span>
+              <span class="trigger-inline">
+                <span
+                  class="trigger-tag"
+                  :class="getTriggerTypeClass(item.triggerType)"
+                >
+                  {{ formatTriggerType(item.triggerType) }}
+                </span>
+              </span>
             </div>
 
             <div class="task-log-history-item__meta">
@@ -411,7 +428,10 @@ const clearHistoryDateFilter = async () => {
 }
 
 const normalizeTask = (raw = {}) => ({
-  taskLogId: raw.taskLogId || raw.id || raw.Id || '',
+  taskLogId: raw.taskLogId || raw.TaskLogId || raw.id || raw.Id || '',
+  taskCode: raw.taskCode || raw.TaskCode || '',
+  triggerType: raw.triggerType || raw.TriggerType || '',
+  taskId: raw.taskId ?? raw.TaskId ?? 0,
   status: raw.status || raw.Status || '',
   startTime: raw.startTime || raw.StartTime || '',
   endTime: raw.endTime || raw.EndTime || '',
@@ -423,6 +443,7 @@ const normalizeTask = (raw = {}) => ({
     raw.ProcessedCount ??
     (raw.successCount ?? raw.SuccessCount ?? 0) + (raw.failureCount ?? raw.FailureCount ?? 0),
   progress: raw.progress ?? raw.Progress,
+  message: raw.message || raw.Message || '',
 })
 
 const normalizeDetail = (raw = {}) => ({
@@ -464,6 +485,24 @@ const getStatusClass = (status) => {
   return 'status-tag--default'
 }
 
+const formatTriggerType = (triggerType) => {
+  const type = String(triggerType || '').toUpperCase()
+
+  if (type === 'MAN') return '手动触发'
+  if (type === 'SCH') return '定时执行'
+
+  return '--'
+}
+
+const getTriggerTypeClass = (triggerType) => {
+  const type = String(triggerType || '').toUpperCase()
+
+  if (type === 'MAN') return 'trigger-tag--manual'
+  if (type === 'SCH') return 'trigger-tag--scheduled'
+
+  return 'trigger-tag--default'
+}
+
 const loadTaskList = async (pageNo = taskListPageNo.value) => {
   listLoading.value = true
   try {
@@ -472,8 +511,8 @@ const loadTaskList = async (pageNo = taskListPageNo.value) => {
       pageSize: taskListPageSize.value,
     }
 
-    if (effectiveHistoryStartDate.value) params.startDate = effectiveHistoryStartDate.value
-    if (effectiveHistoryEndDate.value) params.endDate = effectiveHistoryEndDate.value
+    if (effectiveHistoryStartDate.value) params.startTime = effectiveHistoryStartDate.value
+    if (effectiveHistoryEndDate.value) params.endTime = getDateStringAfterDays(effectiveHistoryEndDate.value, 1)
 
     const res = await api.fetchTaskLogs(params)
     const rawList = res?.data?.items || res?.data || res || []
@@ -512,6 +551,15 @@ const loadTaskList = async (pageNo = taskListPageNo.value) => {
   } finally {
     listLoading.value = false
   }
+}
+
+const getDateStringAfterDays = (dateString, days = 0) => {
+  if (!dateString) return ''
+  const date = new Date(`${dateString}T00:00:00`)
+  date.setDate(date.getDate() + days)
+
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 }
 
 const changeTaskListPage = async (page) => {
@@ -617,6 +665,15 @@ const startPolling = () => {
   }, 3000)
 }
 
+// 自动轮询
+const status = normalizeStatus(currentTask.value?.status)
+if (status === 'running') {
+  startPolling()
+} else {
+  stopPolling()
+}
+
+// TODO: 轮询开关
 const togglePolling = () => {
   if (polling.value) {
     stopPolling()
@@ -636,10 +693,25 @@ watch(
   },
 )
 
+// 获取一个月起点
+const getDateStringOneMonthAgo = () => {
+  const date = new Date()
+  date.setMonth(date.getMonth() - 1)
+
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+}
+
+// 默认查看一个月
 onMounted(async () => {
   const todayDate = getTodayDateString()
+  const oneMonthAgoDate = getDateStringOneMonthAgo()
+
+  historyStartDateInput.value = oneMonthAgoDate
   historyEndDateInput.value = todayDate
+  effectiveHistoryStartDate.value = oneMonthAgoDate
   effectiveHistoryEndDate.value = todayDate
+
   await loadTaskList()
 })
 
@@ -1167,5 +1239,44 @@ defineExpose({
   .task-log-history-pagination {
     justify-content: flex-start;
   }
+}
+
+.trigger-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.trigger-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 38px;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.trigger-tag--manual {
+  background: #f6ffed;
+  color: #389e0d;
+  border: 1px solid #b7eb8f;
+}
+
+.trigger-tag--scheduled {
+  background: #fffbe6;
+  color: #d48806;
+  border: 1px solid #ffe58f;
+}
+
+.trigger-tag--default {
+  background: #f5f5f5;
+  color: #595959;
+  border: 1px solid #d9d9d9;
 }
 </style>
