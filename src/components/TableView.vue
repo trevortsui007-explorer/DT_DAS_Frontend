@@ -35,7 +35,7 @@
             </td>
             <td class="font-600">{{ task.taskName || task.TaskName || '-' }}</td>
             <td>
-              <span class="ant-tag">{{ getTaskMode(task) }}</span>
+              <span :class="['task-mode-tag', getTaskModeClass(task)]">{{ getTaskMode(task) }}</span>
             </td>
             <td><code>{{ translateCron(task.cronExpression || task.CronExpression) }}</code></td>
             <td>
@@ -58,9 +58,41 @@
             <div class="sub-table-container">
               <div class="sub-header">关联的配置组详情：</div>
               <div v-if="getTaskGroups(task).length > 0" class="sub-grid">
-                <div v-for="g in getTaskGroups(task)" :key="getGroupId(g)" class="mini-group-card">
+                <button
+                  v-for="g in getTaskGroups(task)"
+                  :key="getGroupId(g)"
+                  type="button"
+                  class="mini-group-card"
+                  :class="{ active: isGroupSelected(task, g) }"
+                  @click="selectExpandedGroup(task, g)"
+                >
                   <span class="g-name">{{ getGroupName(g) }}</span>
                   <span class="g-count">{{ getGroupConfigCount(g) }} 项</span>
+                </button>
+
+                <div v-if="getSelectedGroup(task)" class="group-config-panel">
+                  <div class="group-config-header">
+                    <span>{{ getGroupName(getSelectedGroup(task)) }}</span>
+                    <span>{{ getResolvedGroupConfigCount(getSelectedGroup(task)) }} 个配置项</span>
+                  </div>
+                  <div v-if="getGroupConfigs(getSelectedGroup(task)).length" class="group-config-grid">
+                    <button
+                      v-for="config in getGroupConfigs(getSelectedGroup(task))"
+                      :key="getConfigId(config)"
+                      type="button"
+                      class="mini-config-card"
+                      title="查看配置详情"
+                      @click="viewConfigDetail(config)"
+                    >
+                      <div class="mini-config-title">{{ getConfigName(config) }}</div>
+                      <div class="mini-config-meta">
+                        <span>ID：{{ getConfigId(config) || '-' }}</span>
+                        <span v-if="getConfigTable(config)">表：{{ getConfigTable(config) }}</span>
+                        <span v-if="getConfigFileType(config)">类型：{{ getConfigFileType(config) }}</span>
+                      </div>
+                    </button>
+                  </div>
+                  <div v-else class="empty-sub">该配置组暂无配置项</div>
                 </div>
               </div>
               <div v-else class="empty-sub">暂未关联任何配置组</div>
@@ -85,14 +117,16 @@ const props = defineProps({
   type: String,
   tasks: { type: Array, default: () => [] },
   allGroups: { type: Array, default: () => [] }, // 需要父组件把全量Group传进来用于匹配
+  allConfigs: { type: Array, default: () => [] },
   stats: { type: Object, default: () => ({ tasks: 0, groups: 0, configs: 0 }) },
   loading: Boolean,
   error: String,
 })
 
-const emit = defineEmits(['edit-task'])
+const emit = defineEmits(['edit-task', 'view-detail'])
 
 const expandedRows = ref(new Set())
+const selectedGroupByTask = ref({})
 
 const toggleRow = (id) => {
   const normalizedId = normalizeId(id)
@@ -109,6 +143,61 @@ const getGroupId = (group) => normalizeId(group?.id ?? group?.Id ?? group?.group
 const getGroupName = (group) => group?.groupName || group?.GroupName || `配置组 ${getGroupId(group)}`
 const getGroupConfigCount = (group) => group?.configCount ?? group?.ConfigCount ?? 0
 const isTaskEnabled = (task) => task?.isEnabled ?? task?.IsEnabled ?? false
+const getConfigId = (config) => normalizeId(config?.id ?? config?.Id ?? config?.configId ?? config?.ConfigId)
+const getConfigName = (config) =>
+  config?.eqName ||
+  config?.EqName ||
+  config?.configName ||
+  config?.ConfigName ||
+  `配置 ${getConfigId(config)}`
+const getConfigTable = (config) => config?.tableName || config?.TableName || ''
+const getConfigFileType = (config) => config?.fileType || config?.FileType || ''
+const normalizeKey = (value) => String(value ?? '').trim().toLowerCase()
+
+const pickFirstArray = (...arrays) => arrays.find((item) => Array.isArray(item) && item.length) || []
+
+const enrichGroup = (group) => {
+  const matchedGroup = props.allGroups.find((item) => getGroupId(item) === getGroupId(group))
+
+  if (!matchedGroup) return group
+
+  return {
+    ...matchedGroup,
+    ...group,
+    associatedConfigs: pickFirstArray(
+      group?.associatedConfigs,
+      group?.AssociatedConfigs,
+      matchedGroup?.associatedConfigs,
+      matchedGroup?.AssociatedConfigs,
+    ),
+    AssociatedConfigs: pickFirstArray(
+      group?.AssociatedConfigs,
+      group?.associatedConfigs,
+      matchedGroup?.AssociatedConfigs,
+      matchedGroup?.associatedConfigs,
+    ),
+    configIds: pickFirstArray(
+      group?.configIds,
+      group?.ConfigIds,
+      group?.associatedConfigIds,
+      group?.AssociatedConfigIds,
+      matchedGroup?.configIds,
+      matchedGroup?.ConfigIds,
+      matchedGroup?.associatedConfigIds,
+      matchedGroup?.AssociatedConfigIds,
+    ),
+    ConfigIds: pickFirstArray(
+      group?.ConfigIds,
+      group?.configIds,
+      group?.AssociatedConfigIds,
+      group?.associatedConfigIds,
+      matchedGroup?.ConfigIds,
+      matchedGroup?.configIds,
+      matchedGroup?.AssociatedConfigIds,
+      matchedGroup?.associatedConfigIds,
+    ),
+  }
+}
 
 const extractTaskGroupIds = (task = {}) => {
   const rawIds = task.groupIds || task.GroupIds || task.groupIdsList || task.GroupIdsList || []
@@ -148,7 +237,7 @@ const getTaskGroups = (task) => {
     []
 
   if (Array.isArray(directGroups) && directGroups.length) {
-    return directGroups
+    return directGroups.map(enrichGroup)
   }
 
   const ids = new Set(extractTaskGroupIds(task))
@@ -161,13 +250,95 @@ const getTaskGroupCount = (task) => {
   return extractTaskGroupIds(task).length
 }
 
+const getGroupConfigs = (group) => {
+  const directConfigs =
+    group?.associatedConfigs ||
+    group?.AssociatedConfigs ||
+    group?.configs ||
+    group?.Configs ||
+    group?.groupConfigs ||
+    group?.GroupConfigs ||
+    []
+
+  if (Array.isArray(directConfigs) && directConfigs.length) {
+    return directConfigs
+  }
+
+  const configRefs =
+    group?.configIds ||
+    group?.ConfigIds ||
+    group?.configIdList ||
+    group?.ConfigIdList ||
+    group?.associatedConfigIds ||
+    group?.AssociatedConfigIds ||
+    []
+
+  if (!Array.isArray(configRefs) || !configRefs.length) {
+    return []
+  }
+
+  const refKeys = new Set(
+    configRefs
+      .map((item) => {
+        if (typeof item === 'object') {
+          return item.id ?? item.Id ?? item.configId ?? item.ConfigId ?? item.eqName ?? item.EqName
+        }
+        return item
+      })
+      .filter((value) => value !== undefined && value !== null && value !== '')
+      .map(normalizeKey),
+  )
+
+  return props.allConfigs.filter((config) => {
+    const id = getConfigId(config)
+    const name = getConfigName(config)
+    return refKeys.has(normalizeKey(id)) || refKeys.has(normalizeKey(name))
+  })
+}
+
+const getResolvedGroupConfigCount = (group) => {
+  const configs = getGroupConfigs(group)
+  return configs.length || getGroupConfigCount(group)
+}
+
+const selectExpandedGroup = (task, group) => {
+  const taskId = getTaskId(task)
+  const groupId = getGroupId(group)
+
+  selectedGroupByTask.value = {
+    ...selectedGroupByTask.value,
+    [taskId]: selectedGroupByTask.value[taskId] === groupId ? '' : groupId,
+  }
+}
+
+const getSelectedGroup = (task) => {
+  const taskId = getTaskId(task)
+  const selectedGroupId = selectedGroupByTask.value[taskId]
+
+  if (!selectedGroupId) return null
+  return getTaskGroups(task).find((group) => getGroupId(group) === selectedGroupId) || null
+}
+
+const isGroupSelected = (task, group) => {
+  return selectedGroupByTask.value[getTaskId(task)] === getGroupId(group)
+}
+
 const getTaskMode = (task) => {
   const mode = task.TaskMode ?? task.taskMode
   return mode === 1 ? '周期执行' : '常规任务'
 }
 
+const getTaskModeClass = (task) => {
+  const mode = task.TaskMode ?? task.taskMode
+  return mode === 1 ? 'is-periodic' : 'is-normal'
+}
+
 const editTask = (task) => {
   emit('edit-task', task)
+}
+
+const viewConfigDetail = (config) => {
+  emit('view-detail', config)
 }
 </script>
 
@@ -249,9 +420,83 @@ const editTask = (task) => {
   align-items: center;
   gap: 8px;
   font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
 }
+
+.mini-group-card:hover,
+.mini-group-card.active {
+  border-color: #52c41a;
+  background: #f6ffed;
+  box-shadow: 0 2px 8px rgba(82, 196, 26, 0.12);
+}
+
 .mini-group-card .g-name { color: #262626; }
 .mini-group-card .g-count { color: #52c41a; font-weight: bold; }
+
+.group-config-panel {
+  width: 100%;
+  margin-top: 12px;
+  padding: 12px;
+  background: #fff;
+  border: 1px solid #e8f5e1;
+  border-radius: 8px;
+}
+
+.group-config-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  color: #262626;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.group-config-header span:last-child {
+  color: #52c41a;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.group-config-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.mini-config-card {
+  padding: 10px;
+  border: 1px solid #f0f0f0;
+  border-radius: 6px;
+  background: #fafafa;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s;
+}
+
+.mini-config-card:hover {
+  border-color: #52c41a;
+  background: #f6ffed;
+  box-shadow: 0 2px 8px rgba(82, 196, 26, 0.12);
+}
+
+.mini-config-title {
+  margin-bottom: 6px;
+  color: #262626;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.mini-config-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #8c8c8c;
+  font-size: 12px;
+}
 
 /* 4. 状态点 & 标签 */
 .status-dot {
@@ -277,6 +522,32 @@ const editTask = (task) => {
   padding: 2px 8px;
   border-radius: 4px;
   font-size: 12px;
+}
+
+.task-mode-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 64px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.task-mode-tag.is-periodic {
+  color: #1677ff;
+  background: #eef6ff;
+  border: 1px solid #91caff;
+}
+
+.task-mode-tag.is-normal {
+  color: #389e0d;
+  background: #f6ffed;
+  border: 1px solid #b7eb8f;
 }
 
 .text-primary { color: #52c41a; }

@@ -70,9 +70,11 @@
         :tasks="tasks"
         :stats="stats"
         :allGroups="groups"
+        :allConfigs="configs"
         :loading="loading"
         :error="error"
         @edit-task="editTask"
+        @view-detail="viewDetail"
       />
 
       <CardsView
