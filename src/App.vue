@@ -114,6 +114,7 @@ import {
   PlayCircleOutlined,
   PauseCircleOutlined,
   PlusOutlined,
+  CopyOutlined,
   SyncOutlined,
   CloudUploadOutlined,
   PartitionOutlined,
@@ -305,8 +306,29 @@ const deleteGroup = () => message.success('删除配置组')
 const batchSyncGroups = () => message.success('批量同步进行中')
 
 // ====================== Config 界面 ======================
-const openNewConfig = () => configModalRef.value?.open(false)
-const editConfig = (config) => configModalRef.value?.open(true, config)
+const openNewConfig = () => configModalRef.value?.open(false, null, false, { existingConfigs: configs.value })
+const editConfig = (config) =>
+  configModalRef.value?.open(true, config, false, { existingConfigs: configs.value })
+
+const copyConfig = () => {
+  if (selectedItems.value.length !== 1) {
+    message.warning('请选择且只能选择 1 个配置进行复制')
+    return
+  }
+
+  const selectedId = String(selectedItems.value[0].id)
+  const sourceConfig = configs.value.find((item) => String(item.id || item.Id) === selectedId)
+
+  if (!sourceConfig) {
+    message.error('未找到选中的配置')
+    return
+  }
+
+  configModalRef.value?.open(false, { ...sourceConfig, id: '', Id: '' }, false, {
+    mode: 'copy',
+    existingConfigs: configs.value,
+  })
+}
 
 // 当配置保存成功后，清空巡检缓存，防止显示旧状态
 const onConfigSaved = () => {
@@ -321,7 +343,7 @@ const deleteConfig = () => console.log('删除配置')
 const importConfig = () => importConfigModalRef.value?.open(false)
 const handleImportSuccess = (data) => {
   message.success('导入成功，请继续确认配置')
-  configModalRef.value?.open(false, data, true)
+  configModalRef.value?.open(false, data, true, { existingConfigs: configs.value })
 }
 const handleGoBackToImport = () => importConfigModalRef.value?.open(true)
 
@@ -624,6 +646,7 @@ const BUTTON_CONFIG_MAP = {
     [
       { text: '导入配置', handler: importConfig, btnType: 'aqua', icon: CloudUploadOutlined },
       { text: '新增配置', handler: openNewConfig, btnType: 'primary', icon: PlusOutlined },
+      { text: '复制配置', handler: copyConfig, btnType: 'orange', icon: CopyOutlined },
       { text: '删除配置', handler: deleteConfig, btnType: 'red', icon: DeleteOutlined },
     ],
     [
