@@ -689,8 +689,40 @@ const handleAcquisition = async () => {
 const startTask = () => message.success('任务开启...')
 const pauseTask = () => message.success('任务暂停...')
 
-const startGroup = () => message.success('配置组开启...')
-const pauseGroup = () => message.success('配置组暂停...')
+const updateGroupStatus = async (isEnabled) => {
+  if (selectedItemIds.value.length === 0) {
+    message.warning('请先选择配置组')
+    return
+  }
+
+  const idsToUpdate = [...selectedItemIds.value]
+  const actionText = isEnabled ? '开启' : '暂停'
+  const hide = message.loading(`正在${actionText}配置组...`, 0)
+
+  try {
+    await api.setGroupStatus(idsToUpdate, isEnabled)
+
+    groups.value.forEach((group) => {
+      const groupId = String(group.id ?? group.Id)
+      if (idsToUpdate.includes(groupId)) {
+        group.isEnabled = isEnabled
+        group.IsEnabled = isEnabled
+      }
+    })
+
+    selectedItems.value = []
+    message.success(`配置组${actionText}成功`)
+    await loadAllData()
+  } catch (err) {
+    message.error(`配置组${actionText}失败`)
+    console.error(err)
+  } finally {
+    hide?.()
+  }
+}
+
+const startGroup = () => updateGroupStatus(true)
+const pauseGroup = () => updateGroupStatus(false)
 
 const startConfig = async () => {
   if (selectedItemIds.value.length === 0) {

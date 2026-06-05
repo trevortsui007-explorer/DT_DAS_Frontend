@@ -52,12 +52,18 @@ export const deleteGroup = (id) => {
 
 // group status
 export const setGroupStatus = (ids, isEnabled) => {
-  const formData = new FormData()
-  formData.append('ids', ids)
-  formData.append('isEnabled', isEnabled)
+  const params = new URLSearchParams()
 
-  return request.patch('/api/file-configs/group/status/', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' }
+  ;(Array.isArray(ids) ? ids : [ids]).forEach((id) => {
+    if (id !== undefined && id !== null && id !== '') {
+      params.append('ids', id)
+    }
+  })
+
+  params.append('isEnabled', isEnabled)
+
+  return request.patch('/api/file-configs/group/status', null, {
+    params
   })
 }
 
