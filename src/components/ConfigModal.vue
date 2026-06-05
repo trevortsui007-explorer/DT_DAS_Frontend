@@ -10,7 +10,9 @@
                 ? '导入配置（第 2/2 步：完善配置）'
                 : isEdit
                   ? '编辑配置项'
-                  : '新建配置项'
+                  : modalMode === 'copy'
+                    ? '复制配置项'
+                    : '新建配置项'
             }}
           </span>
           <span style="cursor: pointer; float: right" @click="close">×</span>
@@ -211,6 +213,8 @@ const emit = defineEmits(['saved', 'goBack'])
 const visible = ref(false)
 const isEdit = ref(false)
 const isFromImport = ref(false) // 标记是否为导入流程
+const modalMode = ref('create')
+const existingConfigs = ref([])
 
 const formData = ref({
   id: '',
@@ -275,9 +279,11 @@ watch(
   },
 )
 
-function open(edit = false, data = null, fromImport = false) {
+function open(edit = false, data = null, fromImport = false, options = {}) {
   isEdit.value = edit
   isFromImport.value = fromImport
+  modalMode.value = options.mode || (edit ? 'edit' : 'create')
+  existingConfigs.value = Array.isArray(options.existingConfigs) ? options.existingConfigs : []
 
   // 每次打开时先重置标记
   autoMarkers.value = {}
@@ -342,6 +348,23 @@ const resetForm = () => {
   }
 }
 
+const getConfigId = (item) => item?.id ?? item?.Id ?? ''
+const getConfigName = (item) => String(item?.eqName || item?.EqName || '').trim()
+
+const hasDuplicateConfigName = () => {
+  const currentName = String(formData.value.eqName || '').trim().toLowerCase()
+  const currentId = String(formData.value.id || '')
+
+  if (!currentName) return false
+
+  return existingConfigs.value.some((item) => {
+    const itemName = getConfigName(item).toLowerCase()
+    const itemId = String(getConfigId(item))
+
+    return itemName === currentName && itemId !== currentId
+  })
+}
+
 function close() {
   visible.value = false
 }
@@ -365,6 +388,11 @@ async function save() {
     // ================= 1. 校验 =================
     if (!formData.value.eqName || !formData.value.tableName) {
       message('请填写必填项：设备名称和目标表名')
+      return
+    }
+
+    if (hasDuplicateConfigName()) {
+      message('设备名称已存在，请修改后再保存')
       return
     }
 
