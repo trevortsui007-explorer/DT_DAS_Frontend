@@ -81,7 +81,7 @@
                       :key="getConfigId(config)"
                       type="button"
                       class="mini-config-card"
-                      title="查看配置详情"
+                      title="打开配置"
                       @click="viewConfigDetail(config)"
                     >
                       <div class="mini-config-title">{{ getConfigName(config) }}</div>
@@ -123,7 +123,7 @@ const props = defineProps({
   error: String,
 })
 
-const emit = defineEmits(['edit-task', 'view-detail'])
+const emit = defineEmits(['edit-task', 'edit-config'])
 
 const expandedRows = ref(new Set())
 const selectedGroupByTask = ref({})
@@ -155,6 +155,22 @@ const getConfigFileType = (config) => config?.fileType || config?.FileType || ''
 const normalizeKey = (value) => String(value ?? '').trim().toLowerCase()
 
 const pickFirstArray = (...arrays) => arrays.find((item) => Array.isArray(item) && item.length) || []
+
+const findFullConfig = (config) => {
+  const configId = getConfigId(config)
+  const configName = normalizeKey(getConfigName(config))
+
+  return props.allConfigs.find((item) => {
+    const itemId = getConfigId(item)
+    if (configId && itemId === configId) return true
+    return configName && normalizeKey(getConfigName(item)) === configName
+  })
+}
+
+const enrichConfig = (config) => {
+  const matchedConfig = findFullConfig(config)
+  return matchedConfig ? { ...matchedConfig, ...config } : config
+}
 
 const enrichGroup = (group) => {
   const matchedGroup = props.allGroups.find((item) => getGroupId(item) === getGroupId(group))
@@ -261,7 +277,7 @@ const getGroupConfigs = (group) => {
     []
 
   if (Array.isArray(directConfigs) && directConfigs.length) {
-    return directConfigs
+    return directConfigs.map(enrichConfig)
   }
 
   const configRefs =
@@ -338,7 +354,7 @@ const editTask = (task) => {
 }
 
 const viewConfigDetail = (config) => {
-  emit('view-detail', config)
+  emit('edit-config', enrichConfig(config))
 }
 </script>
 

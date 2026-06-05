@@ -74,7 +74,7 @@
         :loading="loading"
         :error="error"
         @edit-task="editTask"
-        @view-detail="viewDetail"
+        @edit-config="editConfig"
       />
 
       <CardsView

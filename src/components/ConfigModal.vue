@@ -2,7 +2,7 @@
   <div>
     <div class="ant-modal-mask" :class="{ active: visible }" @click="close"></div>
     <div class="ant-modal-wrap" :class="{ active: visible }">
-      <div class="ant-modal" style="width: 700px">
+      <div class="ant-modal config-modal" style="width: 700px">
         <div class="ant-modal-header">
           <span class="ant-modal-title">
             {{
@@ -15,7 +15,7 @@
                     : '新建配置项'
             }}
           </span>
-          <span style="cursor: pointer; float: right" @click="close">×</span>
+          <span class="modal-close" @click="close">×</span>
         </div>
 
         <div class="ant-modal-body">
@@ -75,9 +75,9 @@
                   v-model="formData.fileType"
                   @change="autoMarkers.FileType = false"
                 >
-                  <option value=".csv">CSV 文件</option>
-                  <option value=".txt">TXT 文件</option>
-                  <option value=".xlsx">Excel 文件</option>
+                  <option value=".csv">.csv</option>
+                  <option value=".xlsx">.xlsx</option>
+                  <option value=".txt">.txt</option>
                 </select>
               </div>
             </div>
@@ -108,7 +108,7 @@
               <div class="form-item" style="margin-top: 12px">
                 <label>后处理类型</label>
                 <div class="segmented-control" id="post-type-segmented">
-                  <div class="segment-pill" :style="{ left: pillLeft }"></div>
+                  <div class="segment-pill" :style="pillStyle"></div>
                   <div class="segment-options">
                     <div
                       v-for="(opt) in postTypes"
@@ -222,7 +222,7 @@ const formData = ref({
   tableName: '',
   filePathPattern: '',
   fileNamePattern: '',
-  fileType: 'csv',
+  fileType: '.csv',
   headerRow: 1,
   startRow: 2,
   postProcessingType: 0,
@@ -240,9 +240,17 @@ const postTypes = [
   { value: 2, label: '调用存储过程' },
 ]
 
-const pillLeft = computed(() => {
+const normalizeFileType = (value) => {
+  const fileType = String(value || '').trim().toLowerCase()
+  if (!fileType) return '.csv'
+  return fileType.startsWith('.') ? fileType : `.${fileType}`
+}
+
+const pillStyle = computed(() => {
   const index = postTypes.findIndex((t) => t.value === formData.value.postProcessingType)
-  return `${index * 33.333}%`
+  return {
+    transform: `translateX(${Math.max(index, 0) * 100}%)`,
+  }
 })
 
 // ==================== 后处理类型联动 ExtFields ====================
@@ -296,7 +304,7 @@ function open(edit = false, data = null, fromImport = false, options = {}) {
       tableName: data.tableName || data.TableName || '',
       filePathPattern: data.filePathPattern || data.FilePathPattern || '',
       fileNamePattern: data.fileNamePattern || data.FileNamePattern || '',
-      fileType: data.fileType || data.FileType || 'csv',
+      fileType: normalizeFileType(data.fileType || data.FileType),
       headerRow: data.headerRow || data.HeaderRow || 1,
       startRow: data.startRow || data.StartRow || 2,
       postProcessingType: data.postProcessingType ?? data.PostProcessingType ?? 0,
@@ -337,7 +345,7 @@ const resetForm = () => {
     tableName: '',
     filePathPattern: '',
     fileNamePattern: '',
-    fileType: 'csv',
+    fileType: '.csv',
     headerRow: 1,
     startRow: 2,
     postProcessingType: 0,
@@ -448,27 +456,69 @@ defineExpose({ open })
 </script>
 
 <style scoped>
+.config-modal {
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.config-modal .ant-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modal-close {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  color: #262626;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.modal-close:hover {
+  background: #f5f5f5;
+}
+
 .form-grid {
   margin-bottom: 16px;
 }
+
+.config-modal .ant-input,
+.config-modal select.ant-input {
+  height: 34px;
+  border-radius: 7px;
+}
+
+.config-modal textarea.ant-input {
+  height: 88px;
+  border-radius: 7px;
+}
+
 .segmented-control {
   position: relative;
   display: flex;
-  background-color: #f0f2f5;
+  background-color: #f2f4f6;
   border-radius: 9999px;
   padding: 4px;
-  height: 26px;
+  height: 34px;
   width: 100%;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.06);
+  box-sizing: border-box;
 }
 .segment-pill {
   position: absolute;
   top: 4px;
-  left: 0;
+  left: 4px;
   height: calc(100% - 8px);
-  width: calc(33.333% - 4px);
+  width: calc((100% - 8px) / 3);
   background-color: var(--ant-primary, #52c41a);
   border-radius: 9999px;
-  transition: left 0.35s cubic-bezier(0.645, 0.045, 0.355, 1);
+  box-shadow: 0 2px 8px rgba(82, 196, 26, 0.28);
+  transition: transform 0.28s cubic-bezier(0.645, 0.045, 0.355, 1);
   z-index: 1;
 }
 .segment-options {
@@ -483,7 +533,7 @@ defineExpose({ open })
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--ant-text-secondary);
   cursor: pointer;
