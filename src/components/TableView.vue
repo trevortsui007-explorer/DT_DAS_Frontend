@@ -26,11 +26,11 @@
         </tr>
         </thead>
         <tbody>
-        <template v-for="task in tasks" :key="task.id">
-          <tr class="main-row" :class="{ 'is-expanded': expandedRows.has(task.id) }">
+        <template v-for="task in tasks" :key="getTaskId(task)">
+          <tr class="main-row" :class="{ 'is-expanded': expandedRows.has(getTaskId(task)) }">
             <td class="text-center">
-                <span class="expand-toggle" @click="toggleRow(task.id)">
-                  {{ expandedRows.has(task.id) ? '▼' : '▶' }}
+                <span class="expand-toggle" @click="toggleRow(getTaskId(task))">
+                  {{ expandedRows.has(getTaskId(task)) ? '▼' : '▶' }}
                 </span>
             </td>
             <td class="font-600">{{ task.taskName || task.TaskName || '-' }}</td>
@@ -39,13 +39,13 @@
             </td>
             <td><code>{{ translateCron(task.cronExpression || task.CronExpression) }}</code></td>
             <td>
-                <span class="group-count-link" @click="toggleRow(task.id)">
-                  {{ (task.groupIds || []).length }} 个配置组
+                <span class="group-count-link" @click="toggleRow(getTaskId(task))">
+                  {{ getTaskGroupCount(task) }} 个配置组
                 </span>
             </td>
             <td>
-                <span :class="['status-dot', task.isEnabled ? 'green' : 'red']">
-                  {{ task.isEnabled ? '启用' : '禁用' }}
+                <span :class="['status-dot', isTaskEnabled(task) ? 'green' : 'red']">
+                  {{ isTaskEnabled(task) ? '启用' : '禁用' }}
                 </span>
             </td>
             <td>
@@ -53,14 +53,14 @@
             </td>
           </tr>
 
-          <tr v-if="expandedRows.has(task.id)" class="sub-table-row">
+          <tr v-if="expandedRows.has(getTaskId(task))" class="sub-table-row">
             <td></td> <td colspan="6">
             <div class="sub-table-container">
               <div class="sub-header">关联的配置组详情：</div>
               <div v-if="getTaskGroups(task).length > 0" class="sub-grid">
-                <div v-for="g in getTaskGroups(task)" :key="g.id" class="mini-group-card">
-                  <span class="g-name">{{ g.groupName }}</span>
-                  <span class="g-count">{{ g.configCount || 0 }} 项</span>
+                <div v-for="g in getTaskGroups(task)" :key="getGroupId(g)" class="mini-group-card">
+                  <span class="g-name">{{ getGroupName(g) }}</span>
+                  <span class="g-count">{{ getGroupConfigCount(g) }} 项</span>
                 </div>
               </div>
               <div v-else class="empty-sub">暂未关联任何配置组</div>
@@ -92,21 +92,73 @@ const props = defineProps({
 
 const emit = defineEmits(['edit-task'])
 
-// 控制行展开的 Set
 const expandedRows = ref(new Set())
 
 const toggleRow = (id) => {
-  if (expandedRows.value.has(id)) {
-    expandedRows.value.delete(id)
+  const normalizedId = normalizeId(id)
+  if (expandedRows.value.has(normalizedId)) {
+    expandedRows.value.delete(normalizedId)
   } else {
-    expandedRows.value.add(id)
+    expandedRows.value.add(normalizedId)
   }
 }
 
-// 根据任务里存的 groupIds 找到对应的 Group 对象
+const normalizeId = (id) => String(id ?? '')
+const getTaskId = (task) => normalizeId(task?.id ?? task?.Id)
+const getGroupId = (group) => normalizeId(group?.id ?? group?.Id ?? group?.groupId ?? group?.GroupId)
+const getGroupName = (group) => group?.groupName || group?.GroupName || `配置组 ${getGroupId(group)}`
+const getGroupConfigCount = (group) => group?.configCount ?? group?.ConfigCount ?? 0
+const isTaskEnabled = (task) => task?.isEnabled ?? task?.IsEnabled ?? false
+
+const extractTaskGroupIds = (task = {}) => {
+  const rawIds = task.groupIds || task.GroupIds || task.groupIdsList || task.GroupIdsList || []
+
+  if (Array.isArray(rawIds) && rawIds.length) {
+    return rawIds
+      .map((item) => (typeof item === 'object' ? item.id ?? item.Id ?? item.groupId ?? item.GroupId : item))
+      .filter((id) => id !== undefined && id !== null && id !== '')
+      .map(normalizeId)
+  }
+
+  const rawGroups =
+    task.associatedGroups ||
+    task.AssociatedGroups ||
+    task.groups ||
+    task.Groups ||
+    task.taskGroups ||
+    task.TaskGroups ||
+    []
+
+  return Array.isArray(rawGroups)
+    ? rawGroups
+        .map((group) => group?.id ?? group?.Id ?? group?.groupId ?? group?.GroupId)
+        .filter((id) => id !== undefined && id !== null && id !== '')
+        .map(normalizeId)
+    : []
+}
+
 const getTaskGroups = (task) => {
-  const ids = task.groupIds || []
-  return props.allGroups.filter(g => ids.includes(g.id))
+  const directGroups =
+    task.associatedGroups ||
+    task.AssociatedGroups ||
+    task.groups ||
+    task.Groups ||
+    task.taskGroups ||
+    task.TaskGroups ||
+    []
+
+  if (Array.isArray(directGroups) && directGroups.length) {
+    return directGroups
+  }
+
+  const ids = new Set(extractTaskGroupIds(task))
+  return props.allGroups.filter((group) => ids.has(getGroupId(group)))
+}
+
+const getTaskGroupCount = (task) => {
+  const groups = getTaskGroups(task)
+  if (groups.length) return groups.length
+  return extractTaskGroupIds(task).length
 }
 
 const getTaskMode = (task) => {
