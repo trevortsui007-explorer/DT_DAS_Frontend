@@ -147,7 +147,10 @@
           </div>
 
           <div class="form-item" style="margin-top: 12px">
-            <label>扩展字段 (ExtFields)</label>
+            <label class="label-with-help">
+              扩展字段 (ExtFields)
+              <HelpTooltip text="扩展字段为非文件内字段" />
+            </label>
             <input
               type="text"
               class="ant-input"
@@ -207,6 +210,7 @@
 import { ref, computed, watch } from 'vue'
 import * as api from '@/api'
 import message from '@/components/index.js'
+import HelpTooltip from './HelpTooltip.vue'
 
 const emit = defineEmits(['saved', 'goBack'])
 
@@ -485,6 +489,11 @@ defineExpose({ open })
 
 .form-grid {
   margin-bottom: 16px;
+}
+
+.label-with-help {
+  display: inline-flex;
+  align-items: center;
 }
 
 .config-modal .ant-input,
