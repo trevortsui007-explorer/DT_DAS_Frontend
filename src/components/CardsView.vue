@@ -1,5 +1,5 @@
 <template>
-  <div class="cards-view" @mousedown="onMouseDown">
+  <div class="cards-view" :class="{ 'is-selecting': isSelecting }" @mousedown="onMouseDown">
     <div v-if="loading" class="loading-placeholder">加载中...</div>
     <div v-else-if="error" class="error-placeholder">{{ error }}</div>
     <div v-else-if="items.length === 0" class="empty-placeholder">暂无数据</div>
@@ -15,10 +15,10 @@
         <div v-for="group in items" :key="group.id"
              class="config-card"
              :class="{
-               'preview-toggle': previewIds.has(group.id || group.Id),
-               'selected': selectedIds.has(group.id || group.Id)
+               'preview-toggle': previewIds.has(getItemId(group)),
+               'selected': selectedIds.has(getItemId(group))
              }"
-             :data-id="group.id || group.Id"
+             :data-id="getItemId(group)"
              @click="handleCardClick($event, group, 'group')">
 
           <div class="card-header">
@@ -58,10 +58,10 @@
         <div v-for="config in items" :key="config.id"
              class="config-card"
              :class="{
-               'preview-toggle': previewIds.has(config.id || config.Id),
-               'selected': selectedIds.has(config.id || config.Id)
+               'preview-toggle': previewIds.has(getItemId(config)),
+               'selected': selectedIds.has(getItemId(config))
              }"
-             :data-id="config.id || config.Id"
+             :data-id="getItemId(config)"
              @click="handleCardClick($event, config, 'config')">
           <div class="card-header">
             <h4 class="clickable-title" @click.stop="viewDetail(config)">{{ config.EqName || config.eqName || '未命名设备' }}</h4>
@@ -119,7 +119,7 @@ let startPos = { x: 0, y: 0 }
 
 const selectedIds = ref(new Set())
 const previewIds = ref(new Set())
-const formatId = (id) => isNaN(Number(id)) ? id : Number(id)
+const getItemId = (item) => String(item?.id ?? item?.Id ?? '')
 
 watch(() => props.items, () => {
   selectedIds.value.clear()
@@ -131,7 +131,7 @@ watch(() => props.items, () => {
 const handleCardClick = (event, item, typeStr) => {
   if (hasDragged.value) return
 
-  const id = formatId(item.id || item.Id)
+  const id = getItemId(item)
 
   if (event.ctrlKey || event.metaKey) {
     if (selectedIds.value.has(id)) {
@@ -206,21 +206,24 @@ const onMouseMove = (e) => {
   previewIds.value.clear()
 
   cards.forEach(card => {
-    const cardTop = card.offsetTop
-    const cardLeft = card.offsetLeft
-    const cardWidth = card.offsetWidth
-    const cardHeight = card.offsetHeight
+    const cardRect = card.getBoundingClientRect()
+    const cardLeft = cardRect.left - gridRect.left
+    const cardTop = cardRect.top - gridRect.top
+    const cardRight = cardLeft + cardRect.width
+    const cardBottom = cardTop + cardRect.height
+    const boxRight = box.value.left + box.value.width
+    const boxBottom = box.value.top + box.value.height
 
     const isOverlapped = !(
-      cardLeft + cardWidth < box.value.left ||
-      cardLeft > box.value.left + box.value.width ||
-      cardTop + cardHeight < box.value.top ||
-      cardTop > box.value.top + box.value.height
+      cardRight < box.value.left ||
+      cardLeft > boxRight ||
+      cardBottom < box.value.top ||
+      cardTop > boxBottom
     )
 
     if (isOverlapped) {
       const id = card.getAttribute('data-id')
-      if (id) previewIds.value.add(formatId(id))
+      if (id) previewIds.value.add(id)
     }
   })
 }
@@ -258,11 +261,11 @@ const viewSourceDetail = (item) => {
 const emitSelection = () => {
   const selectedData = props.items
     .filter(item => {
-      const id = formatId(item.id || item.Id)
+      const id = getItemId(item)
       return selectedIds.value.has(id)
     })
     .map(item => {
-      const id = formatId(item.id || item.Id)
+      const id = getItemId(item)
       if (props.type === 'group') {
         return {
           id,
@@ -384,7 +387,7 @@ const emitSelection = () => {
 }
 
 /* 防止拖拽框选时弹出一大片详情，同时选中状态建议也关闭详情展示以保持界面整洁 */
-.config-card:hover:not(.preview-toggle):not(.selected) .hover-detail {
+.cards-view:not(.is-selecting) .config-card:hover:not(.preview-toggle):not(.selected) .hover-detail {
   max-height: 250px;
   opacity: 1;
   margin-top: 12px;
