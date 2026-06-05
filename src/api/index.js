@@ -318,9 +318,9 @@ export const fetchInspection = ({ configId, startTime, endTime, user, pass }) =>
 // ====================== 大屏显示 ======================
 
 export const fetchOverviewTrend = () => {
-  return request.get('/api/dashboard/trend')
+  return request.get('/api/data-acquisition/dashboard/trend')
 }
 
 export const fetchOverviewActivities = () => {
-  return request.get('/api/dashboard/activities')
+  return request.get('/api/data-acquisition/dashboard/activities')
 }
