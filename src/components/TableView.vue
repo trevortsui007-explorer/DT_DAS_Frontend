@@ -581,9 +581,29 @@ const viewConfigDetail = (config) => {
 .table-view {
   width: 100%;
   overflow-x: auto;
-  overflow-y: hidden;
+  overflow-y: auto;
+  max-height: calc(100vh - 240px);
+  padding-right: 4px;
   border: 1px solid #f0f0f0;
   border-radius: 20px;
+}
+
+.table-view::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.table-view::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.table-view::-webkit-scrollbar-thumb {
+  background: #d9d9d9;
+  border-radius: 10px;
+}
+
+.table-view::-webkit-scrollbar-thumb:hover {
+  background: #bfbfbf;
 }
 
 .ant-table-overview {

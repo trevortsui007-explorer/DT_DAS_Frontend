@@ -45,14 +45,15 @@ defineProps({
   left: 50%;
   bottom: calc(100% + 8px);
   transform: translateX(-50%) translateY(4px);
-  min-width: 180px;
+  max-width: 220px;
   padding: 7px 10px;
   border-radius: 6px;
   color: #fff;
   background: rgba(0, 0, 0, 0.78);
   font-size: 12px;
   line-height: 1.5;
-  white-space: nowrap;
+  white-space: normal;
+  width: max-content;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.18s ease, transform 0.18s ease;
