@@ -48,7 +48,7 @@
           :items="timelinePanelItems"
           :loading="loading"
           :error="error"
-          :max-height="160"
+          :max-height="220"
           :reference-time="timelineEffectiveNow"
           :is-test-mode="Boolean(timelineTestNow)"
           @set-reference-time="handleSetTimelineReferenceTime"
@@ -160,6 +160,7 @@ const groups = ref([])
 const configs = ref([])
 const overviewTrend = ref([])
 const overviewActivities = ref([])
+const overviewTaskLogs = ref([])
 
 const dashboardLoading = ref(false)
 const dashboardError = ref('')
@@ -235,29 +236,102 @@ const rawCronTimelineItems = computed(() =>
   buildCronTimelineItems(tasks.value, timelineEffectiveNow.value),
 )
 
-const timelinePanelItems = computed(() =>
-  rawCronTimelineItems.value.map((task, index) => {
-    const points = Array.isArray(task.rollingPoints)
-      ? task.rollingPoints.map((point) => ({
-          timestamp: point.timestamp,
-          time: point.timestamp,
-          type: point.type,
-          kind: point.kind,
-          status: point.status,
-        }))
+const normalizeTaskLog = (raw = {}) => ({
+  taskLogId: raw.taskLogId || raw.TaskLogId || raw.id || raw.Id || '',
+  taskCode: raw.taskCode || raw.TaskCode || '',
+  taskId: raw.taskId ?? raw.TaskId ?? null,
+  taskName: raw.taskName || raw.TaskName || '',
+  status: raw.status || raw.Status || '',
+  startTime: raw.startTime || raw.StartTime || '',
+  endTime: raw.endTime || raw.EndTime || '',
+})
+
+const normalizeTimelineStatus = (status) => {
+  const value = String(status || '').replace(/\s+/g, '').toLowerCase()
+  if (value === 'failed') return 'error'
+  if (value === 'partialsuccess') return 'warning'
+  if (value === 'running') return 'running'
+  if (value === 'success') return 'success'
+  return 'default'
+}
+
+const getTaskId = (task) => task?.id ?? task?.Id ?? null
+
+const taskLogPointsByTaskId = computed(() => {
+  const map = new Map()
+
+  overviewTaskLogs.value.forEach((rawLog) => {
+    const log = normalizeTaskLog(rawLog)
+    const timestamp = new Date(log.startTime || log.endTime || '').getTime()
+    if (!Number.isFinite(timestamp)) return
+
+    const point = {
+      timestamp,
+      time: timestamp,
+      type: 'history',
+      kind: 'history',
+      status: normalizeTimelineStatus(log.status),
+      taskLogId: log.taskLogId,
+      label: log.taskCode || log.taskLogId,
+    }
+
+    const taskId = log.taskId === null || log.taskId === undefined ? '' : String(log.taskId)
+    if (!map.has(taskId)) map.set(taskId, [])
+    map.get(taskId).push(point)
+  })
+
+  return map
+})
+
+const timelinePanelItems = computed(() => {
+  const items = rawCronTimelineItems.value.map((task, index) => {
+    const taskId = getTaskId(task)
+    const historyPoints = taskLogPointsByTaskId.value.get(String(taskId)) || []
+    const futurePoints = Array.isArray(task.rollingPoints)
+      ? task.rollingPoints
+          .filter((point) => point.type === 'prediction')
+          .map((point) => ({
+            timestamp: point.timestamp,
+            time: point.timestamp,
+            type: 'prediction',
+            kind: point.kind,
+            status: point.status,
+          }))
       : []
 
     return {
-      id: task.id,
+      id: taskId,
       taskName: task.taskName,
       isEnabled: task.isEnabled,
       cronExpression: task.cronExpression,
       color: pickTimelineColor(task.taskName, index),
-      points,
+      points: [...historyPoints, ...futurePoints],
       nextPoint: task.nextPoint || null,
     }
-  }),
-)
+  })
+
+  const timelineTaskIds = new Set(items.map((item) => String(item.id)))
+  const unmatchedHistoryPoints = []
+
+  taskLogPointsByTaskId.value.forEach((points, taskId) => {
+    if (timelineTaskIds.has(String(taskId))) return
+    unmatchedHistoryPoints.push(...points)
+  })
+
+  if (unmatchedHistoryPoints.length) {
+    items.push({
+      id: 'task-log-history',
+      taskName: '任务日志记录',
+      isEnabled: false,
+      cronExpression: '',
+      color: '#64748b',
+      points: unmatchedHistoryPoints,
+      nextPoint: null,
+    })
+  }
+
+  return items
+})
 
 const currentTitle = computed(
   () =>
@@ -315,13 +389,14 @@ const loadAllData = async () => {
   error.value = ''
   dashboardError.value = ''
 
-  const [tasksResult, groupsResult, configsResult, trendResult, activitiesResult] =
+  const [tasksResult, groupsResult, configsResult, trendResult, activitiesResult, taskLogsResult] =
     await Promise.allSettled([
       api.fetchTasks(),
       api.fetchGroups(),
       api.fetchConfigs(),
       api.fetchOverviewTrend(),
       api.fetchOverviewActivities(),
+      api.fetchTaskLogs({ pageNo: 1, pageSize: 100 }),
     ])
 
   const baseDataFailed = [tasksResult, groupsResult, configsResult].some(
@@ -340,8 +415,16 @@ const loadAllData = async () => {
   overviewTrend.value = trendResult.status === 'fulfilled' ? (unwrapResult(trendResult.value) || []) : []
   overviewActivities.value =
     activitiesResult.status === 'fulfilled' ? (unwrapResult(activitiesResult.value) || []) : []
+  overviewTaskLogs.value =
+    taskLogsResult.status === 'fulfilled'
+      ? (taskLogsResult.value?.data?.items || unwrapResult(taskLogsResult.value)?.items || unwrapResult(taskLogsResult.value) || [])
+      : []
 
-  if (trendResult.status === 'rejected' || activitiesResult.status === 'rejected') {
+  if (
+    trendResult.status === 'rejected' ||
+    activitiesResult.status === 'rejected' ||
+    taskLogsResult.status === 'rejected'
+  ) {
     dashboardError.value = '部分总览数据加载失败'
   }
 
@@ -676,7 +759,10 @@ const handleRefreshHistoryLogs = async () => {
   message.success('历史记录刷新成功')
 }
 
-const handleOpenLogFromTimeline = async () => {
+const handleOpenLogFromTimeline = async (payload = {}) => {
+  if (payload.taskLogId) {
+    currentTaskLogId.value = payload.taskLogId
+  }
   activeTab.value = 'log'
   await nextTick()
   await taskLogViewRef.value?.refreshHistoryList?.()
@@ -817,10 +903,14 @@ onBeforeUnmount(() => {
 .overview-stack {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   padding-right: 4px;
+}
+
+.header-actions {
+  gap: 14px;
 }
 </style>

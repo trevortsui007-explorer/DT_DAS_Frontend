@@ -1,13 +1,6 @@
 <template>
   <div class="unified-monitor-container">
     <div class="panel-header">
-      <div class="title-group">
-        <h4 class="main-title">
-          全量任务聚合流动图
-        </h4>
-        <p class="subtitle">中轴为当前时间，左侧为历史状态，右侧为预测执行计划</p>
-      </div>
-
       <div class="mode-switcher time-tester">
         <input
           class="time-input"
@@ -45,7 +38,7 @@
         </span>
       </div>
 
-      <div class="timeline-body">
+      <div class="timeline-body" :style="timelineBodyStyle">
         <div class="now-axis">
           <div class="now-tag">NOW {{ nowLabel }}</div>
         </div>
@@ -67,11 +60,13 @@
               class="execution-point"
               :class="[
                 point.type === 'history' ? 'point-solid' : 'point-ring',
+                getPointStatusClass(point),
                 { 'is-error': point.status === 'error' },
               ]"
+              :title="getPointTitle(task, point)"
               :style="{
                 left: getXPosition(point.time),
-                backgroundColor: point.type === 'history' ? task.color : 'transparent',
+                backgroundColor: point.type === 'history' ? getPointColor(task, point) : 'transparent',
                 borderColor: task.color,
               }"
               @click="handlePointClick(task, point)"
@@ -219,6 +214,8 @@ const normalizePoint = (point, nowTs) => {
     type,
     kind: point?.kind ?? '',
     status: point?.status ?? null,
+    taskLogId: point?.taskLogId || '',
+    label: point?.label || '',
   }
 }
 
@@ -302,6 +299,14 @@ const hasErrorPoints = computed(() =>
   normalizedItems.value.some((task) => task.points.some((point) => point.status === 'error')),
 )
 
+const timelineBodyStyle = computed(() => {
+  const preferredHeight = Math.max(168, 72 + normalizedItems.value.length * 38)
+  const maxHeight = Number(props.maxHeight || 240)
+  return {
+    height: `${Math.min(preferredHeight, Math.max(maxHeight, 168))}px`,
+  }
+})
+
 const runningTaskCount = computed(() =>
   normalizedItems.value.filter((task) => task.isEnabled && task.cronExpression).length,
 )
@@ -347,12 +352,37 @@ const getRuleText = (task) => {
   return translateCron(task.cronExpression)
 }
 
+const getPointColor = (task, point) => {
+  if (point.status === 'error') return '#ef4444'
+  if (point.status === 'warning') return '#f59e0b'
+  if (point.status === 'running') return '#3b82f6'
+  if (point.status === 'success') return '#10b981'
+  return task.color
+}
+
+const getPointStatusClass = (point) => {
+  if (point.type !== 'history') return ''
+  if (point.status === 'error') return 'point-status-error'
+  if (point.status === 'warning') return 'point-status-warning'
+  if (point.status === 'running') return 'point-status-running'
+  if (point.status === 'success') return 'point-status-success'
+  return 'point-status-default'
+}
+
+const getPointTitle = (task, point) => {
+  const timeText = formatHHmm(point.time)
+  const typeText = point.type === 'history' ? '历史记录' : '预测计划'
+  const labelText = point.label ? ` · ${point.label}` : ''
+  return `${task.taskName} · ${typeText} · ${timeText}${labelText}`
+}
+
 const handlePointClick = (task, point) => {
   if (point.type !== 'history') return
 
   emit('open-log', {
     taskId: task.id,
     taskName: task.taskName,
+    taskLogId: point.taskLogId || '',
     timestamp: point.timestamp,
     type: 'history',
     status: point.status || null,
@@ -382,27 +412,17 @@ const handleResetToNow = () => {
 <style scoped>
 .unified-monitor-container {
   background: #ffffff;
-  border-radius: 16px;
-  padding: 20px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+  border: 1px solid #eef2f7;
+  border-radius: 12px;
+  padding: 14px 18px 16px;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 .panel-header {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 24px;
-}
-
-.main-title {
-  font-size: 18px;
-  font-weight: 700;
-  color: #1e293b;
-  margin: 0;
-  display: flex;
+  justify-content: flex-end;
   align-items: center;
-  gap: 8px;
+  margin-bottom: 10px;
 }
 
 .subtitle {
@@ -413,14 +433,15 @@ const handleResetToNow = () => {
 
 .mode-switcher {
   display: flex;
-  background: #f1f5f9;
-  padding: 4px;
-  border-radius: 8px;
+  background: #f8fafc;
+  padding: 5px;
+  border: 1px solid #eef2f7;
+  border-radius: 10px;
 }
 
 .timeline-wrapper {
   position: relative;
-  margin-bottom: 30px;
+  margin-bottom: 16px;
 }
 
 .time-labels {
@@ -439,7 +460,6 @@ const handleResetToNow = () => {
 
 .timeline-body {
   position: relative;
-  height: 240px;
   border-top: 1px solid #e2e8f0;
   border-bottom: 1px solid #e2e8f0;
   background: #f8fafc;
@@ -482,7 +502,7 @@ const handleResetToNow = () => {
 
 .grid-line {
   flex: 1;
-  border-right: 1px solid #f1f5f9;
+  border-right: 1px solid #e9eef5;
 }
 
 .tracks-container {
@@ -550,6 +570,26 @@ const handleResetToNow = () => {
   border-style: dashed;
 }
 
+.point-status-success {
+  background: #10b981 !important;
+}
+
+.point-status-warning {
+  background: #f59e0b !important;
+}
+
+.point-status-running {
+  background: #3b82f6 !important;
+}
+
+.point-status-error {
+  background: #ef4444 !important;
+}
+
+.point-status-default {
+  background: #94a3b8 !important;
+}
+
 .error-badge {
   position: absolute;
   top: -4px;
@@ -609,12 +649,13 @@ const handleResetToNow = () => {
 
 .stat-card {
   flex: 1;
-  background: #f1f5f9;
+  background: #f8fafc;
   border-radius: 12px;
   padding: 16px;
   display: flex;
   align-items: center;
   gap: 12px;
+  border: 1px solid #eef2f7;
 }
 
 .stat-card.highlight {

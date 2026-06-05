@@ -10,15 +10,24 @@
 
     <div class="dashboard-grid">
       <div class="chart-card">
+        <div class="chart-card__header">
+          <h4>任务状态分布</h4>
+        </div>
         <div ref="taskChartRef" class="chart"></div>
       </div>
 
       <div class="chart-card">
-        <div ref="trendChartRef" class="chart"></div>
+        <div class="chart-card__header">
+          <h4>今日采集趋势</h4>
+        </div>
+        <div v-if="!loading && trendData.length === 0" class="state-panel">暂无趋势数据</div>
+        <div v-else ref="trendChartRef" class="chart"></div>
       </div>
 
       <div class="chart-card list-card">
-        <h4>最新动态</h4>
+        <div class="chart-card__header">
+          <h4>最新动态</h4>
+        </div>
         <div v-if="loading" class="state-text">总览数据加载中...</div>
         <div v-else-if="latestActivities.length === 0" class="state-text">暂无动态数据</div>
         <ul v-else>
@@ -78,13 +87,33 @@ const renderTaskChart = () => {
     }))
 
   taskChart.setOption({
-    title: { text: '任务状态分布', left: 'center', textStyle: { fontSize: 14 } },
     tooltip: { trigger: 'item' },
+    legend: {
+      bottom: 0,
+      left: 'center',
+      itemWidth: 10,
+      itemHeight: 10,
+      textStyle: { color: '#64748b', fontSize: 12 },
+    },
+    graphic: {
+      type: 'text',
+      left: 'center',
+      top: '45%',
+      style: {
+        text: `${props.statusDistribution.reduce((sum, item) => sum + Number(item.value || 0), 0)}`,
+        fill: '#0f172a',
+        fontSize: 22,
+        fontWeight: 700,
+        textAlign: 'center',
+      },
+    },
     series: [
       {
         type: 'pie',
-        radius: ['42%', '70%'],
-        label: { formatter: '{b}' },
+        radius: ['50%', '72%'],
+        center: ['50%', '46%'],
+        label: { show: false },
+        labelLine: { show: false },
         data:
           data.length > 0
             ? data
@@ -99,15 +128,20 @@ const renderTrendChart = () => {
   if (!trendChart) trendChart = echarts.init(trendChartRef.value)
 
   trendChart.setOption({
-    title: { text: '今日采集趋势', left: 'center', textStyle: { fontSize: 14 } },
     tooltip: { trigger: 'axis' },
-    grid: { left: 40, right: 16, top: 56, bottom: 32 },
+    grid: { left: 36, right: 18, top: 14, bottom: 30 },
     xAxis: {
       type: 'category',
       boundaryGap: false,
       data: props.trendData.map((item) => item.time),
+      axisLine: { lineStyle: { color: '#dbe3ef' } },
+      axisLabel: { color: '#64748b' },
     },
-    yAxis: { type: 'value' },
+    yAxis: {
+      type: 'value',
+      splitLine: { lineStyle: { color: '#edf2f7' } },
+      axisLabel: { color: '#64748b' },
+    },
     series: [
       {
         data: props.trendData.map((item) => item.value),
@@ -142,7 +176,8 @@ watch(
 
 watch(
   () => props.trendData,
-  () => {
+  async () => {
+    await nextTick()
     renderTrendChart()
   },
   { deep: true },
@@ -196,26 +231,42 @@ onBeforeUnmount(() => {
 
 .dashboard-grid {
   display: grid;
-  grid-template-columns: 1fr 2fr 1fr;
+  grid-template-columns: 1.1fr 2.1fr 1.1fr;
   gap: 16px;
   min-height: 280px;
 }
 
 .chart-card {
-  background: #f8fafc;
-  border-radius: 10px;
-  padding: 12px;
+  background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+  border: 1px solid #eef2f7;
+  border-radius: 12px;
+  padding: 16px;
   min-height: 280px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
+}
+
+.chart-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.chart-card__header h4 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
 }
 
 .chart {
   width: 100%;
-  height: 256px;
+  height: 236px;
 }
 
 .list-card h4 {
-  margin: 4px 0 12px;
-  font-size: 18px;
+  margin: 0;
+  font-size: 15px;
   color: #111827;
 }
 
@@ -260,6 +311,15 @@ onBeforeUnmount(() => {
   color: #94a3b8;
   font-size: 13px;
   padding-top: 8px;
+}
+
+.state-panel {
+  height: 236px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  font-size: 13px;
 }
 
 @media (max-width: 1200px) {
