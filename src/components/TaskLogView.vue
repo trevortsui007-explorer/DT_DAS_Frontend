@@ -27,16 +27,12 @@
           <div class="task-log-summary-grid">
             <div class="task-log-summary-item">
               <span class="label">任务编号</span>
-              <span class="value mono">{{ currentTask.taskCode || currentTask.taskLogId || '--' }}</span>
-            </div>
-
-            <div class="task-log-summary-item">
-              <span class="label">触发类型</span>
-              <span class="value">
+              <span class="task-log-summary-trigger">
                 <span class="trigger-tag" :class="getTriggerTypeClass(currentTask.triggerType)">
                   {{ formatTriggerType(currentTask.triggerType) }}
                 </span>
               </span>
+              <span class="value mono">{{ currentTask.taskCode || currentTask.taskLogId || '--' }}</span>
             </div>
 
             <div class="task-log-summary-item">
@@ -109,6 +105,11 @@
                   v-for="item in filteredTaskDetails"
                   :key="item.id || `${item.fileName}-${item.startTime}`"
                   class="task-log-detail-item"
+                  role="button"
+                  tabindex="0"
+                  @click="openDetailModal(item)"
+                  @keydown.enter="openDetailModal(item)"
+                  @keydown.space.prevent="openDetailModal(item)"
                 >
                   <div class="task-log-detail-item__top">
                     <span class="task-log-file">{{ item.fileName || '--' }}</span>
@@ -264,6 +265,53 @@
         </div>
       </aside>
     </div>
+
+    <div class="ant-modal-mask" :class="{ active: detailModalVisible }" @click="closeDetailModal"></div>
+    <div class="ant-modal-wrap" :class="{ active: detailModalVisible }">
+      <div class="ant-modal task-log-detail-modal">
+        <div class="ant-modal-header">
+          <span class="ant-modal-title">日志明细</span>
+          <span class="task-log-modal-close" @click="closeDetailModal">×</span>
+        </div>
+
+        <div class="ant-modal-body task-log-detail-modal__body">
+          <div v-if="detailModalLoading" class="loading-placeholder">正在加载配置详情...</div>
+          <template v-else-if="selectedDetail">
+            <section
+              v-for="section in detailModalSections"
+              :key="section.title"
+              class="detail-section"
+            >
+              <h4 class="detail-section__title">{{ section.title }}</h4>
+              <div class="detail-section__grid">
+                <div
+                  v-for="field in section.fields"
+                  :key="field.label"
+                  class="detail-field"
+                >
+                  <span class="detail-field__label">{{ field.label }}</span>
+                  <span
+                    v-if="field.tag"
+                    class="detail-value-tag"
+                    :class="field.tagClass"
+                  >
+                    {{ field.value }}
+                  </span>
+                  <span
+                    v-else
+                    class="detail-field__value"
+                    :class="[field.valueClass, { 'danger-text': field.danger }]"
+                  >
+                    {{ field.value }}
+                  </span>
+                </div>
+              </div>
+            </section>
+          </template>
+          <div v-else class="empty-placeholder">暂无日志明细</div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -297,6 +345,7 @@ const currentTask = ref(null)
 const taskList = ref([])
 const taskDetails = ref([])
 const detailCacheByTaskId = ref({})
+const configCacheById = ref({})
 const detailFilterTags = ['All', 'Running', 'Success', 'Failed']
 const activeDetailTag = ref('All')
 const historyStartDateInput = ref('')
@@ -314,6 +363,10 @@ const detailsLoading = ref(false)
 const polling = ref(false)
 const pollingTimer = ref(null)
 const lastRefreshTime = ref(null)
+const detailModalVisible = ref(false)
+const detailModalLoading = ref(false)
+const selectedDetail = ref(null)
+const selectedDetailConfig = ref(null)
 
 const progressPercent = computed(() => {
   const item = currentTask.value
@@ -457,6 +510,133 @@ const normalizeDetail = (raw = {}) => ({
   startTime: raw.startTime || raw.StartTime || '',
   endTime: raw.endTime || raw.EndTime || '',
   errorMessage: raw.errorMessage || raw.ErrorMessage || '',
+  config: raw.config || raw.Config || null,
+})
+
+const getField = (source, keys, fallback = '--') => {
+  if (!source) return fallback
+
+  for (const key of keys) {
+    const value = source[key]
+    if (value !== undefined && value !== null && value !== '') return value
+  }
+
+  return fallback
+}
+
+const formatEnabled = (value) => {
+  if (value === true) return '启用'
+  if (value === false) return '禁用'
+  return '--'
+}
+
+const formatPostProcessingType = (value) => {
+  if (value === null || value === undefined || value === '') return '--'
+  const type = Number(value)
+  if (type === 0) return '无后处理'
+  if (type === 1) return '服务'
+  if (type === 2) return '存储过程'
+  return '--'
+}
+
+const getEnabledClass = (value) => {
+  if (value === true) return 'detail-tag--success'
+  if (value === false) return 'detail-tag--muted'
+  return 'detail-tag--default'
+}
+
+const getPostProcessingClass = (value) => {
+  if (value === null || value === undefined || value === '') return 'detail-tag--default'
+  const type = Number(value)
+  if (type === 1) return 'detail-tag--blue'
+  if (type === 2) return 'detail-tag--gold'
+  return 'detail-tag--muted'
+}
+
+const detailModalSections = computed(() => {
+  const task = currentTask.value || {}
+  const detail = selectedDetail.value || {}
+  const config = selectedDetailConfig.value || detail.config || {}
+
+  return [
+    {
+      title: '任务信息',
+      fields: [
+        { label: '任务编号', value: task.taskCode || task.taskLogId || '--', valueClass: 'detail-value--primary' },
+        { label: 'TaskLog ID', value: task.taskLogId || '--' },
+        { label: '任务ID', value: task.taskId ?? '--' },
+        {
+          label: '触发类型',
+          value: formatTriggerType(task.triggerType),
+          tag: true,
+          tagClass: getTriggerTypeClass(task.triggerType),
+        },
+        {
+          label: '状态',
+          value: task.status || '--',
+          tag: true,
+          tagClass: getStatusClass(task.status),
+        },
+        { label: '开始时间', value: formatDateTime(task.startTime) },
+        { label: '结束时间', value: formatDateTime(task.endTime) },
+        { label: '总任务数', value: task.totalConfigs ?? 0, valueClass: 'detail-value--primary' },
+        { label: '已处理', value: task.processedCount ?? 0, valueClass: 'detail-value--blue' },
+        { label: '成功', value: task.successCount ?? 0, valueClass: 'detail-value--success' },
+        { label: '失败', value: task.failureCount ?? 0, danger: Number(task.failureCount || 0) > 0 },
+        { label: '执行进度', value: `${progressPercent.value}%`, valueClass: 'detail-value--primary' },
+      ],
+    },
+    {
+      title: '配置信息',
+      fields: [
+        { label: '配置ID', value: getField(config, ['id', 'Id'], detail.configId ?? '--'), valueClass: 'detail-value--primary' },
+        { label: '设备名称', value: getField(config, ['eqName', 'EqName']), valueClass: 'detail-value--primary' },
+        { label: '目标表名', value: getField(config, ['tableName', 'TableName']), valueClass: 'detail-value--blue' },
+        { label: '文件路径规则', value: getField(config, ['filePathPattern', 'FilePathPattern']) },
+        { label: '文件名规则', value: getField(config, ['fileNamePattern', 'FileNamePattern']) },
+        {
+          label: '文件类型',
+          value: getField(config, ['fileType', 'FileType']),
+          tag: true,
+          tagClass: 'detail-tag--blue',
+        },
+        { label: '表头行号', value: getField(config, ['headerRow', 'HeaderRow']) },
+        { label: '数据起始行', value: getField(config, ['startRow', 'StartRow']) },
+        {
+          label: '后处理类型',
+          value: formatPostProcessingType(getField(config, ['postProcessingType', 'PostProcessingType'], null)),
+          tag: true,
+          tagClass: getPostProcessingClass(getField(config, ['postProcessingType', 'PostProcessingType'], null)),
+        },
+        { label: '存储过程/服务名', value: getField(config, ['procedureName', 'ProcedureName', 'serviceName', 'ServiceName']), valueClass: 'detail-value--primary' },
+        { label: '扩展字段', value: getField(config, ['extFields', 'ExtFields']) },
+        {
+          label: '启用状态',
+          value: formatEnabled(getField(config, ['isEnabled', 'IsEnabled'], null)),
+          tag: true,
+          tagClass: getEnabledClass(getField(config, ['isEnabled', 'IsEnabled'], null)),
+        },
+      ],
+    },
+    {
+      title: '日志明细',
+      fields: [
+        { label: '文件名', value: detail.fileName || '--', valueClass: 'detail-value--primary' },
+        { label: '配置ID', value: detail.configId ?? '--', valueClass: 'detail-value--primary' },
+        {
+          label: '状态',
+          value: detail.status || '--',
+          tag: true,
+          tagClass: getStatusClass(detail.status),
+        },
+        { label: '起始行', value: detail.startRow ?? 0 },
+        { label: '处理行数', value: detail.processedRows ?? 0, valueClass: 'detail-value--blue' },
+        { label: '开始时间', value: formatDateTime(detail.startTime) },
+        { label: '结束时间', value: formatDateTime(detail.endTime) },
+        { label: '错误信息', value: detail.errorMessage || '--', danger: Boolean(detail.errorMessage) },
+      ],
+    },
+  ]
 })
 
 const formatDateTime = (value) => {
@@ -608,6 +788,42 @@ const loadTaskDetails = async (taskLogId, { force = false } = {}) => {
   } finally {
     detailsLoading.value = false
   }
+}
+
+const openDetailModal = async (item) => {
+  selectedDetail.value = item
+  selectedDetailConfig.value = item.config || null
+  detailModalLoading.value = false
+  detailModalVisible.value = true
+
+  if (!item.configId || item.config) return
+
+  const cachedConfig = configCacheById.value[item.configId]
+  if (cachedConfig) {
+    selectedDetailConfig.value = cachedConfig
+    return
+  }
+
+  detailModalLoading.value = true
+  try {
+    const res = await api.fetchConfigById(item.configId)
+    const config = res?.data || res || null
+    if (selectedDetail.value !== item) return
+    selectedDetailConfig.value = config
+    configCacheById.value = {
+      ...configCacheById.value,
+      [item.configId]: config,
+    }
+  } catch (err) {
+    console.error('加载配置详情失败', err)
+    notify.error('加载配置详情失败')
+  } finally {
+    detailModalLoading.value = false
+  }
+}
+
+const closeDetailModal = () => {
+  detailModalVisible.value = false
 }
 
 const selectTask = async (item) => {
@@ -929,6 +1145,13 @@ defineExpose({
   display: flex;
   flex-direction: column;
   gap: 6px;
+  position: relative;
+}
+
+.task-log-summary-trigger {
+  position: absolute;
+  top: 12px;
+  right: 12px;
 }
 
 .task-log-summary-item .label {
@@ -1042,6 +1265,15 @@ defineExpose({
   border-radius: 10px;
   padding: 12px;
   transition: all 0.2s ease;
+}
+
+.task-log-detail-item {
+  cursor: pointer;
+}
+
+.task-log-detail-item:focus-visible {
+  outline: 2px solid rgba(82, 196, 26, 0.35);
+  outline-offset: 2px;
 }
 
 .task-log-history-item {
@@ -1278,5 +1510,137 @@ defineExpose({
   background: #f5f5f5;
   color: #595959;
   border: 1px solid #d9d9d9;
+}
+
+.task-log-detail-modal {
+  width: min(860px, calc(100vw - 48px));
+}
+
+.task-log-modal-close {
+  cursor: pointer;
+  float: right;
+  color: var(--ant-text-secondary, rgba(0, 0, 0, 0.45));
+  font-size: 20px;
+  line-height: 1;
+}
+
+.task-log-modal-close:hover {
+  color: #cf1322;
+}
+
+.task-log-detail-modal__body {
+  max-height: 72vh;
+  overflow-y: auto;
+}
+
+.detail-section + .detail-section {
+  margin-top: 18px;
+}
+
+.detail-section__title {
+  margin: 0 0 10px;
+  padding-left: 10px;
+  border-left: 3px solid var(--ant-primary, #52c41a);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ant-text-primary, rgba(0, 0, 0, 0.85));
+}
+
+.detail-section__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.detail-field {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--ant-border-color, #f0f0f0);
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.detail-field__label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--ant-text-secondary, rgba(0, 0, 0, 0.45));
+}
+
+.detail-field__value {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ant-text-primary, rgba(0, 0, 0, 0.85));
+  word-break: break-all;
+}
+
+.detail-value--primary {
+  color: var(--ant-primary, #52c41a);
+}
+
+.detail-value--blue {
+  color: #1677ff;
+}
+
+.detail-value--success {
+  color: #389e0d;
+}
+
+.detail-value-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 64px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  box-sizing: border-box;
+}
+
+.detail-value-tag.status-tag--success,
+.detail-value-tag.trigger-tag--manual,
+.detail-value-tag.detail-tag--success {
+  background: #f6ffed;
+  color: #389e0d;
+  border: 1px solid #b7eb8f;
+}
+
+.detail-value-tag.status-tag--failed {
+  background: #fff2f0;
+  color: #cf1322;
+  border: 1px solid #ffccc7;
+}
+
+.detail-value-tag.status-tag--running,
+.detail-value-tag.detail-tag--blue {
+  background: #e6f7ff;
+  color: #096dd9;
+  border: 1px solid #91d5ff;
+}
+
+.detail-value-tag.status-tag--partial,
+.detail-value-tag.trigger-tag--scheduled,
+.detail-value-tag.detail-tag--gold {
+  background: #fffbe6;
+  color: #d48806;
+  border: 1px solid #ffe58f;
+}
+
+.detail-value-tag.status-tag--default,
+.detail-value-tag.trigger-tag--default,
+.detail-value-tag.detail-tag--default,
+.detail-value-tag.detail-tag--muted {
+  background: #f5f5f5;
+  color: #595959;
+  border: 1px solid #d9d9d9;
+}
+
+@media (max-width: 760px) {
+  .detail-section__grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
