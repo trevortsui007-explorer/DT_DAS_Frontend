@@ -3,7 +3,6 @@
     <div class="dashboard-header">
       <div>
         <h3 class="dashboard-title">实时数据监控</h3>
-        <p class="dashboard-subtitle">总览页聚合任务、配置组、配置项与动态趋势数据</p>
       </div>
       <span v-if="error" class="dashboard-error">{{ error }}</span>
     </div>
@@ -216,12 +215,6 @@ onBeforeUnmount(() => {
   margin: 0;
   font-size: 18px;
   color: #1f2937;
-}
-
-.dashboard-subtitle {
-  margin: 6px 0 0;
-  font-size: 13px;
-  color: #6b7280;
 }
 
 .dashboard-error {
