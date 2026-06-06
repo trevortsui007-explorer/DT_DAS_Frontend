@@ -131,14 +131,22 @@
             <div class="form-item mapping-form-item">
               <div class="label-row">
                 <label>字段映射关系</label>
-                <button
-                  type="button"
-                  class="ant-btn ant-btn-default"
-                  style="height: 26px; padding: 0 12px; font-size: 13px"
-                  @click="showFieldMappingJson"
-                >
-                  查看JSON
-                </button>
+                <div class="mapping-json-actions">
+                  <button
+                    type="button"
+                    class="ant-btn ant-btn-primary mapping-json-action"
+                    @click="openFieldMappingJsonImport"
+                  >
+                    添加JSON数据
+                  </button>
+                  <button
+                    type="button"
+                    class="ant-btn ant-btn-default mapping-json-action"
+                    @click="showFieldMappingJson"
+                  >
+                    查看JSON
+                  </button>
+                </div>
               </div>
               <div class="mapping-table">
                 <div class="mapping-table__head">
@@ -179,7 +187,7 @@
           <section class="form-section">
             <div class="section-title">后处理信息</div>
             <div class="form-grid">
-              <div class="form-item">
+              <div class="form-item post-type-item">
                 <label>后处理类型</label>
                 <div class="segmented-control" id="post-type-segmented">
                   <div class="segment-pill" :style="pillStyle"></div>
@@ -272,6 +280,44 @@
         </div>
       </div>
     </div>
+
+    <div
+      class="ant-modal-mask json-import-mask"
+      :class="{ active: jsonImportVisible }"
+      @click="closeFieldMappingJsonImport"
+    ></div>
+    <div class="ant-modal-wrap json-import-wrap" :class="{ active: jsonImportVisible }">
+      <div class="ant-modal json-import-modal" style="width: 620px">
+        <div class="ant-modal-header">
+          <span class="ant-modal-title">添加字段映射 JSON</span>
+          <span class="modal-close" @click="closeFieldMappingJsonImport">×</span>
+        </div>
+        <div class="ant-modal-body">
+          <div class="json-import-toolbar">
+            <button type="button" class="ant-btn ant-btn-default" @click="formatImportJson">
+              整理JSON
+            </button>
+            <button type="button" class="ant-btn ant-btn-default" @click="copyImportJson">
+              复制JSON
+            </button>
+            <button type="button" class="ant-btn ant-btn-default" @click="pasteImportJson">
+              贴入JSON
+            </button>
+          </div>
+          <textarea
+            class="ant-input json-import-textarea"
+            v-model="jsonImportText"
+            placeholder='例如: {"PCB号": "pcbNo", "二维码": "qrCode"}'
+          ></textarea>
+        </div>
+        <div class="ant-modal-footer json-import-footer">
+          <button class="ant-btn ant-btn-default" @click="closeFieldMappingJsonImport">取消</button>
+          <button class="ant-btn ant-btn-primary" @click="confirmImportFieldMappingJson">
+            确认添加
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -290,6 +336,8 @@ const modalMode = ref('create')
 const existingConfigs = ref([])
 const jsonPreviewVisible = ref(false)
 const fieldMappingJsonText = ref('{}')
+const jsonImportVisible = ref(false)
+const jsonImportText = ref('')
 
 const formData = ref({
   id: '',
@@ -417,6 +465,34 @@ const removeMappingRow = (index) => {
   fieldMappingRows.value.splice(index, 1)
   if (!fieldMappingRows.value.length) {
     fieldMappingRows.value.push(createMappingRow())
+  }
+}
+
+const mergeMappingRows = (mappingObject) => {
+  const merged = new Map()
+
+  fieldMappingRows.value.forEach((row) => {
+    const source = String(row.source || '').trim()
+    const target = String(row.target || '').trim()
+    if (source && target) {
+      merged.set(source, target)
+    }
+  })
+
+  Object.entries(mappingObject).forEach(([source, target]) => {
+    const normalizedSource = String(source || '').trim()
+    const normalizedTarget = String(target ?? '').trim()
+    if (normalizedSource && normalizedTarget) {
+      merged.set(normalizedSource, normalizedTarget)
+    }
+  })
+
+  fieldMappingRows.value = Array.from(merged.entries()).map(([source, target]) =>
+    createMappingRow(source, target),
+  )
+
+  if (!fieldMappingRows.value.length) {
+    fieldMappingRows.value = [createMappingRow()]
   }
 }
 
@@ -563,10 +639,20 @@ const hasDuplicateConfigName = () => {
 function close() {
   visible.value = false
   jsonPreviewVisible.value = false
+  jsonImportVisible.value = false
 }
 
 function closeFieldMappingJson() {
   jsonPreviewVisible.value = false
+}
+
+function openFieldMappingJsonImport() {
+  jsonImportText.value = ''
+  jsonImportVisible.value = true
+}
+
+function closeFieldMappingJsonImport() {
+  jsonImportVisible.value = false
 }
 
 function goBack() {
@@ -578,6 +664,45 @@ function showFieldMappingJson() {
   syncFieldMappingsFromRows()
   fieldMappingJsonText.value = formData.value.fieldMappings || '{}'
   jsonPreviewVisible.value = true
+}
+
+function formatImportJson() {
+  const parsed = parseMappingObject(jsonImportText.value)
+  if (!parsed) {
+    message('JSON 格式有误，请检查后再整理')
+    return
+  }
+  jsonImportText.value = JSON.stringify(parsed, null, 2)
+}
+
+async function copyImportJson() {
+  try {
+    await navigator.clipboard.writeText(jsonImportText.value || '')
+    message('JSON 已复制')
+  } catch {
+    message('复制失败，请使用 Ctrl+C')
+  }
+}
+
+async function pasteImportJson() {
+  try {
+    jsonImportText.value = await navigator.clipboard.readText()
+  } catch {
+    message('读取剪贴板失败，请使用 Ctrl+V')
+  }
+}
+
+function confirmImportFieldMappingJson() {
+  const parsed = parseMappingObject(jsonImportText.value)
+  if (!parsed) {
+    message('JSON 格式有误，请检查后再添加')
+    return
+  }
+
+  mergeMappingRows(parsed)
+  syncFieldMappingsFromRows()
+  jsonImportVisible.value = false
+  message('字段映射已添加')
 }
 
 async function save() {
@@ -751,6 +876,18 @@ defineExpose({ open })
   margin-bottom: 0;
 }
 
+.mapping-json-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mapping-json-action {
+  height: 26px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
 .status-form-item {
   display: flex;
   flex-direction: column;
@@ -758,6 +895,10 @@ defineExpose({ open })
 
 .status-form-item .toggle-switch {
   margin-top: 0;
+}
+
+.post-type-item {
+  grid-column: 1 / -1;
 }
 
 .mapping-table {
@@ -840,16 +981,23 @@ defineExpose({ open })
   z-index: 1100;
 }
 
-.json-preview-wrap {
+.json-preview-wrap,
+.json-import-wrap {
   z-index: 1101;
 }
 
-.json-preview-modal {
+.json-import-mask {
+  z-index: 1100;
+}
+
+.json-preview-modal,
+.json-import-modal {
   border-radius: 10px;
   overflow: hidden;
 }
 
-.json-preview-modal .ant-modal-header {
+.json-preview-modal .ant-modal-header,
+.json-import-modal .ant-modal-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -873,6 +1021,31 @@ defineExpose({ open })
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.json-import-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.json-import-textarea {
+  width: 100%;
+  min-height: 280px;
+  resize: vertical;
+  font-family: Consolas, 'Courier New', monospace;
+  line-height: 1.6;
+}
+
+.json-import-modal .json-import-textarea {
+  height: 280px;
+}
+
+.json-import-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 .segmented-control {

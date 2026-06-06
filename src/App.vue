@@ -9,7 +9,7 @@
           <div class="header-desc">{{ currentDesc }}</div>
         </div>
 
-        <div class="header-actions">
+        <div class="header-actions" :class="{ 'header-actions-overview': activeTab === 'overview' }">
           <template v-for="(item, index) in actionButtons" :key="index">
             <div v-if="Array.isArray(item)" class="ant-btn-group">
               <button
@@ -946,5 +946,13 @@ onBeforeUnmount(() => {
 
 .header-actions {
   gap: 14px;
+}
+
+.header-actions-overview {
+  gap: 18px;
+}
+
+.header-actions-overview > .ant-btn + .ant-btn {
+  margin-left: 0;
 }
 </style>
