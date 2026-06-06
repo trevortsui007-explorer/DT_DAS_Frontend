@@ -160,6 +160,13 @@ export const previewFile = (path, top = 10) => {
   })
 }
 
+export const downloadFile = (path, user, pass) => {
+  return request.get('/api/files/download', {
+    params: { path, user, pass },
+    responseType: 'blob'
+  })
+}
+
 // ====================== LOG ======================
 export const createLog = (data) => {
   return request.post('/api/data-acquisition/log', data)
