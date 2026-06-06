@@ -80,9 +80,12 @@ export const bindConfigsToGroup = (groupId, ids) => {
 }
 
 export const removeConfigsFromGroup = (groupId, ids) => {
+  const params = new URLSearchParams()
+  ids.forEach(id => params.append('ids', id))
+
   return request.delete(
     `/api/file-configs/group/${groupId}/configs`,
-    { params: { ids } }
+    { params }
   )
 }
 

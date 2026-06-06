@@ -28,8 +28,8 @@
             </span>
           </div>
           <div class="card-body">
-            <p>类别：{{ group.groupCategory || group.GroupCategory || '-' }}</p>
-            <p>类型：{{ group.groupType || group.GroupType || '-' }}</p>
+            <p>厂别归属：{{ group.groupCategory || group.GroupCategory || '-' }}</p>
+            <p>采集周期类型：{{ group.groupType || group.GroupType || '-' }}</p>
             <p>关联配置数：{{ group.configCount || group.ConfigCount || 0 }}</p>
           </div>
           <div class="card-actions" @click.stop>
@@ -39,11 +39,10 @@
 
           <div class="hover-detail">
             <div class="hover-detail-content">
-              <div><strong>排序序号：</strong>{{ group.sortOrder ?? group.SortOrder ?? '-' }}</div>
               <div>
                 <strong>包含配置项：</strong>
                 <template v-if="group.associatedConfigs && group.associatedConfigs.length">
-                  {{ group.associatedConfigs.map(c => c.eqName).join(', ') }}
+                  {{ group.associatedConfigs.map(c => c.eqName || c.EqName).join(', ') }}
                 </template>
                 <template v-else>
                   <span style="color: #999;">暂无关联配置</span>

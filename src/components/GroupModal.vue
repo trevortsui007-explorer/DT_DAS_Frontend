@@ -23,18 +23,13 @@
           </div>
 
           <div class="form-item">
-            <label>组类别</label>
+            <label>厂别归属</label>
             <input class="ant-input" v-model="formData.groupCategory" />
           </div>
 
           <div class="form-item">
-            <label>组类型</label>
+            <label>采集周期类型</label>
             <input class="ant-input" v-model="formData.groupType" />
-          </div>
-
-          <div class="form-item">
-            <label>排序</label>
-            <input type="number" class="ant-input" v-model="formData.sortOrder" />
           </div>
 
           <!-- 状态 -->
@@ -81,19 +76,19 @@
               <div class="config-select-grid">
                 <div
                   v-for="conf in filteredConfigs"
-                  :key="conf.eqName || conf.EqName"
+                  :key="getConfigId(conf)"
                   class="config-checkbox-card"
                   :class="{
-                    'is-checked': formData.configIds.includes(conf.eqName || conf.EqName),
+                    'is-checked': formData.configIds.includes(getConfigId(conf)),
                   }"
-                  @click="toggleConfig(conf.eqName || conf.EqName)"
+                  @click="toggleConfig(getConfigId(conf))"
                 >
                   <div class="checkbox-status">
                     <div class="inner-dot"></div>
                   </div>
 
                   <div class="config-card-name">
-                    {{ conf.eqName || conf.EqName }}
+                    {{ getConfigName(conf) }}
                   </div>
                 </div>
 
@@ -106,7 +101,9 @@
         <!-- Footer -->
         <div class="ant-modal-footer">
           <button class="ant-btn ant-btn-default" @click="close">取消</button>
-          <button class="ant-btn ant-btn-primary" @click="save">保存</button>
+          <button class="ant-btn ant-btn-primary" :disabled="saving" @click="save">
+            {{ saving ? '保存中...' : '保存' }}
+          </button>
         </div>
       </div>
     </div>
@@ -116,24 +113,41 @@
 <script setup>
 import { ref, computed } from 'vue'
 import message from '@/components/index.js'
+import * as api from '@/api'
 
 const emit = defineEmits(['saved'])
 
 const visible = ref(false)
 const isEdit = ref(false)
 const searchKeyword = ref('')
+const saving = ref(false)
 
 const allConfigs = ref([])
+const originalConfigIds = ref([])
 
 const formData = ref({
   id: null,
   groupName: '',
   groupCategory: '',
   groupType: '',
-  sortOrder: 0,
   isEnabled: true,
   configIds: [],
 })
+
+const getConfigId = (conf) => String(conf?.id ?? conf?.Id ?? '')
+const getConfigName = (conf) => conf?.eqName || conf?.EqName || conf?.name || conf?.Name || '未命名配置'
+const getAssociatedConfigId = (conf) => String(conf?.id ?? conf?.Id ?? conf?.configId ?? conf?.ConfigId ?? '')
+
+const unwrapResult = (res) => res?.data ?? res
+const assertSuccess = (res) => {
+  const result = unwrapResult(res)
+
+  if (result?.code !== undefined && result.code !== 1) {
+    throw new Error(result.info || result.message || '保存失败')
+  }
+
+  return result
+}
 
 const filteredConfigs = computed(() => {
   const keyword = searchKeyword.value.trim().toLowerCase()
@@ -141,7 +155,7 @@ const filteredConfigs = computed(() => {
   if (!keyword) return allConfigs.value
 
   return allConfigs.value.filter((conf) =>
-    (conf.eqName || conf.EqName || '').toLowerCase().includes(keyword),
+    getConfigName(conf).toLowerCase().includes(keyword),
   )
 })
 
@@ -149,21 +163,21 @@ const isAllSelected = computed(() => {
   return (
     filteredConfigs.value.length > 0 &&
     filteredConfigs.value.every((conf) =>
-      formData.value.configIds.includes(conf.eqName || conf.EqName),
+      formData.value.configIds.includes(getConfigId(conf)),
     )
   )
 })
 
 const isIndeterminate = computed(() => {
   const selectedCount = filteredConfigs.value.filter((conf) =>
-    formData.value.configIds.includes(conf.eqName || conf.EqName),
+    formData.value.configIds.includes(getConfigId(conf)),
   ).length
 
   return selectedCount > 0 && selectedCount < filteredConfigs.value.length
 })
 
 const toggleSelectAll = () => {
-  const visibleIds = filteredConfigs.value.map((conf) => conf.eqName || conf.EqName)
+  const visibleIds = filteredConfigs.value.map(getConfigId).filter(Boolean)
 
   if (isAllSelected.value) {
     formData.value.configIds = formData.value.configIds.filter((id) => !visibleIds.includes(id))
@@ -178,6 +192,8 @@ const toggleSelectAll = () => {
    选择配置项
 ======================== */
 const toggleConfig = (id) => {
+  if (!id) return
+
   const index = formData.value.configIds.indexOf(id)
   if (index > -1) {
     formData.value.configIds.splice(index, 1)
@@ -192,26 +208,32 @@ const toggleConfig = (id) => {
 function open(edit = false, data = null, configs = []) {
   isEdit.value = edit
   allConfigs.value = configs
+  searchKeyword.value = ''
 
   if (edit && data) {
+    const associatedConfigs = data.associatedConfigs || data.AssociatedConfigs || []
+    const selectedIds = associatedConfigs.length
+      ? associatedConfigs.map(getAssociatedConfigId).filter(Boolean)
+      : (data.configIds || data.ConfigIds || []).map((id) => String(id)).filter(Boolean)
+
+    originalConfigIds.value = [...selectedIds]
     formData.value = {
       id: data.id || data.Id || null,
       groupName: data.groupName || data.GroupName || '',
       groupCategory: data.groupCategory || data.GroupCategory || '',
       groupType: data.groupType || data.GroupType || '',
-      sortOrder: data.sortOrder ?? data.SortOrder ?? 0,
       isEnabled: data.isEnabled ?? data.IsEnabled ?? true,
 
       // 回显
-      configIds: (data.associatedConfigs || []).map((c) => c.eqName || c.EqName),
+      configIds: selectedIds,
     }
   } else {
+    originalConfigIds.value = []
     formData.value = {
       id: null,
       groupName: '',
       groupCategory: '',
       groupType: '',
-      sortOrder: 0,
       isEnabled: true,
       configIds: [],
     }
@@ -223,28 +245,54 @@ function open(edit = false, data = null, configs = []) {
 /* ========================
    保存
 ======================== */
-function save() {
+async function save() {
   if (!formData.value.groupName.trim()) {
     message('请输入配置组名称')
     return
   }
+
+  saving.value = true
 
   const payload = {
     Id: formData.value.id,
     GroupName: formData.value.groupName,
     GroupCategory: formData.value.groupCategory,
     GroupType: formData.value.groupType,
-    SortOrder: Number(formData.value.sortOrder) || 0,
     IsEnabled: formData.value.isEnabled,
-
-    // 关键：关联配置
-    ConfigIds: formData.value.configIds,
   }
 
-  console.log('提交数据:', payload)
+  try {
+    let groupId = formData.value.id
 
-  close()
-  emit('saved')
+    if (isEdit.value) {
+      assertSuccess(await api.updateGroup(groupId, payload))
+    } else {
+      const result = assertSuccess(await api.createGroup(payload))
+      groupId = result?.data ?? result?.Data ?? result
+    }
+
+    const selectedIds = [...new Set(formData.value.configIds.filter(Boolean))]
+    const oldIds = [...new Set(originalConfigIds.value.filter(Boolean))]
+    const idsToAdd = selectedIds.filter((id) => !oldIds.includes(id))
+    const idsToRemove = oldIds.filter((id) => !selectedIds.includes(id))
+
+    if (idsToRemove.length > 0) {
+      assertSuccess(await api.removeConfigsFromGroup(groupId, idsToRemove))
+    }
+
+    if (idsToAdd.length > 0) {
+      assertSuccess(await api.bindConfigsToGroup(groupId, idsToAdd))
+    }
+
+    message.success('配置组保存成功')
+    close()
+    emit('saved')
+  } catch (error) {
+    console.error('配置组保存失败:', error)
+    message.error(error.message || '配置组保存失败')
+  } finally {
+    saving.value = false
+  }
 }
 
 function close() {
