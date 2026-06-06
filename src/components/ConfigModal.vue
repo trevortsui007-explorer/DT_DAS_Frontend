@@ -60,7 +60,10 @@
               </div>
 
               <div class="form-item">
-                <label>文件名规则</label>
+                <label class="label-with-help">
+                  文件名规则
+                  <HelpTooltip text="规则名为空，则采集这个文件夹的内容" />
+                </label>
                 <input
                   type="text"
                   class="ant-input"
@@ -68,6 +71,7 @@
                   v-model="formData.fileNamePattern"
                   placeholder="例如: Log.csv"
                   @input="autoMarkers.FileNamePattern = false"
+                  @blur="normalizeFileNamePattern"
                 />
               </div>
 
@@ -77,7 +81,7 @@
                   class="ant-input"
                   :class="{ 'auto-filled-input': isAuto('FileType') }"
                   v-model="formData.fileType"
-                  @change="autoMarkers.FileType = false"
+                  @change="handleFileTypeChange"
                 >
                   <option value=".csv">.csv</option>
                   <option value=".xlsx">.xlsx</option>
@@ -380,6 +384,39 @@ const normalizeFileType = (value) => {
   const fileType = String(value || '').trim().toLowerCase()
   if (!fileType) return '.csv'
   return fileType.startsWith('.') ? fileType : `.${fileType}`
+}
+
+const supportedFileTypes = ['.csv', '.xlsx', '.txt']
+
+const normalizeFileNamePattern = () => {
+  const currentName = String(formData.value.fileNamePattern || '').trim()
+  if (!currentName) {
+    formData.value.fileNamePattern = ''
+    return
+  }
+
+  const currentType = normalizeFileType(formData.value.fileType)
+  const lowerName = currentName.toLowerCase()
+  const matchedType = supportedFileTypes.find((type) => lowerName.endsWith(type))
+
+  if (matchedType) {
+    formData.value.fileNamePattern = `${currentName.slice(0, -matchedType.length)}${currentType}`
+    return
+  }
+
+  const lastSegment = currentName.split(/[\\/]/).pop() || currentName
+  if (/\.[^./\\]+$/.test(lastSegment)) {
+    formData.value.fileNamePattern = currentName
+    return
+  }
+
+  formData.value.fileNamePattern = `${currentName}${currentType}`
+}
+
+const handleFileTypeChange = () => {
+  autoMarkers.value.FileType = false
+  formData.value.fileType = normalizeFileType(formData.value.fileType)
+  normalizeFileNamePattern()
 }
 
 const createMappingRow = (source = '', target = '') => {
@@ -719,6 +756,8 @@ async function save() {
     }
 
     // ================= 2. 构造 payload =================
+    formData.value.fileType = normalizeFileType(formData.value.fileType)
+    normalizeFileNamePattern()
     syncFieldMappingsFromRows()
 
     const payload = {
