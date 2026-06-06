@@ -104,14 +104,29 @@ export const updateTask = (id, data) => {
 }
 
 export const deleteTasks = (ids) => {
+  const params = new URLSearchParams()
+  ;(Array.isArray(ids) ? ids : [ids]).forEach((id) => {
+    if (id !== undefined && id !== null && id !== '') {
+      params.append('ids', id)
+    }
+  })
+
   return request.delete('/api/data-acquisition/tasks', {
-    params: { ids }
+    params
   })
 }
 
 export const setTaskStatus = (ids, isEnabled) => {
+  const params = new URLSearchParams()
+  ;(Array.isArray(ids) ? ids : [ids]).forEach((id) => {
+    if (id !== undefined && id !== null && id !== '') {
+      params.append('ids', id)
+    }
+  })
+  params.append('isEnabled', isEnabled)
+
   return request.patch('/api/data-acquisition/tasks/status', null, {
-    params: { ids, isEnabled }
+    params
   })
 }
 
@@ -234,15 +249,31 @@ export const startExecutionByIds = (ids, processDate) => {
 
 // 按组 IDs 启动
 export const startExecutionByGroups = (groupIds, processDate) => {
+  const params = new URLSearchParams()
+  ;(groupIds || []).forEach((id) => {
+    params.append('groupIds', id)
+  })
+  if (processDate) {
+    params.append('processDate', processDate)
+  }
+
   return request.post('/api/data-acquisition/execution/start/by-groups', null, {
-    params: { groupIds, processDate }
+    params
   })
 }
 
 // 按任务 IDs 启动
 export const startExecutionByTasks = (taskIds, processDate) => {
+  const params = new URLSearchParams()
+  ;(taskIds || []).forEach((id) => {
+    params.append('taskIds', id)
+  })
+  if (processDate) {
+    params.append('processDate', processDate)
+  }
+
   return request.post('/api/data-acquisition/execution/start/by-tasks', null, {
-    params: { taskIds, processDate }
+    params
   })
 }
 

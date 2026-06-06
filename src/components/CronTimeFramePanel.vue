@@ -769,13 +769,13 @@ const closeNextRunModal = () => {
 
 .stat-card {
   flex: 1;
-  background: #f8fafc;
+  background: #f0fdf4;
   border-radius: 12px;
   padding: 16px;
   display: flex;
   align-items: center;
   gap: 12px;
-  border: 1px solid #eef2f7;
+  border: 1px solid #bbf7d0;
 }
 
 .stat-action {

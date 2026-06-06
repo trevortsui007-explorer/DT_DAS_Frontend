@@ -75,6 +75,7 @@
         :error="error"
         @edit-task="editTask"
         @edit-config="editConfig"
+        @selection-change="handleSelectionChange"
       />
 
       <CardsView
@@ -444,7 +445,24 @@ const onTaskSaved = () => {
   loadAllData()
 }
 
-const deleteTask = () => console.log('删除任务')
+const deleteTask = async () => {
+  if (!selectedItemIds.value.length) {
+    message.warning('请先选择任务')
+    return
+  }
+
+  if (!window.confirm(`确认删除选中的 ${selectedItemIds.value.length} 个任务？`)) return
+
+  try {
+    await api.deleteTasks(selectedItemIds.value)
+    selectedItems.value = []
+    message.success('任务删除成功')
+    await loadAllData()
+  } catch (err) {
+    message.error('任务删除失败')
+    console.error(err)
+  }
+}
 
 // ====================== Group 界面 ======================
 const openNewGroup = () => groupModalRef.value?.open(false, null, configs.value)
@@ -609,10 +627,17 @@ const handleSelectionChange = (items) => {
   selectedItems.value = Array.isArray(items) ? items : []
 }
 
+const getSelectionLabel = () =>
+  ({
+    task: '任务',
+    group: '配置组',
+    config: '配置',
+  })[activeTab.value] || '配置'
+
 // ====================== 采集相关 ======================
 const handleTimeRangeAcquisition = () => {
   if (!selectedItems.value.length) {
-    message.warning('请先选择配置')
+    message.warning(`请先选择${getSelectionLabel()}`)
     return
   }
 
@@ -630,7 +655,9 @@ const handleTaskStartConfirm = async (data) => {
     const endDate = formatApiDate(data.endTime)
 
     const res = await api.startExecutionConfigsRange({
-      ids,
+      ids: activeTab.value === 'config' ? ids : [],
+      groupIds: activeTab.value === 'group' ? ids : [],
+      taskIds: activeTab.value === 'task' ? ids : [],
       startDate,
       endDate,
     })
@@ -645,7 +672,7 @@ const handleTaskStartConfirm = async (data) => {
       return
     }
 
-    message.success(`任务已成功下发！采集配置数：${ids.length}`)
+    message.success(`任务已成功下发！${getSelectionLabel()}数：${ids.length}`)
     await openLogTabForTask(taskLogId)
   } catch (error) {
     hide()
@@ -657,7 +684,7 @@ const handleTaskStartConfirm = async (data) => {
 // 单时间采集
 const handleAcquisition = async () => {
   if (!selectedItemIds.value.length) {
-    message.warning('请先选择配置')
+    message.warning(`请先选择${getSelectionLabel()}`)
     return
   }
 
@@ -665,7 +692,12 @@ const handleAcquisition = async () => {
 
   try {
     const processDate = getTodayForApi()
-    const res = await api.startExecutionByIds(selectedItemIds.value, processDate)
+    const res =
+      activeTab.value === 'task'
+        ? await api.startExecutionByTasks(selectedItemIds.value, processDate)
+        : activeTab.value === 'group'
+          ? await api.startExecutionByGroups(selectedItemIds.value, processDate)
+          : await api.startExecutionByIds(selectedItemIds.value, processDate)
     const result = unwrapResult(res)
     const taskLogId = result?.taskLogId || ''
 
@@ -686,8 +718,40 @@ const handleAcquisition = async () => {
 }
 
 // ====================== 启停相关 ======================
-const startTask = () => message.success('任务开启...')
-const pauseTask = () => message.success('任务暂停...')
+const updateTaskStatus = async (isEnabled) => {
+  if (selectedItemIds.value.length === 0) {
+    message.warning('请先选择任务')
+    return
+  }
+
+  const idsToUpdate = [...selectedItemIds.value]
+  const actionText = isEnabled ? '开启' : '暂停'
+  const hide = message.loading(`正在${actionText}任务...`, 0)
+
+  try {
+    await api.setTaskStatus(idsToUpdate, isEnabled)
+
+    tasks.value.forEach((task) => {
+      const taskId = String(task.id ?? task.Id)
+      if (idsToUpdate.includes(taskId)) {
+        task.isEnabled = isEnabled
+        task.IsEnabled = isEnabled
+      }
+    })
+
+    selectedItems.value = []
+    message.success(`任务${actionText}成功`)
+    await loadAllData()
+  } catch (err) {
+    message.error(`任务${actionText}失败`)
+    console.error(err)
+  } finally {
+    hide?.()
+  }
+}
+
+const startTask = () => updateTaskStatus(true)
+const pauseTask = () => updateTaskStatus(false)
 
 const updateGroupStatus = async (isEnabled) => {
   if (selectedItemIds.value.length === 0) {

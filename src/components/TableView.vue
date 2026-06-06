@@ -17,7 +17,18 @@
       <table v-else-if="type === 'task'" class="ant-table">
         <thead>
         <tr>
-          <th style="width: 48px"></th> <th>任务名称</th>
+          <th style="width: 44px">
+            <input
+              type="checkbox"
+              class="row-checkbox"
+              :checked="isAllTasksSelected"
+              :indeterminate="isTaskSelectionIndeterminate"
+              @change="toggleAllTasks"
+              @click.stop
+            />
+          </th>
+          <th style="width: 48px"></th>
+          <th>任务名称</th>
           <th>模式</th>
           <th>执行频率</th>
           <th>关联组</th>
@@ -27,9 +38,25 @@
         </thead>
         <tbody>
         <template v-for="task in tasks" :key="getTaskId(task)">
-          <tr class="main-row" :class="{ 'is-expanded': expandedRows.has(getTaskId(task)) }">
+          <tr
+            class="main-row"
+            :class="{
+              'is-expanded': expandedRows.has(getTaskId(task)),
+              'is-selected': selectedTaskIds.has(getTaskId(task))
+            }"
+            @click="editTask(task)"
+          >
             <td class="text-center">
-                <span class="expand-toggle" @click="toggleRow(getTaskId(task))">
+              <input
+                type="checkbox"
+                class="row-checkbox"
+                :checked="selectedTaskIds.has(getTaskId(task))"
+                @change="toggleTaskSelection(task)"
+                @click.stop
+              />
+            </td>
+            <td class="text-center">
+                <span class="expand-toggle" @click.stop="toggleRow(getTaskId(task))">
                   {{ expandedRows.has(getTaskId(task)) ? '▼' : '▶' }}
                 </span>
             </td>
@@ -39,7 +66,7 @@
             </td>
             <td><code>{{ translateCron(task.cronExpression || task.CronExpression) }}</code></td>
             <td>
-                <span class="group-count-link" @click="toggleRow(getTaskId(task))">
+                <span class="group-count-link" @click.stop="toggleRow(getTaskId(task))">
                   {{ getTaskGroupCount(task) }} 个配置组
                 </span>
             </td>
@@ -49,12 +76,14 @@
                 </span>
             </td>
             <td>
-              <button class="ant-btn-link" @click="editTask(task)">编辑</button>
+              <button class="ant-btn-link" @click.stop="editTask(task)">编辑</button>
             </td>
           </tr>
 
           <tr v-if="expandedRows.has(getTaskId(task))" class="sub-table-row">
-            <td></td> <td colspan="6">
+            <td></td>
+            <td></td>
+            <td colspan="6">
             <div class="sub-table-container">
               <div class="sub-header">关联的配置组详情：</div>
               <div v-if="getTaskGroups(task).length > 0" class="sub-grid">
@@ -101,7 +130,7 @@
           </tr>
         </template>
         <tr v-if="tasks.length === 0">
-          <td colspan="7" class="empty-placeholder">暂无任务数据</td>
+          <td colspan="8" class="empty-placeholder">暂无任务数据</td>
         </tr>
         </tbody>
       </table>
@@ -110,7 +139,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { translateCron } from '@/utils/cron'
 
 const props = defineProps({
@@ -123,10 +152,28 @@ const props = defineProps({
   error: String,
 })
 
-const emit = defineEmits(['edit-task', 'edit-config'])
+const emit = defineEmits(['edit-task', 'edit-config', 'selection-change'])
 
 const expandedRows = ref(new Set())
 const selectedGroupByTask = ref({})
+const selectedTaskIds = ref(new Set())
+
+const isAllTasksSelected = computed(
+  () => props.tasks.length > 0 && props.tasks.every((task) => selectedTaskIds.value.has(getTaskId(task))),
+)
+
+const isTaskSelectionIndeterminate = computed(() => {
+  const selectedCount = props.tasks.filter((task) => selectedTaskIds.value.has(getTaskId(task))).length
+  return selectedCount > 0 && selectedCount < props.tasks.length
+})
+
+watch(
+  () => props.tasks,
+  () => {
+    selectedTaskIds.value.clear()
+    emit('selection-change', [])
+  },
+)
 
 const toggleRow = (id) => {
   const normalizedId = normalizeId(id)
@@ -153,6 +200,40 @@ const getConfigName = (config) =>
 const getConfigTable = (config) => config?.tableName || config?.TableName || ''
 const getConfigFileType = (config) => config?.fileType || config?.FileType || ''
 const normalizeKey = (value) => String(value ?? '').trim().toLowerCase()
+
+const emitTaskSelection = () => {
+  const selectedTasks = props.tasks
+    .filter((task) => selectedTaskIds.value.has(getTaskId(task)))
+    .map((task) => ({
+      id: getTaskId(task),
+      taskName: task.taskName || task.TaskName || '-',
+    }))
+
+  emit('selection-change', selectedTasks)
+}
+
+const toggleTaskSelection = (task) => {
+  const id = getTaskId(task)
+  if (!id) return
+
+  if (selectedTaskIds.value.has(id)) {
+    selectedTaskIds.value.delete(id)
+  } else {
+    selectedTaskIds.value.add(id)
+  }
+
+  emitTaskSelection()
+}
+
+const toggleAllTasks = () => {
+  if (isAllTasksSelected.value) {
+    selectedTaskIds.value.clear()
+  } else {
+    selectedTaskIds.value = new Set(props.tasks.map(getTaskId).filter(Boolean))
+  }
+
+  emitTaskSelection()
+}
 
 const pickFirstArray = (...arrays) => arrays.find((item) => Array.isArray(item) && item.length) || []
 
@@ -397,7 +478,20 @@ const viewConfigDetail = (config) => {
 }
 .expand-toggle:hover { color: #52c41a; }
 .main-row:hover td { background-color: #f6ffed !important; }
+.main-row {
+  cursor: pointer;
+}
+.main-row.is-selected td {
+  background-color: #f6ffed !important;
+}
 .is-expanded td { background: #fbfbfb; }
+
+.row-checkbox {
+  width: 15px;
+  height: 15px;
+  accent-color: #52c41a;
+  cursor: pointer;
+}
 
 .group-count-link {
   color: #52c41a;
