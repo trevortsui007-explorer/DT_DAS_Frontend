@@ -70,9 +70,18 @@
             </span>
           </div>
           <div class="card-body">
-            <p><strong>文件路径规则：</strong>{{ config.FilePathPattern || config.filePathPattern || '-' }}</p>
-            <p><strong>文件名规则：</strong>{{ config.FileNamePattern || config.fileNamePattern || '-' }}</p>
-            <p><strong>类型：</strong><span class="ant-tag">{{ config.FileType || config.fileType || '-' }}</span></p>
+            <p class="card-field">
+              <strong>文件路径规则：</strong>
+              <span class="card-field-value">{{ getConfigField(config, 'FilePathPattern', 'filePathPattern') }}</span>
+            </p>
+            <p class="card-field">
+              <strong>文件名规则：</strong>
+              <span class="card-field-value">{{ getConfigField(config, 'FileNamePattern', 'fileNamePattern') }}</span>
+            </p>
+            <p class="card-field">
+              <strong>类型：</strong>
+              <span class="ant-tag">{{ getConfigField(config, 'FileType', 'fileType') }}</span>
+            </p>
           </div>
           <div class="card-actions" @click.stop>
             <a @click="viewDetail(config)">详情 →</a>
@@ -120,6 +129,11 @@ let startPos = { x: 0, y: 0 }
 const selectedIds = ref(new Set())
 const previewIds = ref(new Set())
 const getItemId = (item) => String(item?.id ?? item?.Id ?? '')
+
+const getConfigField = (config, upperKey, lowerKey) => {
+  const value = config?.[upperKey] ?? config?.[lowerKey]
+  return value === undefined || value === null || value === '' ? '-' : String(value)
+}
 
 watch(() => props.items, () => {
   selectedIds.value.clear()
@@ -361,6 +375,20 @@ const emitSelection = () => {
 }
 
 .card-body p { margin: 8px 0; font-size: 13px; color: #666; line-height: 1.5; }
+.card-field {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+}
+.card-field strong {
+  flex: 0 0 auto;
+}
+.card-field-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
 .card-actions {
   margin-top: 12px;
   padding-top: 12px;
