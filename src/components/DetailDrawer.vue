@@ -4,7 +4,7 @@
     <div class="ant-drawer-content-wrapper" :class="{ active: visible }">
       <div class="ant-drawer-header">
         <span class="ant-drawer-title">{{ title }}</span>
-        <span style="cursor:pointer; float:right;" @click="close">×</span>
+        <button type="button" class="drawer-close-btn" @click="close">×</button>
       </div>
       <div class="ant-drawer-body">
         <pre v-if="detailData" style="white-space: pre-wrap; word-break: break-all;">{{ formattedData }}</pre>
@@ -40,5 +40,26 @@ defineExpose({ open })
 </script>
 
 <style scoped>
-/* 抽屉样式全局已提供，无需额外添加 */
+.ant-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.drawer-close-btn {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #8c8c8c;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.drawer-close-btn:hover {
+  background: #f5f5f5;
+  color: #262626;
+}
 </style>

@@ -14,6 +14,7 @@
 
       <div class="ant-modal-header">
         <h3 class="ant-modal-title">巡检日历详情</h3>
+        <button type="button" class="modal-close-btn" @click="close">×</button>
       </div>
 
       <div class="ant-modal-body">
@@ -63,9 +64,6 @@
         </div>
       </div>
 
-      <div class="ant-modal-footer">
-        <button class="ant-btn" @click="close">关闭</button>
-      </div>
     </div>
   </div>
 </template>
@@ -193,10 +191,28 @@ defineExpose({
 
 /* Header & Footer */
 .ant-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   padding: 16px 24px;
   border-bottom: 1px solid #f0f0f0;
 }
 .ant-modal-title { margin: 0; font-size: 16px; font-weight: 600; }
+.modal-close-btn {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #8c8c8c;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+.modal-close-btn:hover {
+  background: #f5f5f5;
+  color: #262626;
+}
 .ant-modal-body { padding: 24px; }
 .ant-modal-footer {
   padding: 10px 16px;

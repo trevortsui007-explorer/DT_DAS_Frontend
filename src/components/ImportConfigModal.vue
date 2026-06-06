@@ -522,10 +522,24 @@ defineExpose({ open })
 <style scoped>
 /* ==================== 保留第二个版本的全部样式 + 新增部分 ==================== */
 .modal-close-btn {
-  cursor: pointer; float: right; font-size: 20px;
-  color: var(--ant-text-secondary); transition: color 0.3s; line-height: 1;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  font-size: 20px;
+  color: var(--ant-text-secondary);
+  transition: color 0.3s, background 0.3s;
+  line-height: 1;
 }
-.modal-close-btn:hover { color: #ff4d4f; }
+.modal-close-btn:hover { background: #f5f5f5; color: #ff4d4f; }
+
+.ant-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
 
 .dropzone {
   border: 2px dashed var(--ant-border-color);

@@ -1,13 +1,14 @@
 <template>
   <div v-if="visible" class="ant-modal-mask active"></div>
   <div v-if="visible" class="ant-modal-wrap active" @click.self="handleCancel">
-    <div class="ant-modal task-action-modal">
-      <div class="ant-modal-header">
-        <div class="ant-modal-title">
-          <FieldTimeOutlined style="color: #52c41a; margin-right: 8px;" />
-          任务采集计划设置
+      <div class="ant-modal task-action-modal">
+        <div class="ant-modal-header">
+          <div class="ant-modal-title">
+            <FieldTimeOutlined style="color: #52c41a; margin-right: 8px;" />
+            任务采集计划设置
+          </div>
+          <button type="button" class="modal-close-btn" @click="handleCancel">×</button>
         </div>
-      </div>
 
       <div class="ant-modal-body">
         <div class="selected-info-box">
@@ -111,6 +112,29 @@ const handleConfirm = () => {
 <style scoped>
 .task-action-modal {
   width: 600px !important; /* 稍微调宽一点，方便显示多个标签 */
+}
+
+.task-action-modal .ant-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modal-close-btn {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #8c8c8c;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.modal-close-btn:hover {
+  background: #f5f5f5;
+  color: #262626;
 }
 
 .selected-info-box {

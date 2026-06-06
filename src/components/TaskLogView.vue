@@ -1516,15 +1516,27 @@ defineExpose({
   width: min(860px, calc(100vw - 48px));
 }
 
+.task-log-detail-modal .ant-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
 .task-log-modal-close {
   cursor: pointer;
-  float: right;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
   color: var(--ant-text-secondary, rgba(0, 0, 0, 0.45));
   font-size: 20px;
   line-height: 1;
 }
 
 .task-log-modal-close:hover {
+  background: #f5f5f5;
   color: #cf1322;
 }
 
