@@ -139,10 +139,17 @@ export const fetchTaskGroups = (taskId) => {
 }
 
 export const assignTaskGroups = (taskId, ids) => {
+  const params = new URLSearchParams()
+  ;(ids || []).forEach((id) => {
+    if (id !== undefined && id !== null && id !== '') {
+      params.append('ids', id)
+    }
+  })
+
   return request.post(
     `/api/data-acquisition/tasks/${taskId}/groups`,
     null,
-    { params: { ids } }
+    { params }
   )
 }
 

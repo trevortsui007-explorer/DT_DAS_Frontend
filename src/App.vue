@@ -59,6 +59,10 @@
           :status-distribution="taskStatusDistribution"
           :trend-data="overviewTrend"
           :latest-activities="overviewActivities"
+          :task-logs="overviewTaskLogs"
+          :tasks="tasks"
+          :configs="configs"
+          :stats="stats"
           :loading="dashboardLoading"
           :error="dashboardError"
         />
