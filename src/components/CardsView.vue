@@ -1,5 +1,5 @@
 <template>
-  <div class="cards-view" @mousedown="onMouseDown">
+  <div class="cards-view" :class="{ 'is-selecting': isSelecting }" @mousedown="onMouseDown">
     <div v-if="loading" class="loading-placeholder">加载中...</div>
     <div v-else-if="error" class="error-placeholder">{{ error }}</div>
     <div v-else-if="items.length === 0" class="empty-placeholder">暂无数据</div>
@@ -15,10 +15,10 @@
         <div v-for="group in items" :key="group.id"
              class="config-card"
              :class="{
-               'preview-toggle': previewIds.has(group.id || group.Id),
-               'selected': selectedIds.has(group.id || group.Id)
+               'preview-toggle': previewIds.has(getItemId(group)),
+               'selected': selectedIds.has(getItemId(group))
              }"
-             :data-id="group.id || group.Id"
+             :data-id="getItemId(group)"
              @click="handleCardClick($event, group, 'group')">
 
           <div class="card-header">
@@ -28,8 +28,8 @@
             </span>
           </div>
           <div class="card-body">
-            <p>类别：{{ group.groupCategory || group.GroupCategory || '-' }}</p>
-            <p>类型：{{ group.groupType || group.GroupType || '-' }}</p>
+            <p>厂别归属：{{ group.groupCategory || group.GroupCategory || '-' }}</p>
+            <p>采集周期类型：{{ group.groupType || group.GroupType || '-' }}</p>
             <p>关联配置数：{{ group.configCount || group.ConfigCount || 0 }}</p>
           </div>
           <div class="card-actions" @click.stop>
@@ -39,11 +39,10 @@
 
           <div class="hover-detail">
             <div class="hover-detail-content">
-              <div><strong>排序序号：</strong>{{ group.sortOrder ?? group.SortOrder ?? '-' }}</div>
               <div>
                 <strong>包含配置项：</strong>
                 <template v-if="group.associatedConfigs && group.associatedConfigs.length">
-                  {{ group.associatedConfigs.map(c => c.eqName).join(', ') }}
+                  {{ group.associatedConfigs.map(c => c.eqName || c.EqName).join(', ') }}
                 </template>
                 <template v-else>
                   <span style="color: #999;">暂无关联配置</span>
@@ -58,10 +57,10 @@
         <div v-for="config in items" :key="config.id"
              class="config-card"
              :class="{
-               'preview-toggle': previewIds.has(config.id || config.Id),
-               'selected': selectedIds.has(config.id || config.Id)
+               'preview-toggle': previewIds.has(getItemId(config)),
+               'selected': selectedIds.has(getItemId(config))
              }"
-             :data-id="config.id || config.Id"
+             :data-id="getItemId(config)"
              @click="handleCardClick($event, config, 'config')">
           <div class="card-header">
             <h4 class="clickable-title" @click.stop="viewDetail(config)">{{ config.EqName || config.eqName || '未命名设备' }}</h4>
@@ -70,9 +69,18 @@
             </span>
           </div>
           <div class="card-body">
-            <p><strong>文件路径规则：</strong>{{ config.FilePathPattern || config.filePathPattern || '-' }}</p>
-            <p><strong>文件名规则：</strong>{{ config.FileNamePattern || config.fileNamePattern || '-' }}</p>
-            <p><strong>类型：</strong><span class="ant-tag">{{ config.FileType || config.fileType || '-' }}</span></p>
+            <p class="card-field">
+              <strong>文件路径规则：</strong>
+              <span class="card-field-value">{{ getConfigField(config, 'FilePathPattern', 'filePathPattern') }}</span>
+            </p>
+            <p class="card-field">
+              <strong>文件名规则：</strong>
+              <span class="card-field-value">{{ getConfigField(config, 'FileNamePattern', 'fileNamePattern') }}</span>
+            </p>
+            <p class="card-field">
+              <strong>类型：</strong>
+              <span class="ant-tag">{{ getConfigField(config, 'FileType', 'fileType') }}</span>
+            </p>
           </div>
           <div class="card-actions" @click.stop>
             <a @click="viewDetail(config)">详情 →</a>
@@ -119,7 +127,12 @@ let startPos = { x: 0, y: 0 }
 
 const selectedIds = ref(new Set())
 const previewIds = ref(new Set())
-const formatId = (id) => isNaN(Number(id)) ? id : Number(id)
+const getItemId = (item) => String(item?.id ?? item?.Id ?? '')
+
+const getConfigField = (config, upperKey, lowerKey) => {
+  const value = config?.[upperKey] ?? config?.[lowerKey]
+  return value === undefined || value === null || value === '' ? '-' : String(value)
+}
 
 watch(() => props.items, () => {
   selectedIds.value.clear()
@@ -131,7 +144,7 @@ watch(() => props.items, () => {
 const handleCardClick = (event, item, typeStr) => {
   if (hasDragged.value) return
 
-  const id = formatId(item.id || item.Id)
+  const id = getItemId(item)
 
   if (event.ctrlKey || event.metaKey) {
     if (selectedIds.value.has(id)) {
@@ -206,21 +219,24 @@ const onMouseMove = (e) => {
   previewIds.value.clear()
 
   cards.forEach(card => {
-    const cardTop = card.offsetTop
-    const cardLeft = card.offsetLeft
-    const cardWidth = card.offsetWidth
-    const cardHeight = card.offsetHeight
+    const cardRect = card.getBoundingClientRect()
+    const cardLeft = cardRect.left - gridRect.left
+    const cardTop = cardRect.top - gridRect.top
+    const cardRight = cardLeft + cardRect.width
+    const cardBottom = cardTop + cardRect.height
+    const boxRight = box.value.left + box.value.width
+    const boxBottom = box.value.top + box.value.height
 
     const isOverlapped = !(
-      cardLeft + cardWidth < box.value.left ||
-      cardLeft > box.value.left + box.value.width ||
-      cardTop + cardHeight < box.value.top ||
-      cardTop > box.value.top + box.value.height
+      cardRight < box.value.left ||
+      cardLeft > boxRight ||
+      cardBottom < box.value.top ||
+      cardTop > boxBottom
     )
 
     if (isOverlapped) {
       const id = card.getAttribute('data-id')
-      if (id) previewIds.value.add(formatId(id))
+      if (id) previewIds.value.add(id)
     }
   })
 }
@@ -258,11 +274,11 @@ const viewSourceDetail = (item) => {
 const emitSelection = () => {
   const selectedData = props.items
     .filter(item => {
-      const id = formatId(item.id || item.Id)
+      const id = getItemId(item)
       return selectedIds.value.has(id)
     })
     .map(item => {
-      const id = formatId(item.id || item.Id)
+      const id = getItemId(item)
       if (props.type === 'group') {
         return {
           id,
@@ -358,6 +374,20 @@ const emitSelection = () => {
 }
 
 .card-body p { margin: 8px 0; font-size: 13px; color: #666; line-height: 1.5; }
+.card-field {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+}
+.card-field strong {
+  flex: 0 0 auto;
+}
+.card-field-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
 .card-actions {
   margin-top: 12px;
   padding-top: 12px;
@@ -384,7 +414,7 @@ const emitSelection = () => {
 }
 
 /* 防止拖拽框选时弹出一大片详情，同时选中状态建议也关闭详情展示以保持界面整洁 */
-.config-card:hover:not(.preview-toggle):not(.selected) .hover-detail {
+.cards-view:not(.is-selecting) .config-card:hover:not(.preview-toggle):not(.selected) .hover-detail {
   max-height: 250px;
   opacity: 1;
   margin-top: 12px;

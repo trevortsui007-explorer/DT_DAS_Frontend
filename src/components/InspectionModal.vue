@@ -14,6 +14,7 @@
 
       <div class="ant-modal-header">
         <h3 class="ant-modal-title">巡检日历详情</h3>
+        <button type="button" class="modal-close-btn" @click="close">×</button>
       </div>
 
       <div class="ant-modal-body">
@@ -47,8 +48,9 @@
             v-for="day in days"
             :key="day.date"
             class="calendar-cell"
-            :class="day.status"
+            :class="[day.status, { downloadable: day.canDownload }]"
             :title="day.date"
+            @click="handleDayClick(day)"
           >
             <div class="day-inner">
               {{ day.day }}
@@ -63,15 +65,14 @@
         </div>
       </div>
 
-      <div class="ant-modal-footer">
-        <button class="ant-btn" @click="close">关闭</button>
-      </div>
     </div>
   </div>
 </template>
 
 <script setup>
 import { computed, ref, watch } from 'vue'
+import message from '@/components/index.js'
+import { downloadFile } from '@/api'
 
 const props = defineProps({
   visible: Boolean,
@@ -84,6 +85,8 @@ const emit = defineEmits(['update:visible', 'change'])
 const now = new Date()
 const year = ref(now.getFullYear())
 const month = ref(now.getMonth() + 1)
+const downloadUser = 'et1'
+const downloadPass = 'dt123456#'
 
 // 关闭弹窗
 const close = () => emit('update:visible', false)
@@ -117,10 +120,47 @@ const fileMap = computed(() => {
   props.data?.files?.forEach(f => {
     // 假设 detectedDate 是 "2026-01-01T00:00:00"
     const d = f.detectedDate.split('T')[0]
-    map[d] = f.isMissing ? 'missing' : 'normal'
+    map[d] = {
+      status: f.isMissing ? 'missing' : 'normal',
+      file: f
+    }
   })
   return map
 })
+
+const saveBlob = (blob, filename) => {
+  const url = window.URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename || 'download'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  window.URL.revokeObjectURL(url)
+}
+
+const handleDayClick = async (day) => {
+  if (!day.canDownload || !day.file?.fullPath) return
+
+  const filename = day.file.fileName || day.file.fullPath.split(/[\\/]/).pop()
+  if (!window.confirm(`是否下载 ${filename}？`)) return
+
+  try {
+    const blob = await downloadFile(day.file.fullPath, downloadUser, downloadPass)
+
+    if (blob?.type?.includes('application/json')) {
+      const text = await blob.text()
+      const result = JSON.parse(text)
+      throw new Error(result.info || result.message || '文件下载失败')
+    }
+
+    saveBlob(blob, filename)
+    message.success('文件下载已开始')
+  } catch (error) {
+    console.error('文件下载失败:', error)
+    message.error('文件下载失败')
+  }
+}
 
 // 计算每月 1 号是星期几（用于计算日历起始位移）
 const firstDayOffset = computed(() => {
@@ -141,17 +181,23 @@ const days = computed(() => {
   for (let i = 1; i <= totalDays; i++) {
     const dateStr = formatDate(year.value, month.value, i)
     const currentDate = new Date(year.value, month.value - 1, i)
+    const record = fileMap.value[dateStr]
 
     let status = 'future'
+    let file = null
+
     if (currentDate <= today) {
       // 如果 fileMap 里没找到，默认视为缺失
-      status = fileMap.value[dateStr] || 'missing'
+      status = record?.status || 'missing'
+      file = record?.file || null
     }
 
     result.push({
       day: i,
       date: dateStr,
-      status
+      status,
+      file,
+      canDownload: status === 'normal' && Boolean(file?.fullPath)
     })
   }
   return result
@@ -193,10 +239,28 @@ defineExpose({
 
 /* Header & Footer */
 .ant-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   padding: 16px 24px;
   border-bottom: 1px solid #f0f0f0;
 }
 .ant-modal-title { margin: 0; font-size: 16px; font-weight: 600; }
+.modal-close-btn {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #8c8c8c;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+.modal-close-btn:hover {
+  background: #f5f5f5;
+  color: #262626;
+}
 .ant-modal-body { padding: 24px; }
 .ant-modal-footer {
   padding: 10px 16px;
@@ -261,6 +325,10 @@ defineExpose({
   display: flex;
   align-items: center;
   justify-content: center;
+  cursor: default;
+}
+
+.calendar-cell.downloadable {
   cursor: pointer;
 }
 
@@ -295,7 +363,7 @@ defineExpose({
   border: 1px solid #f0f0f0;
 }
 
-.calendar-cell:not(.empty):hover .day-inner {
+.calendar-cell.downloadable:hover .day-inner {
   transform: scale(1.15);
   box-shadow: 0 4px 10px rgba(0,0,0,0.1);
 }

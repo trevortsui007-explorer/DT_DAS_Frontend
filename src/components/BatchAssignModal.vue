@@ -5,7 +5,7 @@
       <div class="ant-modal" style="width: 400px;">
         <div class="ant-modal-header">
           <span class="ant-modal-title">分配至配置组</span>
-          <span style="cursor:pointer; float:right;" @click="close">×</span>
+          <button type="button" class="modal-close-btn" @click="close">×</button>
         </div>
         <div class="ant-modal-body" style="padding-top: 10px;">
           <p style="margin-bottom: 12px; margin-top: 8px; color: #666;">
@@ -69,6 +69,29 @@ defineExpose({ open })
 </script>
 
 <style scoped>
+.ant-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modal-close-btn {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #8c8c8c;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.modal-close-btn:hover {
+  background: #f5f5f5;
+  color: #262626;
+}
+
 .group-list-selector {
   max-height: 300px;
   overflow-y: auto;

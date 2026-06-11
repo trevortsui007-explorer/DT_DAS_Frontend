@@ -2,25 +2,18 @@
   <div>
     <div class="ant-modal-mask" :class="{ active: visible }" @click="close"></div>
     <div class="ant-modal-wrap" :class="{ active: visible }">
-      <div class="ant-modal" style="width: 700px">
+      <div class="ant-modal config-modal" style="width: 700px">
         <div class="ant-modal-header">
-          <span class="ant-modal-title">
-            {{
-              isFromImport
-                ? '导入配置（第 2/2 步：完善配置）'
-                : isEdit
-                  ? '编辑配置项'
-                  : '新建配置项'
-            }}
-          </span>
-          <span style="cursor: pointer; float: right" @click="close">×</span>
+          <span class="ant-modal-title">{{ modalTitle }}</span>
+          <span class="modal-close" @click="close">×</span>
         </div>
 
         <div class="ant-modal-body">
           <input type="hidden" v-model="formData.id" />
 
-          <div class="form-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px">
-            <div class="form-column">
+          <section class="form-section">
+            <div class="section-title">基础配置信息</div>
+            <div class="form-grid top-form-grid">
               <div class="form-item">
                 <label><span style="color: red">*</span> 设备名称 (EqName)</label>
                 <input
@@ -31,7 +24,20 @@
                 />
               </div>
 
-              <div class="form-item" style="margin-top: 12px">
+              <div class="form-item status-form-item">
+                <label>状态</label>
+                <label class="toggle-switch">
+                  <input type="checkbox" v-model="formData.isEnabled" />
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+            </div>
+          </section>
+
+          <section class="form-section">
+            <div class="section-title">文件采集信息</div>
+            <div class="form-grid">
+              <div class="form-item">
                 <label><span style="color: red">*</span> 目标表名 (TableName)</label>
                 <input
                   type="text"
@@ -43,7 +49,7 @@
                 />
               </div>
 
-              <div class="form-item" style="margin-top: 12px">
+              <div class="form-item">
                 <label><span style="color: red">*</span> 文件路径规则</label>
                 <input
                   type="text"
@@ -53,8 +59,11 @@
                 />
               </div>
 
-              <div class="form-item" style="margin-top: 12px">
-                <label>文件名规则</label>
+              <div class="form-item">
+                <label class="label-with-help">
+                  文件名规则
+                  <HelpTooltip text="规则名为空，则采集这个文件夹的内容" />
+                </label>
                 <input
                   type="text"
                   class="ant-input"
@@ -62,25 +71,29 @@
                   v-model="formData.fileNamePattern"
                   placeholder="例如: Log.csv"
                   @input="autoMarkers.FileNamePattern = false"
+                  @blur="normalizeFileNamePattern"
                 />
               </div>
 
-              <div class="form-item" style="margin-top: 12px">
+              <div class="form-item">
                 <label>文件类型</label>
                 <select
                   class="ant-input"
                   :class="{ 'auto-filled-input': isAuto('FileType') }"
                   v-model="formData.fileType"
-                  @change="autoMarkers.FileType = false"
+                  @change="handleFileTypeChange"
                 >
-                  <option value=".csv">CSV 文件</option>
-                  <option value=".txt">TXT 文件</option>
-                  <option value=".xlsx">Excel 文件</option>
+                  <option value=".csv">.csv</option>
+                  <option value=".xlsx">.xlsx</option>
+                  <option value=".txt">.txt</option>
                 </select>
               </div>
             </div>
+          </section>
 
-            <div class="form-column">
+          <section class="form-section">
+            <div class="section-title">文件内容信息</div>
+            <div class="form-grid">
               <div class="form-item">
                 <label>表头行号 (HeaderRow)</label>
                 <input
@@ -92,7 +105,7 @@
                 />
               </div>
 
-              <div class="form-item" style="margin-top: 12px">
+              <div class="form-item">
                 <label>数据起始行 (StartRow)</label>
                 <input
                   type="number"
@@ -102,11 +115,86 @@
                   @input="autoMarkers.StartRow = false"
                 />
               </div>
+            </div>
 
-              <div class="form-item" style="margin-top: 12px">
+            <div class="form-item">
+              <label class="label-with-help">
+                扩展字段 (ExtFields)
+                <HelpTooltip text="扩展字段为非文件内字段" />
+              </label>
+              <input
+                type="text"
+                class="ant-input"
+                :class="{ 'auto-filled-input': isAuto('ExtFields') }"
+                v-model="formData.extFields"
+                placeholder="例如: row, fullFilePath"
+                @input="autoMarkers.ExtFields = false"
+              />
+            </div>
+
+            <div class="form-item mapping-form-item">
+              <div class="label-row">
+                <label>字段映射关系</label>
+                <div class="mapping-json-actions">
+                  <button
+                    type="button"
+                    class="ant-btn ant-btn-primary mapping-json-action"
+                    @click="openFieldMappingJsonImport"
+                  >
+                    添加JSON数据
+                  </button>
+                  <button
+                    type="button"
+                    class="ant-btn ant-btn-default mapping-json-action"
+                    @click="showFieldMappingJson"
+                  >
+                    查看JSON
+                  </button>
+                </div>
+              </div>
+              <div class="mapping-table">
+                <div class="mapping-table__head">
+                  <span>文件字段</span>
+                  <span>入库字段</span>
+                  <span>操作</span>
+                </div>
+                <div
+                  v-for="(row, index) in fieldMappingRows"
+                  :key="row.key"
+                  class="mapping-table__row"
+                >
+                  <input
+                    class="ant-input"
+                    v-model="row.source"
+                    placeholder="例如: PCB号"
+                  />
+                  <input
+                    class="ant-input"
+                    v-model="row.target"
+                    placeholder="例如: pcbNo"
+                  />
+                  <button
+                    type="button"
+                    class="mapping-remove-btn"
+                    @click="removeMappingRow(index)"
+                  >
+                    删除
+                  </button>
+                </div>
+                <button type="button" class="mapping-add-btn" @click="addMappingRow">
+                  + 新增映射
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section class="form-section">
+            <div class="section-title">后处理信息</div>
+            <div class="form-grid">
+              <div class="form-item post-type-item">
                 <label>后处理类型</label>
                 <div class="segmented-control" id="post-type-segmented">
-                  <div class="segment-pill" :style="{ left: pillLeft }"></div>
+                  <div class="segment-pill" :style="pillStyle"></div>
                   <div class="segment-options">
                     <div
                       v-for="(opt) in postTypes"
@@ -121,7 +209,7 @@
                 </div>
               </div>
 
-              <div class="form-item" style="margin-top: 12px">
+              <div class="form-item">
                 <label>存储过程/服务名</label>
                 <input
                   type="text"
@@ -131,56 +219,37 @@
                 />
               </div>
 
-              <div
-                class="form-item"
-                style="margin-top: 12px; display: flex; flex-direction: column"
-              >
-                <label>状态</label>
-                <label class="toggle-switch">
-                  <input type="checkbox" v-model="formData.isEnabled" />
-                  <span class="toggle-slider"></span>
-                </label>
+              <div class="form-item">
+                <label>后处理表 (PostTableName)</label>
+                <input
+                  type="text"
+                  class="ant-input"
+                  v-model="formData.postTableName"
+                  placeholder="后处理写入表名"
+                />
+              </div>
+
+              <div class="form-item">
+                <label>存储过程Flag (Flag)</label>
+                <input
+                  type="text"
+                  class="ant-input"
+                  v-model="formData.flag"
+                  placeholder="例如: MasonETFailureService"
+                />
+              </div>
+
+              <div class="form-item">
+                <label>后处理解释 (FlagName)</label>
+                <input
+                  type="text"
+                  class="ant-input"
+                  v-model="formData.flagName"
+                  placeholder="后处理说明"
+                />
               </div>
             </div>
-          </div>
-
-          <div class="form-item" style="margin-top: 12px">
-            <label>扩展字段 (ExtFields)</label>
-            <input
-              type="text"
-              class="ant-input"
-              :class="{ 'auto-filled-input': isAuto('ExtFields') }"
-              v-model="formData.extFields"
-              placeholder="例如: row, fullFilePath"
-              @input="autoMarkers.ExtFields = false"
-            />
-          </div>
-
-          <div class="form-item" style="margin-top: 12px">
-            <div
-              style="
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                margin-bottom: 6px;
-              "
-            >
-              <label>字段映射关系 (JSON 格式)</label>
-              <button
-                class="ant-btn ant-btn-default"
-                style="height: 26px; padding: 0 12px; font-size: 13px"
-                @click="formatJson"
-              >
-                格式化 JSON
-              </button>
-            </div>
-            <textarea
-              class="ant-input"
-              v-model="formData.fieldMappings"
-              style="height: 88px; resize: vertical; width: 100%"
-              placeholder='例如: {"环境温度": "Temperature", "环境湿度": "Humidity"}'
-            ></textarea>
-          </div>
+          </section>
         </div>
 
         <div class="ant-modal-footer" style="display: flex; justify-content: space-between">
@@ -198,6 +267,61 @@
         </div>
       </div>
     </div>
+
+    <div
+      class="ant-modal-mask json-preview-mask"
+      :class="{ active: jsonPreviewVisible }"
+      @click="closeFieldMappingJson"
+    ></div>
+    <div class="ant-modal-wrap json-preview-wrap" :class="{ active: jsonPreviewVisible }">
+      <div class="ant-modal json-preview-modal" style="width: 520px">
+        <div class="ant-modal-header">
+          <span class="ant-modal-title">字段映射 JSON</span>
+          <span class="modal-close" @click="closeFieldMappingJson">×</span>
+        </div>
+        <div class="ant-modal-body">
+          <pre class="json-preview-content">{{ fieldMappingJsonText }}</pre>
+        </div>
+      </div>
+    </div>
+
+    <div
+      class="ant-modal-mask json-import-mask"
+      :class="{ active: jsonImportVisible }"
+      @click="closeFieldMappingJsonImport"
+    ></div>
+    <div class="ant-modal-wrap json-import-wrap" :class="{ active: jsonImportVisible }">
+      <div class="ant-modal json-import-modal" style="width: 620px">
+        <div class="ant-modal-header">
+          <span class="ant-modal-title">添加字段映射 JSON</span>
+          <span class="modal-close" @click="closeFieldMappingJsonImport">×</span>
+        </div>
+        <div class="ant-modal-body">
+          <div class="json-import-toolbar">
+            <button type="button" class="ant-btn ant-btn-default" @click="formatImportJson">
+              整理JSON
+            </button>
+            <button type="button" class="ant-btn ant-btn-default" @click="copyImportJson">
+              复制JSON
+            </button>
+            <button type="button" class="ant-btn ant-btn-default" @click="pasteImportJson">
+              贴入JSON
+            </button>
+          </div>
+          <textarea
+            class="ant-input json-import-textarea"
+            v-model="jsonImportText"
+            placeholder='例如: {"PCB号": "pcbNo", "二维码": "qrCode"}'
+          ></textarea>
+        </div>
+        <div class="ant-modal-footer json-import-footer">
+          <button class="ant-btn ant-btn-default" @click="closeFieldMappingJsonImport">取消</button>
+          <button class="ant-btn ant-btn-primary" @click="confirmImportFieldMappingJson">
+            确认添加
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -205,12 +329,19 @@
 import { ref, computed, watch } from 'vue'
 import * as api from '@/api'
 import message from '@/components/index.js'
+import HelpTooltip from './HelpTooltip.vue'
 
 const emit = defineEmits(['saved', 'goBack'])
 
 const visible = ref(false)
 const isEdit = ref(false)
 const isFromImport = ref(false) // 标记是否为导入流程
+const modalMode = ref('create')
+const existingConfigs = ref([])
+const jsonPreviewVisible = ref(false)
+const fieldMappingJsonText = ref('{}')
+const jsonImportVisible = ref(false)
+const jsonImportText = ref('')
 
 const formData = ref({
   id: '',
@@ -218,17 +349,23 @@ const formData = ref({
   tableName: '',
   filePathPattern: '',
   fileNamePattern: '',
-  fileType: 'csv',
+  fileType: '.csv',
   headerRow: 1,
   startRow: 2,
   postProcessingType: 0,
+  postTableName: '',
   procedureName: '',
+  serviceName: '',
+  flag: '',
+  flagName: '',
   isEnabled: true,
   extFields: '',
   fieldMappings: '',
 })
 
 const autoMarkers = ref({})
+const fieldMappingRows = ref([])
+let mappingRowSeed = 0
 
 const postTypes = [
   { value: 0, label: '无操作' },
@@ -236,9 +373,171 @@ const postTypes = [
   { value: 2, label: '调用存储过程' },
 ]
 
-const pillLeft = computed(() => {
+const modalTitle = computed(() => {
+  if (isFromImport.value) return '导入配置'
+  if (isEdit.value) return '编辑配置项'
+  if (modalMode.value === 'copy') return '复制配置项'
+  return '新增配置项'
+})
+
+const normalizeFileType = (value) => {
+  const fileType = String(value || '').trim().toLowerCase()
+  if (!fileType) return '.csv'
+  return fileType.startsWith('.') ? fileType : `.${fileType}`
+}
+
+const supportedFileTypes = ['.csv', '.xlsx', '.txt']
+
+const normalizeFileNamePattern = () => {
+  const currentName = String(formData.value.fileNamePattern || '').trim()
+  if (!currentName) {
+    formData.value.fileNamePattern = ''
+    return
+  }
+
+  const currentType = normalizeFileType(formData.value.fileType)
+  const lowerName = currentName.toLowerCase()
+  const matchedType = supportedFileTypes.find((type) => lowerName.endsWith(type))
+
+  if (matchedType) {
+    formData.value.fileNamePattern = `${currentName.slice(0, -matchedType.length)}${currentType}`
+    return
+  }
+
+  const lastSegment = currentName.split(/[\\/]/).pop() || currentName
+  if (/\.[^./\\]+$/.test(lastSegment)) {
+    formData.value.fileNamePattern = currentName
+    return
+  }
+
+  formData.value.fileNamePattern = `${currentName}${currentType}`
+}
+
+const handleFileTypeChange = () => {
+  autoMarkers.value.FileType = false
+  formData.value.fileType = normalizeFileType(formData.value.fileType)
+  normalizeFileNamePattern()
+}
+
+const createMappingRow = (source = '', target = '') => {
+  mappingRowSeed += 1
+  return {
+    key: `mapping-${mappingRowSeed}`,
+    source,
+    target,
+  }
+}
+
+const parseMappingObject = (value) => {
+  if (!value) return null
+  if (typeof value === 'object' && !Array.isArray(value)) return value
+  if (typeof value !== 'string') return null
+
+  let text = value.trim().replace(/^\uFEFF/, '')
+  for (let i = 0; i < 3; i += 1) {
+    try {
+      const parsed = JSON.parse(text)
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed
+      if (typeof parsed === 'string' && parsed !== text) {
+        text = parsed.trim()
+        continue
+      }
+      break
+    } catch {
+      break
+    }
+  }
+
+  const normalizedText = text.replace(/\\"/g, '"').replace(/[“”]/g, '"').replace(/[‘’]/g, "'")
+  const rows = {}
+  const pairPattern = /"([^"]+)"\s*:\s*"([^"]*)"/g
+  let match = pairPattern.exec(normalizedText)
+  while (match) {
+    rows[match[1]] = match[2]
+    match = pairPattern.exec(normalizedText)
+  }
+
+  return Object.keys(rows).length ? rows : null
+}
+
+const parseFieldMappingsToRows = (value) => {
+  if (!value) return [createMappingRow()]
+
+  const parsed = parseMappingObject(value)
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return [createMappingRow()]
+  }
+
+  const rows = Object.entries(parsed).map(([source, target]) =>
+    createMappingRow(source, String(target ?? '')),
+  )
+
+  return rows.length ? rows : [createMappingRow()]
+}
+
+const buildFieldMappingsJson = () => {
+  const mappings = {}
+
+  fieldMappingRows.value.forEach((row) => {
+    const source = String(row.source || '').trim()
+    const target = String(row.target || '').trim()
+    if (source && target) {
+      mappings[source] = target
+    }
+  })
+
+  return JSON.stringify(mappings, null, 2)
+}
+
+const syncFieldMappingsFromRows = () => {
+  formData.value.fieldMappings = buildFieldMappingsJson()
+}
+
+const addMappingRow = () => {
+  fieldMappingRows.value.push(createMappingRow())
+}
+
+const removeMappingRow = (index) => {
+  fieldMappingRows.value.splice(index, 1)
+  if (!fieldMappingRows.value.length) {
+    fieldMappingRows.value.push(createMappingRow())
+  }
+}
+
+const mergeMappingRows = (mappingObject) => {
+  const merged = new Map()
+
+  fieldMappingRows.value.forEach((row) => {
+    const source = String(row.source || '').trim()
+    const target = String(row.target || '').trim()
+    if (source && target) {
+      merged.set(source, target)
+    }
+  })
+
+  Object.entries(mappingObject).forEach(([source, target]) => {
+    const normalizedSource = String(source || '').trim()
+    const normalizedTarget = String(target ?? '').trim()
+    if (normalizedSource && normalizedTarget) {
+      merged.set(normalizedSource, normalizedTarget)
+    }
+  })
+
+  fieldMappingRows.value = Array.from(merged.entries()).map(([source, target]) =>
+    createMappingRow(source, target),
+  )
+
+  if (!fieldMappingRows.value.length) {
+    fieldMappingRows.value = [createMappingRow()]
+  }
+}
+
+const pillStyle = computed(() => {
   const index = postTypes.findIndex((t) => t.value === formData.value.postProcessingType)
-  return `${index * 33.333}%`
+  return {
+    transform: `translateX(${Math.max(index, 0) * 100}%)`,
+  }
 })
 
 // ==================== 后处理类型联动 ExtFields ====================
@@ -275,33 +574,43 @@ watch(
   },
 )
 
-function open(edit = false, data = null, fromImport = false) {
+function open(edit = false, data = null, fromImport = false, options = {}) {
   isEdit.value = edit
   isFromImport.value = fromImport
+  modalMode.value = options.mode || (edit ? 'edit' : 'create')
+  existingConfigs.value = Array.isArray(options.existingConfigs) ? options.existingConfigs : []
 
   // 每次打开时先重置标记
   autoMarkers.value = {}
 
   if (data) {
     // 兼容后端的大写字段和前端的小写字段
+    const rawFieldMappings =
+      typeof (data.fieldMappings || data.FieldMappings) === 'object'
+        ? JSON.stringify(data.fieldMappings || data.FieldMappings, null, 2)
+        : data.fieldMappings || data.FieldMappings || ''
+
     formData.value = {
       id: data.id || data.Id || '',
       eqName: data.eqName || data.EqName || '',
       tableName: data.tableName || data.TableName || '',
       filePathPattern: data.filePathPattern || data.FilePathPattern || '',
       fileNamePattern: data.fileNamePattern || data.FileNamePattern || '',
-      fileType: data.fileType || data.FileType || 'csv',
+      fileType: normalizeFileType(data.fileType || data.FileType),
       headerRow: data.headerRow || data.HeaderRow || 1,
       startRow: data.startRow || data.StartRow || 2,
       postProcessingType: data.postProcessingType ?? data.PostProcessingType ?? 0,
+      postTableName: data.postTableName || data.PostTableName || '',
       procedureName: data.procedureName || data.ProcedureName || '',
+      serviceName: data.serviceName || data.ServiceName || '',
+      flag: data.flag || data.Flag || '',
+      flagName: data.flagName || data.FlagName || '',
       isEnabled: data.isEnabled ?? data.IsEnabled ?? true,
       extFields: data.extFields || data.ExtFields || '',
-      fieldMappings:
-        typeof (data.fieldMappings || data.FieldMappings) === 'object'
-          ? JSON.stringify(data.fieldMappings || data.FieldMappings, null, 2)
-          : data.fieldMappings || data.FieldMappings || '',
+      fieldMappings: rawFieldMappings,
     }
+
+    fieldMappingRows.value = parseFieldMappingsToRows(rawFieldMappings)
 
     // 如果是导入，才处理绿色高亮标记
     if (fromImport && data._autoFilledFields) {
@@ -331,19 +640,56 @@ const resetForm = () => {
     tableName: '',
     filePathPattern: '',
     fileNamePattern: '',
-    fileType: 'csv',
+    fileType: '.csv',
     headerRow: 1,
     startRow: 2,
     postProcessingType: 0,
+    postTableName: '',
     procedureName: '',
+    serviceName: '',
+    flag: '',
+    flagName: '',
     isEnabled: true,
     extFields: '',
     fieldMappings: '',
   }
+  fieldMappingRows.value = [createMappingRow()]
+}
+
+const getConfigId = (item) => item?.id ?? item?.Id ?? ''
+const getConfigName = (item) => String(item?.eqName || item?.EqName || '').trim()
+
+const hasDuplicateConfigName = () => {
+  const currentName = String(formData.value.eqName || '').trim().toLowerCase()
+  const currentId = String(formData.value.id || '')
+
+  if (!currentName) return false
+
+  return existingConfigs.value.some((item) => {
+    const itemName = getConfigName(item).toLowerCase()
+    const itemId = String(getConfigId(item))
+
+    return itemName === currentName && itemId !== currentId
+  })
 }
 
 function close() {
   visible.value = false
+  jsonPreviewVisible.value = false
+  jsonImportVisible.value = false
+}
+
+function closeFieldMappingJson() {
+  jsonPreviewVisible.value = false
+}
+
+function openFieldMappingJsonImport() {
+  jsonImportText.value = ''
+  jsonImportVisible.value = true
+}
+
+function closeFieldMappingJsonImport() {
+  jsonImportVisible.value = false
 }
 
 function goBack() {
@@ -351,13 +697,49 @@ function goBack() {
   emit('goBack') // 通知父组件退回上一步
 }
 
-function formatJson() {
-  try {
-    const parsed = JSON.parse(formData.value.fieldMappings)
-    formData.value.fieldMappings = JSON.stringify(parsed, null, 2)
-  } catch (err) {
-    message('JSON 格式有误，请检查后再试～', err)
+function showFieldMappingJson() {
+  syncFieldMappingsFromRows()
+  fieldMappingJsonText.value = formData.value.fieldMappings || '{}'
+  jsonPreviewVisible.value = true
+}
+
+function formatImportJson() {
+  const parsed = parseMappingObject(jsonImportText.value)
+  if (!parsed) {
+    message('JSON 格式有误，请检查后再整理')
+    return
   }
+  jsonImportText.value = JSON.stringify(parsed, null, 2)
+}
+
+async function copyImportJson() {
+  try {
+    await navigator.clipboard.writeText(jsonImportText.value || '')
+    message('JSON 已复制')
+  } catch {
+    message('复制失败，请使用 Ctrl+C')
+  }
+}
+
+async function pasteImportJson() {
+  try {
+    jsonImportText.value = await navigator.clipboard.readText()
+  } catch {
+    message('读取剪贴板失败，请使用 Ctrl+V')
+  }
+}
+
+function confirmImportFieldMappingJson() {
+  const parsed = parseMappingObject(jsonImportText.value)
+  if (!parsed) {
+    message('JSON 格式有误，请检查后再添加')
+    return
+  }
+
+  mergeMappingRows(parsed)
+  syncFieldMappingsFromRows()
+  jsonImportVisible.value = false
+  message('字段映射已添加')
 }
 
 async function save() {
@@ -368,7 +750,16 @@ async function save() {
       return
     }
 
+    if (hasDuplicateConfigName()) {
+      message('设备名称已存在，请修改后再保存')
+      return
+    }
+
     // ================= 2. 构造 payload =================
+    formData.value.fileType = normalizeFileType(formData.value.fileType)
+    normalizeFileNamePattern()
+    syncFieldMappingsFromRows()
+
     const payload = {
       EqName: formData.value.eqName,
       TableName: formData.value.tableName,
@@ -383,10 +774,13 @@ async function save() {
       ExtFields: formData.value.extFields,
       FieldMappings: formData.value.fieldMappings,
 
-      PostTableName: '',
-      ServiceName: formData.value.postProcessingType === 1 ? formData.value.procedureName : '',
-      Flag: '',
-      FlagName: '',
+      PostTableName: formData.value.postTableName,
+      ServiceName:
+        formData.value.postProcessingType === 1
+          ? formData.value.procedureName
+          : formData.value.serviceName,
+      Flag: formData.value.flag,
+      FlagName: formData.value.flagName,
     }
 
     console.log('提交数据:', payload)
@@ -420,27 +814,300 @@ defineExpose({ open })
 </script>
 
 <style scoped>
-.form-grid {
-  margin-bottom: 16px;
+.config-modal {
+  border-radius: 10px;
+  overflow: hidden;
 }
+
+.config-modal .ant-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modal-close {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  color: #262626;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.modal-close:hover {
+  background: #f5f5f5;
+}
+
+.config-modal .ant-modal-body {
+  max-height: 72vh;
+  overflow-y: auto;
+}
+
+.form-section {
+  padding: 14px 0 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.form-section:first-of-type {
+  padding-top: 0;
+}
+
+.form-section:last-of-type {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.section-title {
+  margin-bottom: 12px;
+  padding-left: 10px;
+  border-left: 3px solid #52c41a;
+  color: #1f2937;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 16px;
+}
+
+.top-form-grid {
+  align-items: end;
+}
+
+.form-item {
+  margin: 0;
+}
+
+.form-item + .form-item {
+  margin-top: 0;
+}
+
+.form-section > .form-item {
+  margin-top: 14px;
+}
+
+.mapping-form-item {
+  margin-top: 18px;
+}
+
+.form-item label {
+  display: inline-flex;
+  align-items: center;
+  margin-bottom: 6px;
+  color: #262626;
+  font-weight: 500;
+}
+
+.label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.label-row label {
+  margin-bottom: 0;
+}
+
+.mapping-json-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mapping-json-action {
+  height: 26px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+.status-form-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.status-form-item .toggle-switch {
+  margin-top: 0;
+}
+
+.post-type-item {
+  grid-column: 1 / -1;
+}
+
+.mapping-table {
+  border: 1px solid #edf0f2;
+  border-radius: 7px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.mapping-table__head,
+.mapping-table__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 68px;
+  gap: 8px;
+  align-items: center;
+}
+
+.mapping-table__head {
+  padding: 8px 10px;
+  background: #fafafa;
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.mapping-table__row {
+  padding: 8px 10px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.mapping-table__row .ant-input {
+  height: 32px;
+}
+
+.mapping-remove-btn {
+  height: 30px;
+  border: 1px solid #ffccc7;
+  border-radius: 6px;
+  background: #fff2f0;
+  color: #f5222d;
+  cursor: pointer;
+}
+
+.mapping-remove-btn:hover {
+  border-color: #ff7875;
+}
+
+.mapping-add-btn {
+  width: 100%;
+  height: 34px;
+  border: 0;
+  border-top: 1px solid #f0f0f0;
+  background: #fbfffa;
+  color: #32b313;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mapping-add-btn:hover {
+  background: #f6ffed;
+}
+
+.label-with-help {
+  display: inline-flex;
+  align-items: center;
+}
+
+.config-modal .ant-input,
+.config-modal select.ant-input {
+  height: 34px;
+  border-radius: 7px;
+}
+
+.config-modal textarea.ant-input {
+  height: 88px;
+  border-radius: 7px;
+}
+
+.json-preview-mask {
+  z-index: 1100;
+}
+
+.json-preview-wrap,
+.json-import-wrap {
+  z-index: 1101;
+}
+
+.json-import-mask {
+  z-index: 1100;
+}
+
+.json-preview-modal,
+.json-import-modal {
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.json-preview-modal .ant-modal-header,
+.json-import-modal .ant-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.json-preview-modal .ant-modal-body {
+  max-height: 56vh;
+  overflow: auto;
+}
+
+.json-preview-content {
+  min-height: 220px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid #edf0f2;
+  border-radius: 7px;
+  background: #fafafa;
+  color: #1f2937;
+  font-family: Consolas, 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.json-import-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.json-import-textarea {
+  width: 100%;
+  min-height: 280px;
+  resize: vertical;
+  font-family: Consolas, 'Courier New', monospace;
+  line-height: 1.6;
+}
+
+.json-import-modal .json-import-textarea {
+  height: 280px;
+}
+
+.json-import-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 .segmented-control {
   position: relative;
   display: flex;
-  background-color: #f0f2f5;
+  background-color: #f2f4f6;
   border-radius: 9999px;
   padding: 4px;
-  height: 26px;
+  height: 34px;
   width: 100%;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.06);
+  box-sizing: border-box;
 }
 .segment-pill {
   position: absolute;
   top: 4px;
-  left: 0;
+  left: 4px;
   height: calc(100% - 8px);
-  width: calc(33.333% - 4px);
+  width: calc((100% - 8px) / 3);
   background-color: var(--ant-primary, #52c41a);
   border-radius: 9999px;
-  transition: left 0.35s cubic-bezier(0.645, 0.045, 0.355, 1);
+  box-shadow: 0 2px 8px rgba(82, 196, 26, 0.28);
+  transition: transform 0.28s cubic-bezier(0.645, 0.045, 0.355, 1);
   z-index: 1;
 }
 .segment-options {
@@ -455,7 +1122,7 @@ defineExpose({ open })
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--ant-text-secondary);
   cursor: pointer;

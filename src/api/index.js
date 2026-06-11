@@ -52,12 +52,18 @@ export const deleteGroup = (id) => {
 
 // group status
 export const setGroupStatus = (ids, isEnabled) => {
-  const formData = new FormData()
-  formData.append('ids', ids)
-  formData.append('isEnabled', isEnabled)
+  const params = new URLSearchParams()
 
-  return request.patch('/api/file-configs/group/status/', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' }
+  ;(Array.isArray(ids) ? ids : [ids]).forEach((id) => {
+    if (id !== undefined && id !== null && id !== '') {
+      params.append('ids', id)
+    }
+  })
+
+  params.append('isEnabled', isEnabled)
+
+  return request.patch('/api/file-configs/group/status', null, {
+    params
   })
 }
 
@@ -74,9 +80,12 @@ export const bindConfigsToGroup = (groupId, ids) => {
 }
 
 export const removeConfigsFromGroup = (groupId, ids) => {
+  const params = new URLSearchParams()
+  ids.forEach(id => params.append('ids', id))
+
   return request.delete(
     `/api/file-configs/group/${groupId}/configs`,
-    { params: { ids } }
+    { params }
   )
 }
 
@@ -98,14 +107,29 @@ export const updateTask = (id, data) => {
 }
 
 export const deleteTasks = (ids) => {
+  const params = new URLSearchParams()
+  ;(Array.isArray(ids) ? ids : [ids]).forEach((id) => {
+    if (id !== undefined && id !== null && id !== '') {
+      params.append('ids', id)
+    }
+  })
+
   return request.delete('/api/data-acquisition/tasks', {
-    params: { ids }
+    params
   })
 }
 
 export const setTaskStatus = (ids, isEnabled) => {
+  const params = new URLSearchParams()
+  ;(Array.isArray(ids) ? ids : [ids]).forEach((id) => {
+    if (id !== undefined && id !== null && id !== '') {
+      params.append('ids', id)
+    }
+  })
+  params.append('isEnabled', isEnabled)
+
   return request.patch('/api/data-acquisition/tasks/status', null, {
-    params: { ids, isEnabled }
+    params
   })
 }
 
@@ -115,10 +139,17 @@ export const fetchTaskGroups = (taskId) => {
 }
 
 export const assignTaskGroups = (taskId, ids) => {
+  const params = new URLSearchParams()
+  ;(ids || []).forEach((id) => {
+    if (id !== undefined && id !== null && id !== '') {
+      params.append('ids', id)
+    }
+  })
+
   return request.post(
     `/api/data-acquisition/tasks/${taskId}/groups`,
     null,
-    { params: { ids } }
+    { params }
   )
 }
 
@@ -136,6 +167,13 @@ export const checkFileExists = (path) => {
 export const previewFile = (path, top = 10) => {
   return request.get('/api/files/preview', {
     params: { path, top }
+  })
+}
+
+export const downloadFile = (path, user, pass) => {
+  return request.get('/api/files/download', {
+    params: { path, user, pass },
+    responseType: 'blob'
   })
 }
 
@@ -228,15 +266,31 @@ export const startExecutionByIds = (ids, processDate) => {
 
 // 按组 IDs 启动
 export const startExecutionByGroups = (groupIds, processDate) => {
+  const params = new URLSearchParams()
+  ;(groupIds || []).forEach((id) => {
+    params.append('groupIds', id)
+  })
+  if (processDate) {
+    params.append('processDate', processDate)
+  }
+
   return request.post('/api/data-acquisition/execution/start/by-groups', null, {
-    params: { groupIds, processDate }
+    params
   })
 }
 
 // 按任务 IDs 启动
 export const startExecutionByTasks = (taskIds, processDate) => {
+  const params = new URLSearchParams()
+  ;(taskIds || []).forEach((id) => {
+    params.append('taskIds', id)
+  })
+  if (processDate) {
+    params.append('processDate', processDate)
+  }
+
   return request.post('/api/data-acquisition/execution/start/by-tasks', null, {
-    params: { taskIds, processDate }
+    params
   })
 }
 
@@ -313,14 +367,4 @@ export const fetchInspection = ({ configId, startTime, endTime, user, pass }) =>
       pass
     }
   })
-}
-
-// ====================== 大屏显示 ======================
-
-export const fetchOverviewTrend = () => {
-  return request.get('/api/data-acquisition/dashboard/trend')
-}
-
-export const fetchOverviewActivities = () => {
-  return request.get('/api/data-acquisition/dashboard/activities')
 }

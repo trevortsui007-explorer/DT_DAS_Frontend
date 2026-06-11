@@ -595,32 +595,13 @@ export const mockConfigs = {
   ]
 }
 
-// ====================== 总览数据 ======================
-export const mockOverviewTrend = {
-  data: [
-    { time: '08:00', value: 120 },
-    { time: '10:00', value: 168 },
-    { time: '12:00', value: 150 },
-    { time: '14:00', value: 268 },
-    { time: '16:00', value: 232 },
-  ],
-}
-
-export const mockOverviewActivities = {
-  data: [
-    { time: '16:20', text: '任务 018 完成年度 KPI 计算', level: 'success' },
-    { time: '15:45', text: '配置组“能源管理组”完成批量同步', level: 'info' },
-    { time: '14:30', text: '配置项“总电表”采集完成并写入 total_energy', level: 'success' },
-    { time: '13:15', text: '任务 010 当前处于禁用状态，未参与采集', level: 'warning' },
-    { time: '11:40', text: '配置项“锅炉压力表”状态异常，等待人工复核', level: 'error' },
-  ],
-}
-
 // ====================== 任务日志数据 ======================
 export const mockTaskLogs = {
   data: [
     {
       taskLogId: 'TL202604230001',
+      taskId: 4,
+      taskName: '数据同步任务',
       status: 'Running',
       startTime: '2026-04-23T09:30:00',
       endTime: '',
@@ -632,6 +613,8 @@ export const mockTaskLogs = {
     },
     {
       taskLogId: 'TL202604220003',
+      taskId: 7,
+      taskName: '设备状态巡检',
       status: 'Success',
       startTime: '2026-04-22T14:10:00',
       endTime: '2026-04-22T14:15:36',
@@ -643,6 +626,8 @@ export const mockTaskLogs = {
     },
     {
       taskLogId: 'TL202604220002',
+      taskId: 16,
+      taskName: '数据质量检查',
       status: 'PartialSuccess',
       startTime: '2026-04-22T10:20:00',
       endTime: '2026-04-22T10:29:12',
@@ -654,6 +639,8 @@ export const mockTaskLogs = {
     },
     {
       taskLogId: 'TL202604210001',
+      taskId: 11,
+      taskName: '夜间批量导入',
       status: 'Failed',
       startTime: '2026-04-21T08:00:00',
       endTime: '2026-04-21T08:02:10',
@@ -943,16 +930,43 @@ export const mockRequest = (config) => {
     return delay({ data: mockTasks.data })
   }
 
-  // ====================== DASHBOARD ======================
-  if (pathname === '/api/dashboard/trend' && method === 'get') {
-    return delay({ data: mockOverviewTrend.data })
-  }
-
-  if (pathname === '/api/dashboard/activities' && method === 'get') {
-    return delay({ data: mockOverviewActivities.data })
-  }
-
   // ====================== TASK LOG ======================
+  if (pathname === '/api/data-acquisition/execution/task-logs' && method === 'get') {
+    const params = config.params || {}
+    const pageNo = Number(params.pageNo || 1)
+    const pageSize = Number(params.pageSize || 10)
+    const start = (pageNo - 1) * pageSize
+    const items = mockTaskLogs.data.slice(start, start + pageSize)
+
+    return delay({
+      data: {
+        items,
+        total: mockTaskLogs.data.length,
+        pageNo,
+        pageSize,
+      },
+    }, 400)
+  }
+
+  if (
+    pathname.startsWith('/api/data-acquisition/execution/') &&
+    pathname.endsWith('/details') &&
+    method === 'get'
+  ) {
+    const taskLogId = pathname.split('/').filter(Boolean).at(-2)
+    return delay({ data: mockTaskLogDetailsMap[taskLogId] || [] }, 350)
+  }
+
+  if (
+    pathname.startsWith('/api/data-acquisition/execution/') &&
+    pathname.endsWith('/status') &&
+    method === 'get'
+  ) {
+    const taskLogId = pathname.split('/').filter(Boolean).at(-2)
+    const item = mockTaskLogs.data.find(log => log.taskLogId === taskLogId)
+    return delay({ data: item || null }, 300)
+  }
+
   if (pathname === '/api/data-acquisition/task-log' && method === 'get') {
     return delay({ data: mockTaskLogs.data }, 400)
   }

@@ -17,7 +17,18 @@
       <table v-else-if="type === 'task'" class="ant-table">
         <thead>
         <tr>
-          <th style="width: 48px"></th> <th>任务名称</th>
+          <th style="width: 44px">
+            <input
+              type="checkbox"
+              class="row-checkbox"
+              :checked="isAllTasksSelected"
+              :indeterminate="isTaskSelectionIndeterminate"
+              @change="toggleAllTasks"
+              @click.stop
+            />
+          </th>
+          <th style="width: 48px"></th>
+          <th>任务名称</th>
           <th>模式</th>
           <th>执行频率</th>
           <th>关联组</th>
@@ -26,41 +37,91 @@
         </tr>
         </thead>
         <tbody>
-        <template v-for="task in tasks" :key="task.id">
-          <tr class="main-row" :class="{ 'is-expanded': expandedRows.has(task.id) }">
+        <template v-for="task in tasks" :key="getTaskId(task)">
+          <tr
+            class="main-row"
+            :class="{
+              'is-expanded': expandedRows.has(getTaskId(task)),
+              'is-selected': selectedTaskIds.has(getTaskId(task))
+            }"
+            @click="editTask(task)"
+          >
             <td class="text-center">
-                <span class="expand-toggle" @click="toggleRow(task.id)">
-                  {{ expandedRows.has(task.id) ? '▼' : '▶' }}
+              <input
+                type="checkbox"
+                class="row-checkbox"
+                :checked="selectedTaskIds.has(getTaskId(task))"
+                @change="toggleTaskSelection(task)"
+                @click.stop
+              />
+            </td>
+            <td class="text-center">
+                <span class="expand-toggle" @click.stop="toggleRow(getTaskId(task))">
+                  {{ expandedRows.has(getTaskId(task)) ? '▼' : '▶' }}
                 </span>
             </td>
             <td class="font-600">{{ task.taskName || task.TaskName || '-' }}</td>
             <td>
-              <span class="ant-tag">{{ getTaskMode(task) }}</span>
+              <span :class="['task-mode-tag', getTaskModeClass(task)]">{{ getTaskMode(task) }}</span>
             </td>
             <td><code>{{ translateCron(task.cronExpression || task.CronExpression) }}</code></td>
             <td>
-                <span class="group-count-link" @click="toggleRow(task.id)">
-                  {{ (task.groupIds || []).length }} 个配置组
+                <span class="group-count-link" @click.stop="toggleRow(getTaskId(task))">
+                  {{ getTaskGroupCount(task) }} 个配置组
                 </span>
             </td>
             <td>
-                <span :class="['status-dot', task.isEnabled ? 'green' : 'red']">
-                  {{ task.isEnabled ? '启用' : '禁用' }}
+                <span :class="['status-dot', isTaskEnabled(task) ? 'green' : 'red']">
+                  {{ isTaskEnabled(task) ? '启用' : '禁用' }}
                 </span>
             </td>
             <td>
-              <button class="ant-btn-link" @click="editTask(task)">编辑</button>
+              <button class="ant-btn-link" @click.stop="editTask(task)">编辑</button>
             </td>
           </tr>
 
-          <tr v-if="expandedRows.has(task.id)" class="sub-table-row">
-            <td></td> <td colspan="6">
+          <tr v-if="expandedRows.has(getTaskId(task))" class="sub-table-row">
+            <td></td>
+            <td></td>
+            <td colspan="6">
             <div class="sub-table-container">
               <div class="sub-header">关联的配置组详情：</div>
               <div v-if="getTaskGroups(task).length > 0" class="sub-grid">
-                <div v-for="g in getTaskGroups(task)" :key="g.id" class="mini-group-card">
-                  <span class="g-name">{{ g.groupName }}</span>
-                  <span class="g-count">{{ g.configCount || 0 }} 项</span>
+                <button
+                  v-for="g in getTaskGroups(task)"
+                  :key="getGroupId(g)"
+                  type="button"
+                  class="mini-group-card"
+                  :class="{ active: isGroupSelected(task, g) }"
+                  @click="selectExpandedGroup(task, g)"
+                >
+                  <span class="g-name">{{ getGroupName(g) }}</span>
+                  <span class="g-count">{{ getGroupConfigCount(g) }} 项</span>
+                </button>
+
+                <div v-if="getSelectedGroup(task)" class="group-config-panel">
+                  <div class="group-config-header">
+                    <span>{{ getGroupName(getSelectedGroup(task)) }}</span>
+                    <span>{{ getResolvedGroupConfigCount(getSelectedGroup(task)) }} 个配置项</span>
+                  </div>
+                  <div v-if="getGroupConfigs(getSelectedGroup(task)).length" class="group-config-grid">
+                    <button
+                      v-for="config in getGroupConfigs(getSelectedGroup(task))"
+                      :key="getConfigId(config)"
+                      type="button"
+                      class="mini-config-card"
+                      title="打开配置"
+                      @click="viewConfigDetail(config)"
+                    >
+                      <div class="mini-config-title">{{ getConfigName(config) }}</div>
+                      <div class="mini-config-meta">
+                        <span>ID：{{ getConfigId(config) || '-' }}</span>
+                        <span v-if="getConfigTable(config)">表：{{ getConfigTable(config) }}</span>
+                        <span v-if="getConfigFileType(config)">类型：{{ getConfigFileType(config) }}</span>
+                      </div>
+                    </button>
+                  </div>
+                  <div v-else class="empty-sub">该配置组暂无配置项</div>
                 </div>
               </div>
               <div v-else class="empty-sub">暂未关联任何配置组</div>
@@ -69,7 +130,7 @@
           </tr>
         </template>
         <tr v-if="tasks.length === 0">
-          <td colspan="7" class="empty-placeholder">暂无任务数据</td>
+          <td colspan="8" class="empty-placeholder">暂无任务数据</td>
         </tr>
         </tbody>
       </table>
@@ -78,35 +139,285 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { translateCron } from '@/utils/cron'
 
 const props = defineProps({
   type: String,
   tasks: { type: Array, default: () => [] },
   allGroups: { type: Array, default: () => [] }, // 需要父组件把全量Group传进来用于匹配
+  allConfigs: { type: Array, default: () => [] },
   stats: { type: Object, default: () => ({ tasks: 0, groups: 0, configs: 0 }) },
   loading: Boolean,
   error: String,
 })
 
-const emit = defineEmits(['edit-task'])
+const emit = defineEmits(['edit-task', 'edit-config', 'selection-change'])
 
-// 控制行展开的 Set
 const expandedRows = ref(new Set())
+const selectedGroupByTask = ref({})
+const selectedTaskIds = ref(new Set())
+
+const isAllTasksSelected = computed(
+  () => props.tasks.length > 0 && props.tasks.every((task) => selectedTaskIds.value.has(getTaskId(task))),
+)
+
+const isTaskSelectionIndeterminate = computed(() => {
+  const selectedCount = props.tasks.filter((task) => selectedTaskIds.value.has(getTaskId(task))).length
+  return selectedCount > 0 && selectedCount < props.tasks.length
+})
+
+watch(
+  () => props.tasks,
+  () => {
+    selectedTaskIds.value.clear()
+    emit('selection-change', [])
+  },
+)
 
 const toggleRow = (id) => {
-  if (expandedRows.value.has(id)) {
-    expandedRows.value.delete(id)
+  const normalizedId = normalizeId(id)
+  if (expandedRows.value.has(normalizedId)) {
+    expandedRows.value.delete(normalizedId)
   } else {
-    expandedRows.value.add(id)
+    expandedRows.value.add(normalizedId)
   }
 }
 
-// 根据任务里存的 groupIds 找到对应的 Group 对象
+const normalizeId = (id) => String(id ?? '')
+const getTaskId = (task) => normalizeId(task?.id ?? task?.Id)
+const getGroupId = (group) => normalizeId(group?.id ?? group?.Id ?? group?.groupId ?? group?.GroupId)
+const getGroupName = (group) => group?.groupName || group?.GroupName || `配置组 ${getGroupId(group)}`
+const getGroupConfigCount = (group) => group?.configCount ?? group?.ConfigCount ?? 0
+const isTaskEnabled = (task) => task?.isEnabled ?? task?.IsEnabled ?? false
+const getConfigId = (config) => normalizeId(config?.id ?? config?.Id ?? config?.configId ?? config?.ConfigId)
+const getConfigName = (config) =>
+  config?.eqName ||
+  config?.EqName ||
+  config?.configName ||
+  config?.ConfigName ||
+  `配置 ${getConfigId(config)}`
+const getConfigTable = (config) => config?.tableName || config?.TableName || ''
+const getConfigFileType = (config) => config?.fileType || config?.FileType || ''
+const normalizeKey = (value) => String(value ?? '').trim().toLowerCase()
+
+const emitTaskSelection = () => {
+  const selectedTasks = props.tasks
+    .filter((task) => selectedTaskIds.value.has(getTaskId(task)))
+    .map((task) => ({
+      id: getTaskId(task),
+      taskName: task.taskName || task.TaskName || '-',
+    }))
+
+  emit('selection-change', selectedTasks)
+}
+
+const toggleTaskSelection = (task) => {
+  const id = getTaskId(task)
+  if (!id) return
+
+  if (selectedTaskIds.value.has(id)) {
+    selectedTaskIds.value.delete(id)
+  } else {
+    selectedTaskIds.value.add(id)
+  }
+
+  emitTaskSelection()
+}
+
+const toggleAllTasks = () => {
+  if (isAllTasksSelected.value) {
+    selectedTaskIds.value.clear()
+  } else {
+    selectedTaskIds.value = new Set(props.tasks.map(getTaskId).filter(Boolean))
+  }
+
+  emitTaskSelection()
+}
+
+const pickFirstArray = (...arrays) => arrays.find((item) => Array.isArray(item) && item.length) || []
+
+const findFullConfig = (config) => {
+  const configId = getConfigId(config)
+  const configName = normalizeKey(getConfigName(config))
+
+  return props.allConfigs.find((item) => {
+    const itemId = getConfigId(item)
+    if (configId && itemId === configId) return true
+    return configName && normalizeKey(getConfigName(item)) === configName
+  })
+}
+
+const enrichConfig = (config) => {
+  const matchedConfig = findFullConfig(config)
+  return matchedConfig ? { ...matchedConfig, ...config } : config
+}
+
+const enrichGroup = (group) => {
+  const matchedGroup = props.allGroups.find((item) => getGroupId(item) === getGroupId(group))
+
+  if (!matchedGroup) return group
+
+  return {
+    ...matchedGroup,
+    ...group,
+    associatedConfigs: pickFirstArray(
+      group?.associatedConfigs,
+      group?.AssociatedConfigs,
+      matchedGroup?.associatedConfigs,
+      matchedGroup?.AssociatedConfigs,
+    ),
+    AssociatedConfigs: pickFirstArray(
+      group?.AssociatedConfigs,
+      group?.associatedConfigs,
+      matchedGroup?.AssociatedConfigs,
+      matchedGroup?.associatedConfigs,
+    ),
+    configIds: pickFirstArray(
+      group?.configIds,
+      group?.ConfigIds,
+      group?.associatedConfigIds,
+      group?.AssociatedConfigIds,
+      matchedGroup?.configIds,
+      matchedGroup?.ConfigIds,
+      matchedGroup?.associatedConfigIds,
+      matchedGroup?.AssociatedConfigIds,
+    ),
+    ConfigIds: pickFirstArray(
+      group?.ConfigIds,
+      group?.configIds,
+      group?.AssociatedConfigIds,
+      group?.associatedConfigIds,
+      matchedGroup?.ConfigIds,
+      matchedGroup?.configIds,
+      matchedGroup?.AssociatedConfigIds,
+      matchedGroup?.associatedConfigIds,
+    ),
+  }
+}
+
+const extractTaskGroupIds = (task = {}) => {
+  const rawIds = task.groupIds || task.GroupIds || task.groupIdsList || task.GroupIdsList || []
+
+  if (Array.isArray(rawIds) && rawIds.length) {
+    return rawIds
+      .map((item) => (typeof item === 'object' ? item.id ?? item.Id ?? item.groupId ?? item.GroupId : item))
+      .filter((id) => id !== undefined && id !== null && id !== '')
+      .map(normalizeId)
+  }
+
+  const rawGroups =
+    task.associatedGroups ||
+    task.AssociatedGroups ||
+    task.groups ||
+    task.Groups ||
+    task.taskGroups ||
+    task.TaskGroups ||
+    []
+
+  return Array.isArray(rawGroups)
+    ? rawGroups
+        .map((group) => group?.id ?? group?.Id ?? group?.groupId ?? group?.GroupId)
+        .filter((id) => id !== undefined && id !== null && id !== '')
+        .map(normalizeId)
+    : []
+}
+
 const getTaskGroups = (task) => {
-  const ids = task.groupIds || []
-  return props.allGroups.filter(g => ids.includes(g.id))
+  const directGroups =
+    task.associatedGroups ||
+    task.AssociatedGroups ||
+    task.groups ||
+    task.Groups ||
+    task.taskGroups ||
+    task.TaskGroups ||
+    []
+
+  if (Array.isArray(directGroups) && directGroups.length) {
+    return directGroups.map(enrichGroup)
+  }
+
+  const ids = new Set(extractTaskGroupIds(task))
+  return props.allGroups.filter((group) => ids.has(getGroupId(group)))
+}
+
+const getTaskGroupCount = (task) => {
+  const groups = getTaskGroups(task)
+  if (groups.length) return groups.length
+  return extractTaskGroupIds(task).length
+}
+
+const getGroupConfigs = (group) => {
+  const directConfigs =
+    group?.associatedConfigs ||
+    group?.AssociatedConfigs ||
+    group?.configs ||
+    group?.Configs ||
+    group?.groupConfigs ||
+    group?.GroupConfigs ||
+    []
+
+  if (Array.isArray(directConfigs) && directConfigs.length) {
+    return directConfigs.map(enrichConfig)
+  }
+
+  const configRefs =
+    group?.configIds ||
+    group?.ConfigIds ||
+    group?.configIdList ||
+    group?.ConfigIdList ||
+    group?.associatedConfigIds ||
+    group?.AssociatedConfigIds ||
+    []
+
+  if (!Array.isArray(configRefs) || !configRefs.length) {
+    return []
+  }
+
+  const refKeys = new Set(
+    configRefs
+      .map((item) => {
+        if (typeof item === 'object') {
+          return item.id ?? item.Id ?? item.configId ?? item.ConfigId ?? item.eqName ?? item.EqName
+        }
+        return item
+      })
+      .filter((value) => value !== undefined && value !== null && value !== '')
+      .map(normalizeKey),
+  )
+
+  return props.allConfigs.filter((config) => {
+    const id = getConfigId(config)
+    const name = getConfigName(config)
+    return refKeys.has(normalizeKey(id)) || refKeys.has(normalizeKey(name))
+  })
+}
+
+const getResolvedGroupConfigCount = (group) => {
+  const configs = getGroupConfigs(group)
+  return configs.length || getGroupConfigCount(group)
+}
+
+const selectExpandedGroup = (task, group) => {
+  const taskId = getTaskId(task)
+  const groupId = getGroupId(group)
+
+  selectedGroupByTask.value = {
+    ...selectedGroupByTask.value,
+    [taskId]: selectedGroupByTask.value[taskId] === groupId ? '' : groupId,
+  }
+}
+
+const getSelectedGroup = (task) => {
+  const taskId = getTaskId(task)
+  const selectedGroupId = selectedGroupByTask.value[taskId]
+
+  if (!selectedGroupId) return null
+  return getTaskGroups(task).find((group) => getGroupId(group) === selectedGroupId) || null
+}
+
+const isGroupSelected = (task, group) => {
+  return selectedGroupByTask.value[getTaskId(task)] === getGroupId(group)
 }
 
 const getTaskMode = (task) => {
@@ -114,8 +425,17 @@ const getTaskMode = (task) => {
   return mode === 1 ? '周期执行' : '常规任务'
 }
 
+const getTaskModeClass = (task) => {
+  const mode = task.TaskMode ?? task.taskMode
+  return mode === 1 ? 'is-periodic' : 'is-normal'
+}
+
 const editTask = (task) => {
   emit('edit-task', task)
+}
+
+const viewConfigDetail = (config) => {
+  emit('edit-config', enrichConfig(config))
 }
 </script>
 
@@ -158,7 +478,20 @@ const editTask = (task) => {
 }
 .expand-toggle:hover { color: #52c41a; }
 .main-row:hover td { background-color: #f6ffed !important; }
+.main-row {
+  cursor: pointer;
+}
+.main-row.is-selected td {
+  background-color: #f6ffed !important;
+}
 .is-expanded td { background: #fbfbfb; }
+
+.row-checkbox {
+  width: 15px;
+  height: 15px;
+  accent-color: #52c41a;
+  cursor: pointer;
+}
 
 .group-count-link {
   color: #52c41a;
@@ -197,9 +530,83 @@ const editTask = (task) => {
   align-items: center;
   gap: 8px;
   font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
 }
+
+.mini-group-card:hover,
+.mini-group-card.active {
+  border-color: #52c41a;
+  background: #f6ffed;
+  box-shadow: 0 2px 8px rgba(82, 196, 26, 0.12);
+}
+
 .mini-group-card .g-name { color: #262626; }
 .mini-group-card .g-count { color: #52c41a; font-weight: bold; }
+
+.group-config-panel {
+  width: 100%;
+  margin-top: 12px;
+  padding: 12px;
+  background: #fff;
+  border: 1px solid #e8f5e1;
+  border-radius: 8px;
+}
+
+.group-config-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  color: #262626;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.group-config-header span:last-child {
+  color: #52c41a;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.group-config-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.mini-config-card {
+  padding: 10px;
+  border: 1px solid #f0f0f0;
+  border-radius: 6px;
+  background: #fafafa;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s;
+}
+
+.mini-config-card:hover {
+  border-color: #52c41a;
+  background: #f6ffed;
+  box-shadow: 0 2px 8px rgba(82, 196, 26, 0.12);
+}
+
+.mini-config-title {
+  margin-bottom: 6px;
+  color: #262626;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.mini-config-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #8c8c8c;
+  font-size: 12px;
+}
 
 /* 4. 状态点 & 标签 */
 .status-dot {
@@ -227,6 +634,32 @@ const editTask = (task) => {
   font-size: 12px;
 }
 
+.task-mode-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 64px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.task-mode-tag.is-periodic {
+  color: #1677ff;
+  background: #eef6ff;
+  border: 1px solid #91caff;
+}
+
+.task-mode-tag.is-normal {
+  color: #389e0d;
+  background: #f6ffed;
+  border: 1px solid #b7eb8f;
+}
+
 .text-primary { color: #52c41a; }
 .font-600 { font-weight: 600; }
 .ant-btn-link {
@@ -242,9 +675,29 @@ const editTask = (task) => {
 .table-view {
   width: 100%;
   overflow-x: auto;
-  overflow-y: hidden;
+  overflow-y: auto;
+  max-height: calc(100vh - 240px);
+  padding-right: 4px;
   border: 1px solid #f0f0f0;
   border-radius: 20px;
+}
+
+.table-view::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.table-view::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.table-view::-webkit-scrollbar-thumb {
+  background: #d9d9d9;
+  border-radius: 10px;
+}
+
+.table-view::-webkit-scrollbar-thumb:hover {
+  background: #bfbfbf;
 }
 
 .ant-table-overview {

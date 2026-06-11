@@ -1,13 +1,6 @@
 <template>
   <div class="unified-monitor-container">
     <div class="panel-header">
-      <div class="title-group">
-        <h4 class="main-title">
-          全量任务聚合流动图
-        </h4>
-        <p class="subtitle">中轴为当前时间，左侧为历史状态，右侧为预测执行计划</p>
-      </div>
-
       <div class="mode-switcher time-tester">
         <input
           class="time-input"
@@ -45,7 +38,7 @@
         </span>
       </div>
 
-      <div class="timeline-body">
+      <div class="timeline-body" :style="timelineBodyStyle">
         <div class="now-axis">
           <div class="now-tag">NOW {{ nowLabel }}</div>
         </div>
@@ -67,11 +60,13 @@
               class="execution-point"
               :class="[
                 point.type === 'history' ? 'point-solid' : 'point-ring',
+                getPointStatusClass(point),
                 { 'is-error': point.status === 'error' },
               ]"
+              :title="getPointTitle(task, point)"
               :style="{
                 left: getXPosition(point.time),
-                backgroundColor: point.type === 'history' ? task.color : 'transparent',
+                backgroundColor: point.type === 'history' ? getPointColor(task, point) : 'transparent',
                 borderColor: task.color,
               }"
               @click="handlePointClick(task, point)"
@@ -95,14 +90,14 @@
     </div>
 
     <div class="stats-footer">
-      <div class="stat-card">
+      <button class="stat-card stat-action" type="button" @click="openRunningModal">
         <div class="stat-icon icon-running">▶</div>
         <div class="stat-info">
           <p class="stat-label">当前正在运行</p>
           <p class="stat-value">{{ runningTaskCount }} <span class="unit">个任务活跃中</span></p>
         </div>
-      </div>
-      <div class="stat-card highlight">
+      </button>
+      <button class="stat-card stat-action highlight" type="button" @click="openNextRunModal">
         <div class="stat-icon icon-predict">🕒</div>
         <div class="stat-info">
           <p class="stat-label">下次采集预计</p>
@@ -110,6 +105,63 @@
             {{ nextRunTimeLabel }}
             <span class="unit">{{ nextRunRelativeLabel }}</span>
           </p>
+        </div>
+      </button>
+    </div>
+
+    <div class="timeline-modal-mask" :class="{ active: runningModalVisible }" @click="closeRunningModal"></div>
+    <div class="timeline-modal-wrap" :class="{ active: runningModalVisible }">
+      <div class="timeline-modal">
+        <div class="timeline-modal__header">
+          <div>
+            <h3>当前运行任务</h3>
+            <p>启用且已配置执行规则的任务</p>
+          </div>
+          <button type="button" class="timeline-modal__close" @click="closeRunningModal">×</button>
+        </div>
+        <div class="timeline-modal__body">
+          <div v-if="runningTasks.length" class="task-modal-list">
+            <div v-for="task in runningTasks" :key="task.id" class="task-modal-item">
+              <div class="task-modal-item__main">
+                <span class="task-color" :style="{ backgroundColor: task.color }"></span>
+                <strong>{{ task.taskName }}</strong>
+              </div>
+              <div class="task-modal-item__meta">
+                <span>执行规则：{{ getRuleText(task) }}</span>
+                <span v-if="getTaskNextTime(task)">下次：{{ getTaskNextTime(task) }}</span>
+              </div>
+            </div>
+          </div>
+          <div v-else class="timeline-modal-empty">暂无运行中的任务</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="timeline-modal-mask" :class="{ active: nextRunModalVisible }" @click="closeNextRunModal"></div>
+    <div class="timeline-modal-wrap" :class="{ active: nextRunModalVisible }">
+      <div class="timeline-modal">
+        <div class="timeline-modal__header">
+          <div>
+            <h3>下次采集时段</h3>
+            <p>{{ nextRunModalSubtitle }}</p>
+          </div>
+          <button type="button" class="timeline-modal__close" @click="closeNextRunModal">×</button>
+        </div>
+        <div class="timeline-modal__body">
+          <div v-if="nextRunTasks.length" class="task-modal-list">
+            <div v-for="task in nextRunTasks" :key="task.id" class="task-modal-item">
+              <div class="task-modal-item__main">
+                <span class="task-color" :style="{ backgroundColor: task.color }"></span>
+                <strong>{{ task.taskName }}</strong>
+                <span class="next-run-tag">{{ nextRunTimeLabel }}</span>
+              </div>
+              <div class="task-modal-item__meta">
+                <span>执行规则：{{ getRuleText(task) }}</span>
+                <span>{{ nextRunRelativeLabel }}</span>
+              </div>
+            </div>
+          </div>
+          <div v-else class="timeline-modal-empty">暂无下一时段采集计划</div>
         </div>
       </div>
     </div>
@@ -151,6 +203,8 @@ const fallbackNow = ref(new Date())
 const timer = ref(null)
 const rangeMinutes = 240
 const timeInputValue = ref('')
+const runningModalVisible = ref(false)
+const nextRunModalVisible = ref(false)
 
 const toDate = (value) => {
   if (!value && value !== 0) return null
@@ -219,6 +273,8 @@ const normalizePoint = (point, nowTs) => {
     type,
     kind: point?.kind ?? '',
     status: point?.status ?? null,
+    taskLogId: point?.taskLogId || '',
+    label: point?.label || '',
   }
 }
 
@@ -302,9 +358,19 @@ const hasErrorPoints = computed(() =>
   normalizedItems.value.some((task) => task.points.some((point) => point.status === 'error')),
 )
 
-const runningTaskCount = computed(() =>
-  normalizedItems.value.filter((task) => task.isEnabled && task.cronExpression).length,
+const timelineBodyStyle = computed(() => {
+  const preferredHeight = Math.max(168, 72 + normalizedItems.value.length * 38)
+  const maxHeight = Number(props.maxHeight || 240)
+  return {
+    height: `${Math.min(preferredHeight, Math.max(maxHeight, 168))}px`,
+  }
+})
+
+const runningTasks = computed(() =>
+  normalizedItems.value.filter((task) => task.isEnabled && task.cronExpression),
 )
+
+const runningTaskCount = computed(() => runningTasks.value.length)
 
 const nextRunInfo = computed(() => {
   const nowTs = activeNow.value.getTime()
@@ -331,6 +397,22 @@ const nextRunInfo = computed(() => {
   }
 })
 
+const nextRunTasks = computed(() => {
+  if (!nextRunInfo.value) return []
+  const targetTs = nextRunInfo.value.timestamp
+
+  return normalizedItems.value.filter((task) => {
+    if (!task.isEnabled) return false
+
+    const hasMatchedPoint = task.points.some(
+      (point) => point.type === 'prediction' && point.timestamp === targetTs,
+    )
+
+    const nextPointTs = task.nextPoint?.timestamp || 0
+    return hasMatchedPoint || nextPointTs === targetTs
+  })
+})
+
 const nextRunTimeLabel = computed(() => {
   if (!nextRunInfo.value) return '--:--'
   return nextRunInfo.value.time
@@ -342,9 +424,60 @@ const nextRunRelativeLabel = computed(() => {
   return `(${nextRunInfo.value.diffMinutes}分钟后)`
 })
 
+const nextRunModalSubtitle = computed(() => {
+  if (!nextRunInfo.value) return '当前没有可预测的下一时段'
+  const date = toDate(nextRunInfo.value.timestamp)
+  const dateText = date
+    ? `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())} ${formatHHmm(date)}`
+    : nextRunTimeLabel.value
+  return `${dateText} ${nextRunRelativeLabel.value}`
+})
+
 const getRuleText = (task) => {
   if (!task?.cronExpression) return '未配置规则'
   return translateCron(task.cronExpression)
+}
+
+const getPointColor = (task, point) => {
+  if (point.status === 'error') return '#ef4444'
+  if (point.status === 'warning') return '#f59e0b'
+  if (point.status === 'running') return '#3b82f6'
+  if (point.status === 'success') return '#10b981'
+  return task.color
+}
+
+const getPointStatusClass = (point) => {
+  if (point.type !== 'history') return ''
+  if (point.status === 'error') return 'point-status-error'
+  if (point.status === 'warning') return 'point-status-warning'
+  if (point.status === 'running') return 'point-status-running'
+  if (point.status === 'success') return 'point-status-success'
+  return 'point-status-default'
+}
+
+const getPointTitle = (task, point) => {
+  const timeText = formatHHmm(point.time)
+  const typeText = point.type === 'history' ? '历史记录' : '预测计划'
+  const labelText = point.label ? ` · ${point.label}` : ''
+  return `${task.taskName} · ${typeText} · ${timeText}${labelText}`
+}
+
+const getTaskNextTime = (task) => {
+  const nowTs = activeNow.value.getTime()
+  const candidates = []
+
+  task.points.forEach((point) => {
+    if (point.type === 'prediction' && point.timestamp >= nowTs) {
+      candidates.push(point.timestamp)
+    }
+  })
+
+  if (task.nextPoint?.timestamp && task.nextPoint.timestamp >= nowTs) {
+    candidates.push(task.nextPoint.timestamp)
+  }
+
+  if (!candidates.length) return ''
+  return formatHHmm(Math.min(...candidates))
 }
 
 const handlePointClick = (task, point) => {
@@ -353,6 +486,7 @@ const handlePointClick = (task, point) => {
   emit('open-log', {
     taskId: task.id,
     taskName: task.taskName,
+    taskLogId: point.taskLogId || '',
     timestamp: point.timestamp,
     type: 'history',
     status: point.status || null,
@@ -377,32 +511,38 @@ const shiftReferenceTime = (minutes) => {
 const handleResetToNow = () => {
   emit('reset-reference-time')
 }
+
+const openRunningModal = () => {
+  runningModalVisible.value = true
+}
+
+const closeRunningModal = () => {
+  runningModalVisible.value = false
+}
+
+const openNextRunModal = () => {
+  nextRunModalVisible.value = true
+}
+
+const closeNextRunModal = () => {
+  nextRunModalVisible.value = false
+}
 </script>
 
 <style scoped>
 .unified-monitor-container {
   background: #ffffff;
-  border-radius: 16px;
-  padding: 20px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+  border: 1px solid #eef2f7;
+  border-radius: 12px;
+  padding: 14px 18px 16px;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 .panel-header {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 24px;
-}
-
-.main-title {
-  font-size: 18px;
-  font-weight: 700;
-  color: #1e293b;
-  margin: 0;
-  display: flex;
+  justify-content: flex-end;
   align-items: center;
-  gap: 8px;
+  margin-bottom: 10px;
 }
 
 .subtitle {
@@ -413,14 +553,15 @@ const handleResetToNow = () => {
 
 .mode-switcher {
   display: flex;
-  background: #f1f5f9;
-  padding: 4px;
-  border-radius: 8px;
+  background: #f8fafc;
+  padding: 5px;
+  border: 1px solid #eef2f7;
+  border-radius: 10px;
 }
 
 .timeline-wrapper {
   position: relative;
-  margin-bottom: 30px;
+  margin-bottom: 16px;
 }
 
 .time-labels {
@@ -439,7 +580,6 @@ const handleResetToNow = () => {
 
 .timeline-body {
   position: relative;
-  height: 240px;
   border-top: 1px solid #e2e8f0;
   border-bottom: 1px solid #e2e8f0;
   background: #f8fafc;
@@ -482,7 +622,7 @@ const handleResetToNow = () => {
 
 .grid-line {
   flex: 1;
-  border-right: 1px solid #f1f5f9;
+  border-right: 1px solid #e9eef5;
 }
 
 .tracks-container {
@@ -550,6 +690,26 @@ const handleResetToNow = () => {
   border-style: dashed;
 }
 
+.point-status-success {
+  background: #10b981 !important;
+}
+
+.point-status-warning {
+  background: #f59e0b !important;
+}
+
+.point-status-running {
+  background: #3b82f6 !important;
+}
+
+.point-status-error {
+  background: #ef4444 !important;
+}
+
+.point-status-default {
+  background: #94a3b8 !important;
+}
+
 .error-badge {
   position: absolute;
   top: -4px;
@@ -609,12 +769,27 @@ const handleResetToNow = () => {
 
 .stat-card {
   flex: 1;
-  background: #f1f5f9;
+  background: #f0fdf4;
   border-radius: 12px;
   padding: 16px;
   display: flex;
   align-items: center;
   gap: 12px;
+  border: 1px solid #bbf7d0;
+}
+
+.stat-action {
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+}
+
+.stat-action:hover {
+  border-color: #86efac;
+  box-shadow: 0 8px 20px rgba(22, 163, 74, 0.12);
+  transform: translateY(-1px);
 }
 
 .stat-card.highlight {
@@ -705,5 +880,135 @@ const handleResetToNow = () => {
 .reset-btn {
   border-color: #bfdbfe;
   color: #1d4ed8;
+}
+
+.timeline-modal-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(15, 23, 42, 0.45);
+  display: none;
+}
+
+.timeline-modal-mask.active {
+  display: block;
+}
+
+.timeline-modal-wrap {
+  position: fixed;
+  inset: 0;
+  z-index: 1001;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.timeline-modal-wrap.active {
+  display: flex;
+}
+
+.timeline-modal {
+  width: min(620px, 100%);
+  max-height: 72vh;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.18);
+  overflow: hidden;
+}
+
+.timeline-modal__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.timeline-modal__header h3 {
+  margin: 0;
+  font-size: 16px;
+  color: #0f172a;
+}
+
+.timeline-modal__header p {
+  margin: 6px 0 0;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.timeline-modal__close {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #475569;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.timeline-modal__close:hover {
+  background: #f1f5f9;
+}
+
+.timeline-modal__body {
+  max-height: calc(72vh - 84px);
+  overflow-y: auto;
+  padding: 16px 20px 20px;
+}
+
+.task-modal-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.task-modal-item {
+  border: 1px solid #eef2f7;
+  border-radius: 10px;
+  padding: 12px;
+  background: #f8fafc;
+}
+
+.task-modal-item__main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #0f172a;
+}
+
+.task-color {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.task-modal-item__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin-top: 8px;
+  padding-left: 18px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.next-run-tag {
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #e0f2fe;
+  color: #0369a1;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.timeline-modal-empty {
+  padding: 28px;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 13px;
 }
 </style>

@@ -296,6 +296,39 @@ function handleDrop(e) {
   if (file) processFile(file)
 }
 
+const decodeWithEncoding = (buffer, encoding) => {
+  try {
+    return new TextDecoder(encoding, { fatal: false }).decode(buffer)
+  } catch {
+    return ''
+  }
+}
+
+const getDecodeScore = (text) => {
+  const replacementCount = (text.match(/\uFFFD/g) || []).length
+  const mojibakeCount = (text.match(/[ÃÂÅÆÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞßàáâãäåæçèéêëìíîïðñòóôõö÷øùúûüýþÿ]/g) || []).length
+  const cjkCount = (text.match(/[\u4e00-\u9fa5]/g) || []).length
+
+  return replacementCount * 20 + mojibakeCount * 2 - cjkCount
+}
+
+const decodeCsvBuffer = (arrayBuffer) => {
+  const buffer = arrayBuffer instanceof Uint8Array ? arrayBuffer : new Uint8Array(arrayBuffer)
+  const candidates = ['utf-8', 'gb18030', 'gbk', 'gb2312']
+    .map((encoding) => ({
+      encoding,
+      text: decodeWithEncoding(buffer, encoding),
+    }))
+    .filter((item) => item.text)
+    .map((item) => ({
+      ...item,
+      score: getDecodeScore(item.text),
+    }))
+    .sort((a, b) => a.score - b.score)
+
+  return candidates[0]?.text?.replace(/^\uFEFF/, '') || ''
+}
+
 function processFile(file) {
   fileData.value = { fileName: file.name }
   fileName.value = file.name
@@ -311,8 +344,11 @@ function processFile(file) {
 
   const reader = new FileReader()
   reader.onload = (e) => {
-    const data = new Uint8Array(e.target.result)
-    const workbook = XLSX.read(data, { type: 'array' })
+    const data = e.target.result
+    const isCsv = fileType.value === '.csv'
+    const workbook = isCsv
+      ? XLSX.read(decodeCsvBuffer(data), { type: 'string', raw: true })
+      : XLSX.read(new Uint8Array(data), { type: 'array' })
     const firstSheet = workbook.Sheets[workbook.SheetNames[0]]
     sheetData.value = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: '' })
     parseSheet()
@@ -522,10 +558,24 @@ defineExpose({ open })
 <style scoped>
 /* ==================== 保留第二个版本的全部样式 + 新增部分 ==================== */
 .modal-close-btn {
-  cursor: pointer; float: right; font-size: 20px;
-  color: var(--ant-text-secondary); transition: color 0.3s; line-height: 1;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  font-size: 20px;
+  color: var(--ant-text-secondary);
+  transition: color 0.3s, background 0.3s;
+  line-height: 1;
 }
-.modal-close-btn:hover { color: #ff4d4f; }
+.modal-close-btn:hover { background: #f5f5f5; color: #ff4d4f; }
+
+.ant-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
 
 .dropzone {
   border: 2px dashed var(--ant-border-color);

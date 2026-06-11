@@ -9,7 +9,7 @@
           <div class="header-desc">{{ currentDesc }}</div>
         </div>
 
-        <div class="header-actions">
+        <div class="header-actions" :class="{ 'header-actions-overview': activeTab === 'overview' }">
           <template v-for="(item, index) in actionButtons" :key="index">
             <div v-if="Array.isArray(item)" class="ant-btn-group">
               <button
@@ -48,7 +48,7 @@
           :items="timelinePanelItems"
           :loading="loading"
           :error="error"
-          :max-height="160"
+          :max-height="220"
           :reference-time="timelineEffectiveNow"
           :is-test-mode="Boolean(timelineTestNow)"
           @set-reference-time="handleSetTimelineReferenceTime"
@@ -57,8 +57,10 @@
         />
         <OverviewDashboard
           :status-distribution="taskStatusDistribution"
-          :trend-data="overviewTrend"
-          :latest-activities="overviewActivities"
+          :task-logs="overviewTaskLogs"
+          :tasks="tasks"
+          :configs="configs"
+          :stats="stats"
           :loading="dashboardLoading"
           :error="dashboardError"
         />
@@ -70,9 +72,12 @@
         :tasks="tasks"
         :stats="stats"
         :allGroups="groups"
+        :allConfigs="configs"
         :loading="loading"
         :error="error"
         @edit-task="editTask"
+        @edit-config="editConfig"
+        @selection-change="handleSelectionChange"
       />
 
       <CardsView
@@ -126,6 +131,7 @@ import {
   PlayCircleOutlined,
   PauseCircleOutlined,
   PlusOutlined,
+  CopyOutlined,
   SyncOutlined,
   CloudUploadOutlined,
   PartitionOutlined,
@@ -157,8 +163,7 @@ const error = ref('')
 const tasks = ref([])
 const groups = ref([])
 const configs = ref([])
-const overviewTrend = ref([])
-const overviewActivities = ref([])
+const overviewTaskLogs = ref([])
 
 const dashboardLoading = ref(false)
 const dashboardError = ref('')
@@ -234,29 +239,102 @@ const rawCronTimelineItems = computed(() =>
   buildCronTimelineItems(tasks.value, timelineEffectiveNow.value),
 )
 
-const timelinePanelItems = computed(() =>
-  rawCronTimelineItems.value.map((task, index) => {
-    const points = Array.isArray(task.rollingPoints)
-      ? task.rollingPoints.map((point) => ({
-          timestamp: point.timestamp,
-          time: point.timestamp,
-          type: point.type,
-          kind: point.kind,
-          status: point.status,
-        }))
+const normalizeTaskLog = (raw = {}) => ({
+  taskLogId: raw.taskLogId || raw.TaskLogId || raw.id || raw.Id || '',
+  taskCode: raw.taskCode || raw.TaskCode || '',
+  taskId: raw.taskId ?? raw.TaskId ?? null,
+  taskName: raw.taskName || raw.TaskName || '',
+  status: raw.status || raw.Status || '',
+  startTime: raw.startTime || raw.StartTime || '',
+  endTime: raw.endTime || raw.EndTime || '',
+})
+
+const normalizeTimelineStatus = (status) => {
+  const value = String(status || '').replace(/\s+/g, '').toLowerCase()
+  if (value === 'failed') return 'error'
+  if (value === 'partialsuccess') return 'warning'
+  if (value === 'running') return 'running'
+  if (value === 'success') return 'success'
+  return 'default'
+}
+
+const getTaskId = (task) => task?.id ?? task?.Id ?? null
+
+const taskLogPointsByTaskId = computed(() => {
+  const map = new Map()
+
+  overviewTaskLogs.value.forEach((rawLog) => {
+    const log = normalizeTaskLog(rawLog)
+    const timestamp = new Date(log.startTime || log.endTime || '').getTime()
+    if (!Number.isFinite(timestamp)) return
+
+    const point = {
+      timestamp,
+      time: timestamp,
+      type: 'history',
+      kind: 'history',
+      status: normalizeTimelineStatus(log.status),
+      taskLogId: log.taskLogId,
+      label: log.taskCode || log.taskLogId,
+    }
+
+    const taskId = log.taskId === null || log.taskId === undefined ? '' : String(log.taskId)
+    if (!map.has(taskId)) map.set(taskId, [])
+    map.get(taskId).push(point)
+  })
+
+  return map
+})
+
+const timelinePanelItems = computed(() => {
+  const items = rawCronTimelineItems.value.map((task, index) => {
+    const taskId = getTaskId(task)
+    const historyPoints = taskLogPointsByTaskId.value.get(String(taskId)) || []
+    const futurePoints = Array.isArray(task.rollingPoints)
+      ? task.rollingPoints
+          .filter((point) => point.type === 'prediction')
+          .map((point) => ({
+            timestamp: point.timestamp,
+            time: point.timestamp,
+            type: 'prediction',
+            kind: point.kind,
+            status: point.status,
+          }))
       : []
 
     return {
-      id: task.id,
+      id: taskId,
       taskName: task.taskName,
       isEnabled: task.isEnabled,
       cronExpression: task.cronExpression,
       color: pickTimelineColor(task.taskName, index),
-      points,
+      points: [...historyPoints, ...futurePoints],
       nextPoint: task.nextPoint || null,
     }
-  }),
-)
+  })
+
+  const timelineTaskIds = new Set(items.map((item) => String(item.id)))
+  const unmatchedHistoryPoints = []
+
+  taskLogPointsByTaskId.value.forEach((points, taskId) => {
+    if (timelineTaskIds.has(String(taskId))) return
+    unmatchedHistoryPoints.push(...points)
+  })
+
+  if (unmatchedHistoryPoints.length) {
+    items.push({
+      id: 'task-log-history',
+      taskName: '任务日志记录',
+      isEnabled: false,
+      cronExpression: '',
+      color: '#64748b',
+      points: unmatchedHistoryPoints,
+      nextPoint: null,
+    })
+  }
+
+  return items
+})
 
 const currentTitle = computed(
   () =>
@@ -314,13 +392,12 @@ const loadAllData = async () => {
   error.value = ''
   dashboardError.value = ''
 
-  const [tasksResult, groupsResult, configsResult, trendResult, activitiesResult] =
+  const [tasksResult, groupsResult, configsResult, taskLogsResult] =
     await Promise.allSettled([
       api.fetchTasks(),
       api.fetchGroups(),
       api.fetchConfigs(),
-      api.fetchOverviewTrend(),
-      api.fetchOverviewActivities(),
+      api.fetchTaskLogs({ pageNo: 1, pageSize: 100 }),
     ])
 
   const baseDataFailed = [tasksResult, groupsResult, configsResult].some(
@@ -336,11 +413,12 @@ const loadAllData = async () => {
     configs.value = unwrapResult(configsResult.value) || []
   }
 
-  overviewTrend.value = trendResult.status === 'fulfilled' ? (unwrapResult(trendResult.value) || []) : []
-  overviewActivities.value =
-    activitiesResult.status === 'fulfilled' ? (unwrapResult(activitiesResult.value) || []) : []
+  overviewTaskLogs.value =
+    taskLogsResult.status === 'fulfilled'
+      ? (taskLogsResult.value?.data?.items || unwrapResult(taskLogsResult.value)?.items || unwrapResult(taskLogsResult.value) || [])
+      : []
 
-  if (trendResult.status === 'rejected' || activitiesResult.status === 'rejected') {
+  if (taskLogsResult.status === 'rejected') {
     dashboardError.value = '部分总览数据加载失败'
   }
 
@@ -358,7 +436,24 @@ const onTaskSaved = () => {
   loadAllData()
 }
 
-const deleteTask = () => console.log('删除任务')
+const deleteTask = async () => {
+  if (!selectedItemIds.value.length) {
+    message.warning('请先选择任务')
+    return
+  }
+
+  if (!window.confirm(`确认删除选中的 ${selectedItemIds.value.length} 个任务？`)) return
+
+  try {
+    await api.deleteTasks(selectedItemIds.value)
+    selectedItems.value = []
+    message.success('任务删除成功')
+    await loadAllData()
+  } catch (err) {
+    message.error('任务删除失败')
+    console.error(err)
+  }
+}
 
 // ====================== Group 界面 ======================
 const openNewGroup = () => groupModalRef.value?.open(false, null, configs.value)
@@ -374,8 +469,29 @@ const deleteGroup = () => message.success('删除配置组')
 const batchSyncGroups = () => message.success('批量同步进行中')
 
 // ====================== Config 界面 ======================
-const openNewConfig = () => configModalRef.value?.open(false)
-const editConfig = (config) => configModalRef.value?.open(true, config)
+const openNewConfig = () => configModalRef.value?.open(false, null, false, { existingConfigs: configs.value })
+const editConfig = (config) =>
+  configModalRef.value?.open(true, config, false, { existingConfigs: configs.value })
+
+const copyConfig = () => {
+  if (selectedItems.value.length !== 1) {
+    message.warning('请选择且只能选择 1 个配置进行复制')
+    return
+  }
+
+  const selectedId = String(selectedItems.value[0].id)
+  const sourceConfig = configs.value.find((item) => String(item.id || item.Id) === selectedId)
+
+  if (!sourceConfig) {
+    message.error('未找到选中的配置')
+    return
+  }
+
+  configModalRef.value?.open(false, { ...sourceConfig, id: '', Id: '' }, false, {
+    mode: 'copy',
+    existingConfigs: configs.value,
+  })
+}
 
 // 当配置保存成功后，清空巡检缓存，防止显示旧状态
 const onConfigSaved = () => {
@@ -390,7 +506,7 @@ const deleteConfig = () => console.log('删除配置')
 const importConfig = () => importConfigModalRef.value?.open(false)
 const handleImportSuccess = (data) => {
   message.success('导入成功，请继续确认配置')
-  configModalRef.value?.open(false, data, true)
+  configModalRef.value?.open(false, data, true, { existingConfigs: configs.value })
 }
 const handleGoBackToImport = () => importConfigModalRef.value?.open(true)
 
@@ -502,10 +618,17 @@ const handleSelectionChange = (items) => {
   selectedItems.value = Array.isArray(items) ? items : []
 }
 
+const getSelectionLabel = () =>
+  ({
+    task: '任务',
+    group: '配置组',
+    config: '配置',
+  })[activeTab.value] || '配置'
+
 // ====================== 采集相关 ======================
 const handleTimeRangeAcquisition = () => {
   if (!selectedItems.value.length) {
-    message.warning('请先选择配置')
+    message.warning(`请先选择${getSelectionLabel()}`)
     return
   }
 
@@ -523,7 +646,9 @@ const handleTaskStartConfirm = async (data) => {
     const endDate = formatApiDate(data.endTime)
 
     const res = await api.startExecutionConfigsRange({
-      ids,
+      ids: activeTab.value === 'config' ? ids : [],
+      groupIds: activeTab.value === 'group' ? ids : [],
+      taskIds: activeTab.value === 'task' ? ids : [],
       startDate,
       endDate,
     })
@@ -538,7 +663,7 @@ const handleTaskStartConfirm = async (data) => {
       return
     }
 
-    message.success(`任务已成功下发！采集配置数：${ids.length}`)
+    message.success(`任务已成功下发！${getSelectionLabel()}数：${ids.length}`)
     await openLogTabForTask(taskLogId)
   } catch (error) {
     hide()
@@ -550,7 +675,7 @@ const handleTaskStartConfirm = async (data) => {
 // 单时间采集
 const handleAcquisition = async () => {
   if (!selectedItemIds.value.length) {
-    message.warning('请先选择配置')
+    message.warning(`请先选择${getSelectionLabel()}`)
     return
   }
 
@@ -558,7 +683,12 @@ const handleAcquisition = async () => {
 
   try {
     const processDate = getTodayForApi()
-    const res = await api.startExecutionByIds(selectedItemIds.value, processDate)
+    const res =
+      activeTab.value === 'task'
+        ? await api.startExecutionByTasks(selectedItemIds.value, processDate)
+        : activeTab.value === 'group'
+          ? await api.startExecutionByGroups(selectedItemIds.value, processDate)
+          : await api.startExecutionByIds(selectedItemIds.value, processDate)
     const result = unwrapResult(res)
     const taskLogId = result?.taskLogId || ''
 
@@ -579,11 +709,75 @@ const handleAcquisition = async () => {
 }
 
 // ====================== 启停相关 ======================
-const startTask = () => message.success('任务开启...')
-const pauseTask = () => message.success('任务暂停...')
+const updateTaskStatus = async (isEnabled) => {
+  if (selectedItemIds.value.length === 0) {
+    message.warning('请先选择任务')
+    return
+  }
 
-const startGroup = () => message.success('配置组开启...')
-const pauseGroup = () => message.success('配置组暂停...')
+  const idsToUpdate = [...selectedItemIds.value]
+  const actionText = isEnabled ? '开启' : '暂停'
+  const hide = message.loading(`正在${actionText}任务...`, 0)
+
+  try {
+    await api.setTaskStatus(idsToUpdate, isEnabled)
+
+    tasks.value.forEach((task) => {
+      const taskId = String(task.id ?? task.Id)
+      if (idsToUpdate.includes(taskId)) {
+        task.isEnabled = isEnabled
+        task.IsEnabled = isEnabled
+      }
+    })
+
+    selectedItems.value = []
+    message.success(`任务${actionText}成功`)
+    await loadAllData()
+  } catch (err) {
+    message.error(`任务${actionText}失败`)
+    console.error(err)
+  } finally {
+    hide?.()
+  }
+}
+
+const startTask = () => updateTaskStatus(true)
+const pauseTask = () => updateTaskStatus(false)
+
+const updateGroupStatus = async (isEnabled) => {
+  if (selectedItemIds.value.length === 0) {
+    message.warning('请先选择配置组')
+    return
+  }
+
+  const idsToUpdate = [...selectedItemIds.value]
+  const actionText = isEnabled ? '开启' : '暂停'
+  const hide = message.loading(`正在${actionText}配置组...`, 0)
+
+  try {
+    await api.setGroupStatus(idsToUpdate, isEnabled)
+
+    groups.value.forEach((group) => {
+      const groupId = String(group.id ?? group.Id)
+      if (idsToUpdate.includes(groupId)) {
+        group.isEnabled = isEnabled
+        group.IsEnabled = isEnabled
+      }
+    })
+
+    selectedItems.value = []
+    message.success(`配置组${actionText}成功`)
+    await loadAllData()
+  } catch (err) {
+    message.error(`配置组${actionText}失败`)
+    console.error(err)
+  } finally {
+    hide?.()
+  }
+}
+
+const startGroup = () => updateGroupStatus(true)
+const pauseGroup = () => updateGroupStatus(false)
 
 const startConfig = async () => {
   if (selectedItemIds.value.length === 0) {
@@ -654,7 +848,10 @@ const handleRefreshHistoryLogs = async () => {
   message.success('历史记录刷新成功')
 }
 
-const handleOpenLogFromTimeline = async () => {
+const handleOpenLogFromTimeline = async (payload = {}) => {
+  if (payload.taskLogId) {
+    currentTaskLogId.value = payload.taskLogId
+  }
   activeTab.value = 'log'
   await nextTick()
   await taskLogViewRef.value?.refreshHistoryList?.()
@@ -732,6 +929,7 @@ const BUTTON_CONFIG_MAP = {
     [
       { text: '导入配置', handler: importConfig, btnType: 'aqua', icon: CloudUploadOutlined },
       { text: '新增配置', handler: openNewConfig, btnType: 'primary', icon: PlusOutlined },
+      { text: '复制配置', handler: copyConfig, btnType: 'orange', icon: CopyOutlined },
       { text: '删除配置', handler: deleteConfig, btnType: 'red', icon: DeleteOutlined },
     ],
     [
@@ -794,10 +992,22 @@ onBeforeUnmount(() => {
 .overview-stack {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   padding-right: 4px;
+}
+
+.header-actions {
+  gap: 14px;
+}
+
+.header-actions-overview {
+  gap: 18px;
+}
+
+.header-actions-overview > .ant-btn + .ant-btn {
+  margin-left: 0;
 }
 </style>
