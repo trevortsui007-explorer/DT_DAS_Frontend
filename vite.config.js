@@ -18,6 +18,19 @@ export default defineConfig({
     },
   },
 
+  build: {
+    rollupOptions: {
+      output: {
+        // 去掉 JS 入口文件的 hash 后缀
+        entryFileNames: 'assets/[name].js',
+        // 去掉其它分包 JS 文件的 hash 后缀
+        chunkFileNames: 'assets/[name].js',
+        // 去掉 CSS、图片、字体等资源的 hash 后缀
+        assetFileNames: 'assets/[name].[ext]',
+      },
+    },
+  },
+
   server: {
     port: 5173,
     proxy: {

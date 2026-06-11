@@ -5,7 +5,7 @@ import { mockRequest } from './mock'
 const USE_MOCK = false
 
 const request = axios.create({
-  baseURL: '',
+  baseURL: import.meta.env.VITE_API_BASE_URL,
   timeout: 15000
 })
 
