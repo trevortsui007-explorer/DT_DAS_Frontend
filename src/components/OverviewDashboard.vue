@@ -163,14 +163,6 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
-  trendData: {
-    type: Array,
-    default: () => [],
-  },
-  latestActivities: {
-    type: Array,
-    default: () => [],
-  },
   taskLogs: {
     type: Array,
     default: () => [],
@@ -316,18 +308,8 @@ const failureHotspots = computed(() => {
     .slice(0, 6)
 })
 
-const fallbackActivities = computed(() =>
-  (props.latestActivities || []).map((item, index) => ({
-    key: `${item.time || index}-${item.text || ''}`,
-    title: item.title || '系统动态',
-    time: item.time || '--',
-    text: item.text || '',
-    level: item.level || 'info',
-  })),
-)
-
 const activityItems = computed(() => {
-  const logs = normalizedLogs.value.slice(0, 6).map((log) => {
+  return normalizedLogs.value.slice(0, 6).map((log) => {
     const status = normalizeStatus(log.status)
     const level = status === 'failed' ? 'error' : status === 'partialsuccess' ? 'warning' : status === 'running' ? 'info' : 'success'
     const resultText =
@@ -343,8 +325,6 @@ const activityItems = computed(() => {
       level,
     }
   })
-
-  return logs.length > 0 ? logs : fallbackActivities.value
 })
 
 const isEnabled = (item) => {
@@ -537,7 +517,7 @@ const initCharts = async () => {
 }
 
 watch(
-  () => [props.statusDistribution, props.taskLogs, props.trendData],
+  () => [props.statusDistribution, props.taskLogs],
   () => initCharts(),
   { deep: true },
 )

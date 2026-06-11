@@ -57,8 +57,6 @@
         />
         <OverviewDashboard
           :status-distribution="taskStatusDistribution"
-          :trend-data="overviewTrend"
-          :latest-activities="overviewActivities"
           :task-logs="overviewTaskLogs"
           :tasks="tasks"
           :configs="configs"
@@ -165,8 +163,6 @@ const error = ref('')
 const tasks = ref([])
 const groups = ref([])
 const configs = ref([])
-const overviewTrend = ref([])
-const overviewActivities = ref([])
 const overviewTaskLogs = ref([])
 
 const dashboardLoading = ref(false)
@@ -396,13 +392,11 @@ const loadAllData = async () => {
   error.value = ''
   dashboardError.value = ''
 
-  const [tasksResult, groupsResult, configsResult, trendResult, activitiesResult, taskLogsResult] =
+  const [tasksResult, groupsResult, configsResult, taskLogsResult] =
     await Promise.allSettled([
       api.fetchTasks(),
       api.fetchGroups(),
       api.fetchConfigs(),
-      api.fetchOverviewTrend(),
-      api.fetchOverviewActivities(),
       api.fetchTaskLogs({ pageNo: 1, pageSize: 100 }),
     ])
 
@@ -419,19 +413,12 @@ const loadAllData = async () => {
     configs.value = unwrapResult(configsResult.value) || []
   }
 
-  overviewTrend.value = trendResult.status === 'fulfilled' ? (unwrapResult(trendResult.value) || []) : []
-  overviewActivities.value =
-    activitiesResult.status === 'fulfilled' ? (unwrapResult(activitiesResult.value) || []) : []
   overviewTaskLogs.value =
     taskLogsResult.status === 'fulfilled'
       ? (taskLogsResult.value?.data?.items || unwrapResult(taskLogsResult.value)?.items || unwrapResult(taskLogsResult.value) || [])
       : []
 
-  if (
-    trendResult.status === 'rejected' ||
-    activitiesResult.status === 'rejected' ||
-    taskLogsResult.status === 'rejected'
-  ) {
+  if (taskLogsResult.status === 'rejected') {
     dashboardError.value = '部分总览数据加载失败'
   }
 
