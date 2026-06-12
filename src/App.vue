@@ -106,6 +106,10 @@
     :data="inspectionData"
     @change="handleInspectionMonthChange"
   />
+  <GroupInspectionModal
+    v-model:visible="groupInspectionVisible"
+    :groups="groupInspectionGroups"
+  />
   <AcquisitionModal
     v-model:visible="acquisitionActionVisible"
     :task-data="currentConfig"
@@ -121,7 +125,7 @@ import message, {
   StatCards, TableView, CardsView,
   ConfigModal, DetailDrawer, GroupModal,
   TaskModal, ImportConfigModal, BatchAssignModal,
-  InspectionModal, AcquisitionModal,
+  InspectionModal, GroupInspectionModal, AcquisitionModal,
   TaskLogView,
 } from './components'
 
@@ -179,6 +183,8 @@ const inspectionVisible = ref(false)
 const inspectionData = ref(null)
 const currentInspectingRow = ref(null)
 const inspectionCache = ref({})
+const groupInspectionVisible = ref(false)
+const groupInspectionGroups = ref([])
 
 // 采集 Modal 相关
 const acquisitionActionVisible = ref(false)
@@ -467,6 +473,18 @@ const deleteGroup = () => message.success('删除配置组')
 
 // 批量同步
 const batchSyncGroups = () => message.success('批量同步进行中')
+
+const openGroupInspection = () => {
+  const targetGroups = selectedItems.value.length ? selectedItems.value : groups.value
+
+  if (!targetGroups.length) {
+    message.warning('暂无可巡检的配置组')
+    return
+  }
+
+  groupInspectionGroups.value = targetGroups
+  groupInspectionVisible.value = true
+}
 
 // ====================== Config 界面 ======================
 const openNewConfig = () => configModalRef.value?.open(false, null, false, { existingConfigs: configs.value })
@@ -923,6 +941,7 @@ const BUTTON_CONFIG_MAP = {
       { text: '今日采集', handler: handleAcquisition, btnType: 'aqua', icon: SelectOutlined },
       { text: '时间段采集', handler: handleTimeRangeAcquisition, btnType: 'blue', icon: FieldTimeOutlined },
     ],
+    { text: '一键巡检', handler: openGroupInspection, btnType: 'blue', icon: SelectOutlined },
     { text: '批量同步', handler: batchSyncGroups, btnType: 'green', icon: SyncOutlined },
   ],
   config: [

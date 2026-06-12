@@ -368,3 +368,14 @@ export const fetchInspection = ({ configId, startTime, endTime, user, pass }) =>
     }
   })
 }
+
+export const fetchGroupInspection = ({ groupId, date, user, pass }) => {
+  return request.get('/api/files/group-discovery', {
+    params: {
+      groupId,
+      date,
+      user,
+      pass
+    }
+  })
+}
