@@ -448,7 +448,13 @@ const deleteTask = async () => {
     return
   }
 
-  if (!window.confirm(`确认删除选中的 ${selectedItemIds.value.length} 个任务？`)) return
+  const confirmed = await message.confirm({
+    title: '删除任务',
+    content: `确认删除选中的 ${selectedItemIds.value.length} 个任务？`,
+    okText: '删除',
+    cancelText: '取消',
+  })
+  if (!confirmed) return
 
   try {
     await api.deleteTasks(selectedItemIds.value)

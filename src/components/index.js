@@ -18,9 +18,12 @@ export { default as TaskLogView } from './TaskLogView.vue'
 //封装bubble调用
 import { h, render } from 'vue'
 import MessageBubbleComponent from './MessageBubble.vue'
+import MessageConfirmComponent from './MessageConfirm.vue'
 
 let vnode = null
 let container = null
+let confirmVnode = null
+let confirmContainer = null
 
 const message = (content, type = 'info', duration = 3000) => {
   if (typeof document === 'undefined') return
@@ -46,5 +49,17 @@ message.info    = (content, duration) => message(content, 'info', duration)
 message.warning = (content, duration) => message(content, 'warning', duration)
 message.error   = (content, duration) => message(content, 'error', duration)
 message.loading = (content, duration = 0) => message(content, 'loading', duration)
+message.confirm = (config) => {
+  if (typeof document === 'undefined') return Promise.resolve(false)
+
+  if (!confirmContainer) {
+    confirmContainer = document.createElement('div')
+    confirmVnode = h(MessageConfirmComponent)
+    render(confirmVnode, confirmContainer)
+    document.body.appendChild(confirmContainer)
+  }
+
+  return confirmVnode.component.exposed.confirm(config)
+}
 
 export default message;

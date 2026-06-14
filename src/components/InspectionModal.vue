@@ -143,7 +143,13 @@ const handleDayClick = async (day) => {
   if (!day.canDownload || !day.file?.fullPath) return
 
   const filename = day.file.fileName || day.file.fullPath.split(/[\\/]/).pop()
-  if (!window.confirm(`是否下载 ${filename}？`)) return
+  const confirmed = await message.confirm({
+    title: '下载文件',
+    content: `是否下载 ${filename}？`,
+    okText: '下载',
+    cancelText: '取消',
+  })
+  if (!confirmed) return
 
   try {
     const blob = await downloadFile(day.file.fullPath, downloadUser, downloadPass)
