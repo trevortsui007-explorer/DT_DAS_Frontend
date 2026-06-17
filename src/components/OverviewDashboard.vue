@@ -157,6 +157,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as echarts from 'echarts'
+import * as api from '../api'
 
 const props = defineProps({
   statusDistribution: {
@@ -192,8 +193,11 @@ const failureChartRef = ref(null)
 let healthChart = null
 let throughputChart = null
 let failureChart = null
+const logDetailSummaryById = ref({})
+const logDetailSummaryLoadingIds = new Set()
 
 const normalizeStatus = (status) => String(status || '').replace(/\s+/g, '').toLowerCase()
+const MISSING_FILE_TEXT = '文件未找到'
 
 const getNumber = (...values) => {
   for (const value of values) {
@@ -211,6 +215,25 @@ const getField = (source, keys, fallback = '') => {
   return fallback
 }
 
+const normalizeDetail = (raw = {}) => ({
+  status: getField(raw, ['status', 'Status'], ''),
+  errorMessage: getField(raw, ['errorMessage', 'ErrorMessage'], ''),
+})
+
+const isMissingFileDetail = (item = {}) => String(item.errorMessage || '').includes(MISSING_FILE_TEXT)
+
+const calculateLogDetailSummary = (details = []) => {
+  const warningCount = details.filter(isMissingFileDetail).length
+  const failureCount = details.filter(
+    (item) => normalizeStatus(item.status) === 'failed' && !isMissingFileDetail(item),
+  ).length
+
+  return {
+    warningCount,
+    failureCount,
+  }
+}
+
 const formatDateTime = (value) => {
   if (!value) return '--'
   const date = new Date(value)
@@ -226,17 +249,28 @@ const normalizedLogs = computed(() =>
       const endTime = getField(raw, ['endTime', 'EndTime'])
       const successCount = getNumber(raw.successCount, raw.SuccessCount)
       const failureCount = getNumber(raw.failureCount, raw.FailureCount)
+      const taskLogId = getField(raw, ['taskLogId', 'TaskLogId', 'id', 'Id'], '')
+      const key = taskLogId || `log-${index}`
+      const detailSummary = taskLogId ? logDetailSummaryById.value[taskLogId] : null
+      const warningCount = detailSummary?.warningCount ?? 0
+      const displayFailureCount = detailSummary ? detailSummary.failureCount : failureCount
+      const displaySuccessCount = detailSummary ? successCount + warningCount : successCount
 
       return {
-        key: getField(raw, ['taskLogId', 'TaskLogId', 'id', 'Id'], `log-${index}`),
+        key,
+        taskLogId,
         taskName: getField(raw, ['taskName', 'TaskName'], getField(raw, ['taskCode', 'TaskCode'], '未命名任务')),
         status: getField(raw, ['status', 'Status'], ''),
         startTime,
         endTime,
         timestamp: new Date(startTime || endTime || 0).getTime(),
         totalConfigs: getNumber(raw.totalConfigs, raw.TotalConfigs),
-        successCount,
-        failureCount,
+        successCount: displaySuccessCount,
+        failureCount: displayFailureCount,
+        warningCount,
+        hasDetailSummary: Boolean(detailSummary),
+        rawSuccessCount: successCount,
+        rawFailureCount: failureCount,
         processedCount: getNumber(raw.processedCount, raw.ProcessedCount, successCount + failureCount),
       }
     })
@@ -249,7 +283,7 @@ const processedConfigs = computed(() =>
 const successConfigs = computed(() => normalizedLogs.value.reduce((sum, log) => sum + log.successCount, 0))
 const failedConfigs = computed(() => normalizedLogs.value.reduce((sum, log) => sum + log.failureCount, 0))
 const failedRuns = computed(() =>
-  normalizedLogs.value.filter((log) => ['failed', 'partialsuccess'].includes(normalizeStatus(log.status))).length,
+  normalizedLogs.value.filter((log) => log.failureCount > 0 || (!log.hasDetailSummary && normalizeStatus(log.status) === 'failed')).length,
 )
 const recentRuns = computed(() => normalizedLogs.value.length)
 const successRate = computed(() => {
@@ -297,7 +331,7 @@ const failureHotspots = computed(() => {
   const map = new Map()
 
   normalizedLogs.value.forEach((log) => {
-    const failed = log.failureCount || (normalizeStatus(log.status) === 'failed' ? 1 : 0)
+    const failed = log.failureCount || (!log.hasDetailSummary && normalizeStatus(log.status) === 'failed' ? 1 : 0)
     if (failed <= 0) return
     map.set(log.taskName, (map.get(log.taskName) || 0) + failed)
   })
@@ -311,11 +345,21 @@ const failureHotspots = computed(() => {
 const activityItems = computed(() => {
   return normalizedLogs.value.slice(0, 6).map((log) => {
     const status = normalizeStatus(log.status)
-    const level = status === 'failed' ? 'error' : status === 'partialsuccess' ? 'warning' : status === 'running' ? 'info' : 'success'
+    const level =
+      log.failureCount > 0
+        ? 'error'
+        : log.warningCount > 0 || status === 'partialsuccess'
+          ? 'warning'
+          : status === 'running'
+            ? 'info'
+            : 'success'
+    const warningText = log.warningCount > 0 ? `（文件不存在${log.warningCount}项）` : ''
     const resultText =
       log.failureCount > 0
-        ? `成功 ${log.successCount}，失败 ${log.failureCount}`
-        : `完成 ${log.successCount || log.processedCount || 0} 个配置`
+        ? `成功${log.successCount}${warningText}，失败${log.failureCount}`
+        : log.successCount > 0
+          ? `成功${log.successCount}${warningText}`
+          : `完成${log.successCount || log.processedCount || 0}个配置`
 
     return {
       key: log.key,
@@ -326,6 +370,36 @@ const activityItems = computed(() => {
     }
   })
 })
+
+const shouldLoadLogDetailSummary = (log = {}) =>
+  Boolean(log.taskLogId) &&
+  Number(log.rawFailureCount ?? log.failureCount ?? 0) > 0 ||
+  (Boolean(log.taskLogId) && ['failed', 'partialsuccess'].includes(normalizeStatus(log.status)))
+
+const loadLogDetailSummary = async (log = {}) => {
+  const taskLogId = log.taskLogId
+  if (!taskLogId || logDetailSummaryById.value[taskLogId] || logDetailSummaryLoadingIds.has(taskLogId)) return
+
+  logDetailSummaryLoadingIds.add(taskLogId)
+  try {
+    const res = await api.fetchTaskLogDetails(taskLogId)
+    const details = (res?.data || res || []).map(normalizeDetail)
+    logDetailSummaryById.value = {
+      ...logDetailSummaryById.value,
+      [taskLogId]: calculateLogDetailSummary(details),
+    }
+  } catch (err) {
+    console.error('加载总览日志明细统计失败', err)
+  } finally {
+    logDetailSummaryLoadingIds.delete(taskLogId)
+  }
+}
+
+const hydrateLogDetailSummaries = () => {
+  normalizedLogs.value.filter(shouldLoadLogDetailSummary).forEach((log) => {
+    void loadLogDetailSummary(log)
+  })
+}
 
 const isEnabled = (item) => {
   const value = item?.isEnabled ?? item?.IsEnabled
@@ -518,11 +592,21 @@ const initCharts = async () => {
 
 watch(
   () => [props.statusDistribution, props.taskLogs],
+  () => {
+    hydrateLogDetailSummaries()
+    initCharts()
+  },
+  { deep: true },
+)
+
+watch(
+  normalizedLogs,
   () => initCharts(),
   { deep: true },
 )
 
 onMounted(() => {
+  hydrateLogDetailSummaries()
   initCharts()
   window.addEventListener('resize', resizeCharts)
 })
