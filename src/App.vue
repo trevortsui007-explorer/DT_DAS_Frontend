@@ -125,6 +125,10 @@
     :task-data="currentConfig"
     @confirm="handleTaskStartConfirm"
   />
+  <ReportExportModal
+    v-model:visible="reportExportVisible"
+    :groups="reportExportGroups"
+  />
 
   <DetailDrawer ref="drawerRef" />
 
@@ -179,6 +183,7 @@ import message, {
   ConfigModal, DetailDrawer, GroupModal,
   TaskModal, ImportConfigModal, BatchAssignModal,
   InspectionModal, GroupInspectionModal, AcquisitionModal,
+  ReportExportModal,
   TaskLogView,
 } from './components'
 
@@ -239,6 +244,8 @@ const currentInspectingRow = ref(null)
 const inspectionCache = ref({})
 const groupInspectionVisible = ref(false)
 const groupInspectionGroups = ref([])
+const reportExportVisible = ref(false)
+const reportExportGroups = ref([])
 
 // 采集 Modal 相关
 const acquisitionActionVisible = ref(false)
@@ -501,7 +508,17 @@ const loadAllData = async () => {
   dashboardLoading.value = false
 }
 
-const exportReport = () => message.success('导出功能开发中')
+const exportReport = () => {
+  const targetGroups = selectedItems.value.length ? selectedItems.value : groups.value
+
+  if (!targetGroups.length) {
+    message.warning('暂无可导出的配置组')
+    return
+  }
+
+  reportExportGroups.value = [...targetGroups]
+  reportExportVisible.value = true
+}
 
 // ====================== Task 界面 ======================
 const openNewTask = () => taskModalRef.value?.open(false, null, groups.value)
@@ -1015,6 +1032,9 @@ const BUTTON_CONFIG_MAP = {
     [
       { text: '今日采集', handler: handleAcquisition, btnType: 'aqua', icon: SelectOutlined },
       { text: '时间段采集', handler: handleTimeRangeAcquisition, btnType: 'blue', icon: FieldTimeOutlined },
+    ],
+    [
+      { text: '报表导出', handler: exportReport, btnType: 'orange', icon: ExportOutlined },
     ],
     { text: '一键巡检', handler: openGroupInspection, btnType: 'blue', icon: SelectOutlined },
     { text: '批量同步', handler: batchSyncGroups, btnType: 'green', icon: SyncOutlined },

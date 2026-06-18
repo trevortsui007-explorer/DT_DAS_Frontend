@@ -32,6 +32,15 @@
             <input class="ant-input" v-model="formData.groupType" />
           </div>
 
+          <div class="form-item">
+            <label>导出存储过程</label>
+            <input
+              class="ant-input"
+              v-model.trim="formData.exportProcedureName"
+              placeholder="例如：Proc_Export_DailyReport"
+            />
+          </div>
+
           <!-- 状态 -->
           <div class="form-item inline-flex">
             <label>启用状态</label>
@@ -130,6 +139,7 @@ const formData = ref({
   groupName: '',
   groupCategory: '',
   groupType: '',
+  exportProcedureName: '',
   isEnabled: true,
   configIds: [],
 })
@@ -222,6 +232,7 @@ function open(edit = false, data = null, configs = []) {
       groupName: data.groupName || data.GroupName || '',
       groupCategory: data.groupCategory || data.GroupCategory || '',
       groupType: data.groupType || data.GroupType || '',
+      exportProcedureName: data.exportProcedureName || data.ExportProcedureName || '',
       isEnabled: data.isEnabled ?? data.IsEnabled ?? true,
 
       // 回显
@@ -234,6 +245,7 @@ function open(edit = false, data = null, configs = []) {
       groupName: '',
       groupCategory: '',
       groupType: '',
+      exportProcedureName: '',
       isEnabled: true,
       configIds: [],
     }
@@ -258,6 +270,7 @@ async function save() {
     GroupName: formData.value.groupName,
     GroupCategory: formData.value.groupCategory,
     GroupType: formData.value.groupType,
+    ExportProcedureName: formData.value.exportProcedureName,
     IsEnabled: formData.value.isEnabled,
   }
 
