@@ -1036,8 +1036,10 @@ const BUTTON_CONFIG_MAP = {
     [
       { text: '报表导出', handler: exportReport, btnType: 'orange', icon: ExportOutlined },
     ],
-    { text: '一键巡检', handler: openGroupInspection, btnType: 'blue', icon: SelectOutlined },
-    { text: '批量同步', handler: batchSyncGroups, btnType: 'green', icon: SyncOutlined },
+    [
+      { text: '一键巡检', handler: openGroupInspection, btnType: 'blue', icon: SelectOutlined },
+      { text: '批量同步', handler: batchSyncGroups, btnType: 'green', icon: SyncOutlined },
+    ]
   ],
   config: [
     [
@@ -1054,7 +1056,9 @@ const BUTTON_CONFIG_MAP = {
       { text: '今日采集', handler: handleAcquisition, btnType: 'aqua', icon: SelectOutlined },
       { text: '时间段采集', handler: handleTimeRangeAcquisition, btnType: 'blue', icon: FieldTimeOutlined },
     ],
-    { text: '批量归组', handler: openAssignModal, btnType: 'green', icon: PartitionOutlined },
+    [
+      { text: '批量归组', handler: openAssignModal, btnType: 'green', icon: PartitionOutlined },
+    ]
   ],
   log: [
     [
@@ -1067,7 +1071,9 @@ const BUTTON_CONFIG_MAP = {
 }
 
 const LIMITED_BUTTON_CONFIG_MAP = {
-  group: [
+  group:
+  [
+    { text: '报表导出', handler: exportReport, btnType: 'orange', icon: ExportOutlined },
     { text: '一键巡检', handler: openGroupInspection, btnType: 'blue', icon: SelectOutlined },
   ],
 }
