@@ -1003,7 +1003,7 @@ const stopTimelineClock = () => {
 // ====================== 按钮相关 ======================
 const BUTTON_CONFIG_MAP = {
   overview: [
-    { text: '刷新大盘', handler: loadAllData, btnType: 'primary', icon: ReloadOutlined },
+    { text: '刷新大盘', handler: loadAllData, btnType: 'primary', icon: ReloadOutlined, className: 'overview-refresh-btn' },
     { text: '导出报告', handler: exportReport, btnType: 'aqua', icon: ExportOutlined },
   ],
   task: [
@@ -1034,7 +1034,7 @@ const BUTTON_CONFIG_MAP = {
       { text: '时间段采集', handler: handleTimeRangeAcquisition, btnType: 'blue', icon: FieldTimeOutlined },
     ],
     [
-      { text: '报表导出', handler: exportReport, btnType: 'orange', icon: ExportOutlined },
+      { text: '报表导出', handler: exportReport, btnType: 'orange', icon: ExportOutlined, className: 'report-export-btn' },
     ],
     [
       { text: '一键巡检', handler: openGroupInspection, btnType: 'blue', icon: SelectOutlined },
@@ -1073,7 +1073,7 @@ const BUTTON_CONFIG_MAP = {
 const LIMITED_BUTTON_CONFIG_MAP = {
   group:
   [
-    { text: '报表导出', handler: exportReport, btnType: 'orange', icon: ExportOutlined },
+    { text: '报表导出', handler: exportReport, btnType: 'orange', icon: ExportOutlined, className: 'report-export-btn' },
     { text: '一键巡检', handler: openGroupInspection, btnType: 'blue', icon: SelectOutlined },
   ],
 }
@@ -1199,6 +1199,10 @@ const submitLogin = () => {
 const getBtnClass = (btn) => {
   const classes = []
 
+  if (btn.className) {
+    classes.push(btn.className)
+  }
+
   if (btn.btnType) {
     if (btn.btnType.startsWith('gradient-')) {
       classes.push(`btn-${btn.btnType}`)
@@ -1249,6 +1253,14 @@ onBeforeUnmount(() => {
 
 .header-actions-overview > .ant-btn + .ant-btn {
   margin-left: 0;
+}
+
+.report-export-btn {
+  margin-right: 10px;
+}
+
+.overview-refresh-btn {
+  margin-right: 10px;
 }
 
 .das-login-modal {

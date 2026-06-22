@@ -4,7 +4,7 @@
       v-for="card in cards"
       :key="card.tab"
       class="stat-card"
-      :class="{ active: activeTab === card.tab }"
+      :class="[{ active: activeTab === card.tab }, `stat-card-${card.tab}`]"
       @click="$emit('update:activeTab', card.tab)"
     >
       <div class="stat-title">{{ card.title }}</div>
