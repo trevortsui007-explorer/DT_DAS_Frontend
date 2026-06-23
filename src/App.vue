@@ -1074,7 +1074,7 @@ const LIMITED_BUTTON_CONFIG_MAP = {
   group:
   [
     { text: '报表导出', handler: exportReport, btnType: 'orange', icon: ExportOutlined, className: 'report-export-btn' },
-    { text: '一键巡检', handler: openGroupInspection, btnType: 'blue', icon: SelectOutlined },
+    { text: '一键巡检', handler: openGroupInspection, btnType: 'blue', icon: SelectOutlined, className: 'inspection-btn' },
   ],
 }
 
@@ -1260,6 +1260,10 @@ onBeforeUnmount(() => {
 }
 
 .overview-refresh-btn {
+  margin-right: 10px;
+}
+
+.inspection-btn {
   margin-right: 10px;
 }
 
