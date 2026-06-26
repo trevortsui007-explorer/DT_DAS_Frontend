@@ -253,6 +253,9 @@ const currentConfig = ref(null)
 const timelineRealNow = ref(new Date())
 const timelineTestNow = ref(null)
 let timelineNowTimer = null
+let overviewLogRefreshTimer = null
+let overviewLogsRefreshing = false
+const OVERVIEW_LOG_REFRESH_INTERVAL = 60000
 
 const LOGIN_HASH_SALT = 'DAS_LOGIN_V1'
 const ADMIN_LOGIN_HASH = '4ff5a5f060bb1f71fcef7c93c9e8af9a8ef4962ed54f6238a6864e96f579c69c'
@@ -468,6 +471,28 @@ const openLogTabForTask = async (taskLogId) => {
 }
 
 // ====================== Overview 界面 ======================
+const unwrapTaskLogs = (res) => {
+  const result = unwrapResult(res)
+  return res?.data?.items || result?.items || result || []
+}
+
+const refreshOverviewTaskLogs = async () => {
+  if (overviewLogsRefreshing || loading.value) return
+
+  overviewLogsRefreshing = true
+
+  try {
+    const res = await api.fetchTaskLogs({ pageNo: 1, pageSize: 100 })
+    overviewTaskLogs.value = unwrapTaskLogs(res)
+    dashboardError.value = ''
+  } catch (err) {
+    dashboardError.value = '部分总览数据加载失败'
+    console.error('自动刷新总览日志失败:', err)
+  } finally {
+    overviewLogsRefreshing = false
+  }
+}
+
 const loadAllData = async () => {
   loading.value = true
   dashboardLoading.value = true
@@ -497,7 +522,7 @@ const loadAllData = async () => {
 
   overviewTaskLogs.value =
     taskLogsResult.status === 'fulfilled'
-      ? (taskLogsResult.value?.data?.items || unwrapResult(taskLogsResult.value)?.items || unwrapResult(taskLogsResult.value) || [])
+      ? unwrapTaskLogs(taskLogsResult.value)
       : []
 
   if (taskLogsResult.status === 'rejected') {
@@ -1000,6 +1025,22 @@ const stopTimelineClock = () => {
   timelineNowTimer = null
 }
 
+const shouldRefreshOverviewLogs = () => activeTab.value === 'overview' && !timelineTestNow.value
+
+const startOverviewLogAutoRefresh = () => {
+  stopOverviewLogAutoRefresh()
+  overviewLogRefreshTimer = setInterval(() => {
+    if (!shouldRefreshOverviewLogs()) return
+    void refreshOverviewTaskLogs()
+  }, OVERVIEW_LOG_REFRESH_INTERVAL)
+}
+
+const stopOverviewLogAutoRefresh = () => {
+  if (!overviewLogRefreshTimer) return
+  clearInterval(overviewLogRefreshTimer)
+  overviewLogRefreshTimer = null
+}
+
 // ====================== 按钮相关 ======================
 const BUTTON_CONFIG_MAP = {
   overview: [
@@ -1217,11 +1258,13 @@ const getBtnClass = (btn) => {
 // ====================== 初始化数据 ======================
 onMounted(() => {
   startTimelineClock()
+  startOverviewLogAutoRefresh()
   loadAllData()
 })
 
 onBeforeUnmount(() => {
   stopTimelineClock()
+  stopOverviewLogAutoRefresh()
 })
 </script>
 
