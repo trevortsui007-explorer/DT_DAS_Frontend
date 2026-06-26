@@ -379,3 +379,19 @@ export const fetchGroupInspection = ({ groupId, date, user, pass }) => {
     }
   })
 }
+
+// ====================== REPORT EXPORT ======================
+export const createReportExportTask = (data) => {
+  return request.post('/api/data-acquisition/export/tasks', data)
+}
+
+export const fetchReportExportTask = (id) => {
+  return request.get(`/api/data-acquisition/export/tasks/${id}`)
+}
+
+export const downloadReportExportTask = (id) => {
+  return request.get(`/api/data-acquisition/export/tasks/${id}/download`, {
+    responseType: 'blob',
+    timeout: 300000
+  })
+}

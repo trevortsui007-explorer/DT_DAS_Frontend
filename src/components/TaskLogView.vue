@@ -38,8 +38,8 @@
             <div class="task-log-summary-item">
               <span class="label">状态</span>
               <span class="value">
-                <span class="status-tag" :class="getStatusClass(currentTask.status)">
-                  {{ currentTask.status || '--' }}
+                <span class="status-tag" :class="getStatusClass(currentTaskDisplaySummary.status)">
+                  {{ currentTaskDisplaySummary.status || '--' }}
                 </span>
               </span>
             </div>
@@ -61,17 +61,17 @@
 
             <div class="task-log-summary-item">
               <span class="label">已处理</span>
-              <span class="value">{{ currentTask.processedCount ?? 0 }}</span>
+              <span class="value">{{ currentTaskDisplaySummary.processedCount ?? 0 }}</span>
             </div>
 
             <div class="task-log-summary-item">
               <span class="label">成功</span>
-              <span class="value success-text">{{ currentTask.successCount ?? 0 }}</span>
+              <span class="value success-text">{{ currentTaskDisplaySummary.successCount ?? 0 }}</span>
             </div>
 
             <div class="task-log-summary-item">
               <span class="label">失败</span>
-              <span class="value danger-text">{{ currentTask.failureCount ?? 0 }}</span>
+              <span class="value danger-text">{{ currentTaskDisplaySummary.failureCount ?? 0 }}</span>
             </div>
           </div>
 
@@ -105,6 +105,7 @@
                   v-for="item in filteredTaskDetails"
                   :key="item.id || `${item.fileName}-${item.startTime}`"
                   class="task-log-detail-item"
+                  :class="{ 'is-warning': isMissingFileDetail(item) }"
                   role="button"
                   tabindex="0"
                   @click="openDetailModal(item)"
@@ -113,23 +114,42 @@
                 >
                   <div class="task-log-detail-item__top">
                     <span class="task-log-file">{{ item.fileName || '--' }}</span>
-                    <span class="status-tag" :class="getStatusClass(item.status)">
-                      {{ item.status || '--' }}
+                    <span class="status-tag" :class="getStatusClass(getDetailDisplayStatus(item))">
+                      {{ getDetailDisplayStatus(item) || '--' }}
                     </span>
                   </div>
 
                   <div class="task-log-detail-item__meta">
-                    <span>配置ID：{{ item.configId ?? '--' }}</span>
-                    <span>起始行：{{ item.startRow ?? 0 }}</span>
-                    <span>处理行数：{{ item.processedRows ?? 0 }}</span>
+                    <span class="task-log-meta-chip task-log-meta-chip--config">
+                      <span>{{ getDetailConfigDisplay(item).label }}</span>
+                      <strong>{{ getDetailConfigDisplay(item).value }}</strong>
+                    </span>
+                    <span class="task-log-row-metric">
+                      <span>起始行</span>
+                      <strong>{{ item.startRow ?? 0 }}</strong>
+                    </span>
+                    <span class="task-log-row-metric">
+                      <span>处理行数</span>
+                      <strong>{{ item.processedRows ?? 0 }}</strong>
+                    </span>
                   </div>
 
                   <div class="task-log-detail-item__meta">
-                    <span>开始：{{ formatDateTime(item.startTime) }}</span>
-                    <span>结束：{{ formatDateTime(item.endTime) }}</span>
+                    <span class="task-log-meta-chip task-log-meta-chip--time">
+                      <span>开始</span>
+                      <strong>{{ formatDateTime(item.startTime) }}</strong>
+                    </span>
+                    <span class="task-log-meta-chip task-log-meta-chip--time">
+                      <span>结束</span>
+                      <strong>{{ formatDateTime(item.endTime) }}</strong>
+                    </span>
                   </div>
 
-                  <div v-if="item.errorMessage" class="task-log-error">
+                  <div
+                    v-if="item.errorMessage"
+                    class="task-log-error"
+                    :class="{ 'task-log-warning': isMissingFileDetail(item) }"
+                  >
                     {{ item.errorMessage }}
                   </div>
                 </div>
@@ -201,15 +221,18 @@
           >
             <div class="task-log-history-item__top">
               <span class="mono task-log-history-id">{{ item.taskCode || item.taskLogId || '--' }}</span>
-              <span class="status-tag" :class="getStatusClass(item.status)">
-                {{ item.status || '--' }}
+              <span v-if="getTaskDisplaySummary(item).warningCount > 0" class="warning-summary-tag">
+                存在{{ getTaskDisplaySummary(item).warningCount }}项无文件
+              </span>
+              <span class="status-tag" :class="getStatusClass(getTaskDisplaySummary(item).status)">
+                {{ getTaskDisplaySummary(item).status || '--' }}
               </span>
             </div>
 
             <div class="task-log-history-item__meta">
               <span>总数 {{ item.totalConfigs ?? 0 }}</span>
-              <span>成功 {{ item.successCount ?? 0 }}</span>
-              <span>失败 {{ item.failureCount ?? 0 }}</span>
+              <span>成功 {{ getTaskDisplaySummary(item).successCount ?? 0 }}</span>
+              <span>失败 {{ getTaskDisplaySummary(item).failureCount ?? 0 }}</span>
               <span class="trigger-inline">
                 <span
                   class="trigger-tag"
@@ -300,7 +323,7 @@
                   <span
                     v-else
                     class="detail-field__value"
-                    :class="[field.valueClass, { 'danger-text': field.danger }]"
+                    :class="[field.valueClass, { 'danger-text': field.danger, 'warning-text': field.warning }]"
                   >
                     {{ field.value }}
                   </span>
@@ -346,7 +369,9 @@ const taskList = ref([])
 const taskDetails = ref([])
 const detailCacheByTaskId = ref({})
 const configCacheById = ref({})
-const detailFilterTags = ['All', 'Running', 'Success', 'Failed']
+const taskDisplaySummaryById = ref({})
+const warningSummaryLoadingIds = new Set()
+const detailFilterTags = ['All', 'Running', 'Success', 'Warning', 'Failed']
 const activeDetailTag = ref('All')
 const historyStartDateInput = ref('')
 const historyEndDateInput = ref('')
@@ -408,11 +433,106 @@ const normalizeStatus = (status) =>
     .replace(/\s+/g, '')
     .toLowerCase()
 
+const MISSING_FILE_TEXT = '文件未找到'
+
+const isMissingFileDetail = (item = {}) =>
+  String(item.errorMessage || '').includes(MISSING_FILE_TEXT)
+
+const getDetailDisplayStatus = (item = {}) => (isMissingFileDetail(item) ? 'Warning' : item.status || '')
+
+const calculateWarningSummary = (details = []) => {
+  const warningCount = details.filter(isMissingFileDetail).length
+  const failureCount = details.filter(
+    (item) => normalizeStatus(item.status) === 'failed' && !isMissingFileDetail(item),
+  ).length
+
+  return {
+    warningCount,
+    failureCount,
+  }
+}
+
+const setTaskDisplaySummary = (taskLogId, details = []) => {
+  if (!taskLogId) return
+
+  taskDisplaySummaryById.value = {
+    ...taskDisplaySummaryById.value,
+    [taskLogId]: calculateWarningSummary(details),
+  }
+}
+
+const getTaskDisplayStatus = (task = {}, successCount = 0, failureCount = 0) => {
+  const status = task.status || ''
+  const normalizedStatus = normalizeStatus(status)
+
+  if (failureCount === 0 && successCount > 0 && ['failed', 'partialsuccess'].includes(normalizedStatus)) {
+    return 'Success'
+  }
+
+  return status
+}
+
+const getTaskDisplaySummary = (task = {}) => {
+  const rawSuccessCount = Number(task.successCount ?? 0)
+  const rawFailureCount = Number(task.failureCount ?? 0)
+  const rawProcessedCount = Number(task.processedCount ?? rawSuccessCount + rawFailureCount)
+  const summary = taskDisplaySummaryById.value[task.taskLogId]
+
+  if (!summary) {
+    return {
+      ...task,
+      successCount: rawSuccessCount,
+      failureCount: rawFailureCount,
+      processedCount: rawProcessedCount,
+      warningCount: 0,
+      status: getTaskDisplayStatus(task, rawSuccessCount, rawFailureCount),
+    }
+  }
+
+  const displaySuccessCount = rawSuccessCount + summary.warningCount
+  const displayFailureCount = summary.failureCount
+
+  return {
+    ...task,
+    successCount: displaySuccessCount,
+    failureCount: displayFailureCount,
+    processedCount: rawProcessedCount,
+    warningCount: summary.warningCount,
+    status: getTaskDisplayStatus(task, displaySuccessCount, displayFailureCount),
+  }
+}
+
+const currentTaskDisplaySummary = computed(() => getTaskDisplaySummary(currentTask.value || {}))
+
+const detailNameCollator = new Intl.Collator('zh-Hans-CN', {
+  numeric: true,
+  sensitivity: 'base',
+})
+
+const getDetailSortName = (detail = {}) => {
+  const configName = getDetailConfigName(detail)
+  if (configName && configName !== '--') return configName
+  if (detail.configId !== undefined && detail.configId !== null) return `配置${detail.configId}`
+  return detail.fileName || ''
+}
+
+const sortedTaskDetails = computed(() =>
+  [...taskDetails.value].sort((a, b) => {
+    const nameResult = detailNameCollator.compare(getDetailSortName(a), getDetailSortName(b))
+    if (nameResult !== 0) return nameResult
+
+    const configResult = Number(a.configId || 0) - Number(b.configId || 0)
+    if (configResult !== 0) return configResult
+
+    return detailNameCollator.compare(a.fileName || '', b.fileName || '')
+  }),
+)
+
 const filteredTaskDetails = computed(() => {
   const selectedTag = normalizeStatus(activeDetailTag.value)
-  if (selectedTag === 'all') return taskDetails.value
+  if (selectedTag === 'all') return sortedTaskDetails.value
 
-  return taskDetails.value.filter((item) => normalizeStatus(item.status) === selectedTag)
+  return sortedTaskDetails.value.filter((item) => normalizeStatus(getDetailDisplayStatus(item)) === selectedTag)
 })
 
 const getStartOfDayMs = (dateString) => {
@@ -524,6 +644,53 @@ const getField = (source, keys, fallback = '--') => {
   return fallback
 }
 
+const getConfigName = (config) => getField(config, ['eqName', 'EqName', 'name', 'Name'], '')
+
+const getDetailConfigName = (detail = {}) => {
+  const directName = getConfigName(detail.config)
+  if (directName) return directName
+
+  const cachedName = getConfigName(configCacheById.value[detail.configId])
+  return cachedName || '--'
+}
+
+const getDetailConfigDisplay = (detail = {}) => {
+  const configName = getDetailConfigName(detail)
+
+  if (configName && configName !== '--') {
+    return {
+      label: '设备',
+      value: configName,
+    }
+  }
+
+  return {
+    label: '配置ID',
+    value: detail.configId ?? '--',
+  }
+}
+
+const fetchConfigForCache = async (configId) => {
+  if (!configId || configCacheById.value[configId]) return
+
+  try {
+    const res = await api.fetchConfigById(configId)
+    configCacheById.value = {
+      ...configCacheById.value,
+      [configId]: res?.data || res || null,
+    }
+  } catch (err) {
+    console.error('预加载配置名称失败', err)
+  }
+}
+
+const preloadDetailConfigs = (details = []) => {
+  const configIds = [...new Set(details.map((item) => item.configId).filter(Boolean))]
+  configIds.forEach((configId) => {
+    void fetchConfigForCache(configId)
+  })
+}
+
 const formatEnabled = (value) => {
   if (value === true) return '启用'
   if (value === false) return '禁用'
@@ -555,7 +722,9 @@ const getPostProcessingClass = (value) => {
 
 const detailModalSections = computed(() => {
   const task = currentTask.value || {}
+  const taskSummary = currentTaskDisplaySummary.value
   const detail = selectedDetail.value || {}
+  const detailStatus = getDetailDisplayStatus(detail)
   const config = selectedDetailConfig.value || detail.config || {}
 
   return [
@@ -573,16 +742,16 @@ const detailModalSections = computed(() => {
         },
         {
           label: '状态',
-          value: task.status || '--',
+          value: taskSummary.status || '--',
           tag: true,
-          tagClass: getStatusClass(task.status),
+          tagClass: getStatusClass(taskSummary.status),
         },
         { label: '开始时间', value: formatDateTime(task.startTime) },
         { label: '结束时间', value: formatDateTime(task.endTime) },
         { label: '总任务数', value: task.totalConfigs ?? 0, valueClass: 'detail-value--primary' },
-        { label: '已处理', value: task.processedCount ?? 0, valueClass: 'detail-value--blue' },
-        { label: '成功', value: task.successCount ?? 0, valueClass: 'detail-value--success' },
-        { label: '失败', value: task.failureCount ?? 0, danger: Number(task.failureCount || 0) > 0 },
+        { label: '已处理', value: taskSummary.processedCount ?? 0, valueClass: 'detail-value--blue' },
+        { label: '成功', value: taskSummary.successCount ?? 0, valueClass: 'detail-value--success' },
+        { label: '失败', value: taskSummary.failureCount ?? 0, danger: Number(taskSummary.failureCount || 0) > 0 },
         { label: '执行进度', value: `${progressPercent.value}%`, valueClass: 'detail-value--primary' },
       ],
     },
@@ -625,15 +794,20 @@ const detailModalSections = computed(() => {
         { label: '配置ID', value: detail.configId ?? '--', valueClass: 'detail-value--primary' },
         {
           label: '状态',
-          value: detail.status || '--',
+          value: detailStatus || '--',
           tag: true,
-          tagClass: getStatusClass(detail.status),
+          tagClass: getStatusClass(detailStatus),
         },
         { label: '起始行', value: detail.startRow ?? 0 },
         { label: '处理行数', value: detail.processedRows ?? 0, valueClass: 'detail-value--blue' },
         { label: '开始时间', value: formatDateTime(detail.startTime) },
         { label: '结束时间', value: formatDateTime(detail.endTime) },
-        { label: '错误信息', value: detail.errorMessage || '--', danger: Boolean(detail.errorMessage) },
+        {
+          label: '错误信息',
+          value: detail.errorMessage || '--',
+          danger: Boolean(detail.errorMessage) && !isMissingFileDetail(detail),
+          warning: isMissingFileDetail(detail),
+        },
       ],
     },
   ]
@@ -661,6 +835,7 @@ const getStatusClass = (status) => {
   if (s === 'success') return 'status-tag--success'
   if (s === 'failed') return 'status-tag--failed'
   if (s === 'running') return 'status-tag--running'
+  if (s === 'warning') return 'status-tag--warning'
   if (s === 'partialsuccess') return 'status-tag--partial'
   return 'status-tag--default'
 }
@@ -683,6 +858,36 @@ const getTriggerTypeClass = (triggerType) => {
   return 'trigger-tag--default'
 }
 
+const shouldLoadWarningSummary = (task = {}) =>
+  Number(task.failureCount || 0) > 0 || ['failed', 'partialsuccess'].includes(normalizeStatus(task.status))
+
+const loadTaskWarningSummary = async (task = {}) => {
+  const taskLogId = task.taskLogId
+  if (!taskLogId || taskDisplaySummaryById.value[taskLogId] || warningSummaryLoadingIds.has(taskLogId)) return
+
+  warningSummaryLoadingIds.add(taskLogId)
+  try {
+    const res = await api.fetchTaskLogDetails(taskLogId)
+    const normalizedDetails = (res?.data || res || []).map(normalizeDetail)
+    detailCacheByTaskId.value = {
+      ...detailCacheByTaskId.value,
+      [taskLogId]: normalizedDetails,
+    }
+    preloadDetailConfigs(normalizedDetails)
+    setTaskDisplaySummary(taskLogId, normalizedDetails)
+  } catch (err) {
+    console.error('加载任务告警统计失败', err)
+  } finally {
+    warningSummaryLoadingIds.delete(taskLogId)
+  }
+}
+
+const hydrateTaskWarningSummaries = (list = []) => {
+  list.filter(shouldLoadWarningSummary).forEach((task) => {
+    void loadTaskWarningSummary(task)
+  })
+}
+
 const loadTaskList = async (pageNo = taskListPageNo.value) => {
   listLoading.value = true
   try {
@@ -702,6 +907,7 @@ const loadTaskList = async (pageNo = taskListPageNo.value) => {
     taskListTotal.value = res?.data?.total ?? list.length
     taskListPageNo.value = res?.data?.pageNo ?? pageNo
     taskListPageSize.value = res?.data?.pageSize ?? taskListPageSize.value
+    hydrateTaskWarningSummaries(list)
 
     if (props.initialTaskLogId) {
       const matched = list.find((item) => item.taskLogId === props.initialTaskLogId)
@@ -770,6 +976,8 @@ const loadTaskDetails = async (taskLogId, { force = false } = {}) => {
   const cachedDetails = detailCacheByTaskId.value[taskLogId]
   if (!force && cachedDetails) {
     taskDetails.value = cachedDetails.map((item) => ({ ...item }))
+    preloadDetailConfigs(cachedDetails)
+    setTaskDisplaySummary(taskLogId, cachedDetails)
     return
   }
 
@@ -781,6 +989,8 @@ const loadTaskDetails = async (taskLogId, { force = false } = {}) => {
       ...detailCacheByTaskId.value,
       [taskLogId]: normalizedDetails,
     }
+    preloadDetailConfigs(normalizedDetails)
+    setTaskDisplaySummary(taskLogId, normalizedDetails)
     taskDetails.value = normalizedDetails
   } catch (err) {
     console.error('加载任务明细失败', err)
@@ -1271,6 +1481,11 @@ defineExpose({
   cursor: pointer;
 }
 
+.task-log-detail-item.is-warning {
+  background: #fff;
+  border-color: #ffe58f;
+}
+
 .task-log-detail-item:focus-visible {
   outline: 2px solid rgba(82, 196, 26, 0.35);
   outline-offset: 2px;
@@ -1316,6 +1531,62 @@ defineExpose({
   margin-top: 4px;
 }
 
+.task-log-detail-item__meta {
+  gap: 8px 10px;
+}
+
+.task-log-row-metric {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: #f0f7ff;
+  border: 1px solid #b7dcff;
+  color: #096dd9;
+  line-height: 1.45;
+}
+
+.task-log-row-metric strong {
+  font-size: 13px;
+  color: #0958d9;
+}
+
+.task-log-meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  line-height: 1.45;
+  white-space: nowrap;
+}
+
+.task-log-meta-chip strong {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.task-log-meta-chip--config {
+  background: #f9f0ff;
+  border: 1px solid #d3adf7;
+  color: #722ed1;
+}
+
+.task-log-meta-chip--config strong {
+  color: #531dab;
+}
+
+.task-log-meta-chip--time {
+  background: #f6ffed;
+  border: 1px solid #b7eb8f;
+  color: #389e0d;
+}
+
+.task-log-meta-chip--time strong {
+  color: #237804;
+}
+
 .task-log-file {
   font-weight: 700;
   color: var(--ant-text-primary, rgba(0, 0, 0, 0.85));
@@ -1335,11 +1606,34 @@ defineExpose({
   word-break: break-word;
 }
 
+.task-log-warning {
+  background: #fffbe6;
+  border-color: #ffe58f;
+  color: #d48806;
+}
+
 .task-log-history-id {
   flex: 1;
   min-width: 0;
   word-break: break-all;
   font-weight: 600;
+}
+
+.warning-summary-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 6px;
+  background: #fffbe6;
+  color: #d48806;
+  border: 1px solid #ffe58f;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .task-log-history-footer {
@@ -1421,6 +1715,12 @@ defineExpose({
   border: 1px solid #ffe58f;
 }
 
+.status-tag--warning {
+  background: #fffbe6;
+  color: #d48806;
+  border: 1px solid #ffe58f;
+}
+
 .status-tag--default {
   background: #f5f5f5;
   color: #595959;
@@ -1433,6 +1733,10 @@ defineExpose({
 
 .danger-text {
   color: #cf1322 !important;
+}
+
+.warning-text {
+  color: #d48806 !important;
 }
 
 .mono {
@@ -1501,9 +1805,9 @@ defineExpose({
 }
 
 .trigger-tag--scheduled {
-  background: #fffbe6;
-  color: #d48806;
-  border: 1px solid #ffe58f;
+  background: #e6f7ff;
+  color: #096dd9;
+  border: 1px solid #91d5ff;
 }
 
 .trigger-tag--default {
@@ -1627,6 +1931,7 @@ defineExpose({
 }
 
 .detail-value-tag.status-tag--running,
+.detail-value-tag.trigger-tag--scheduled,
 .detail-value-tag.detail-tag--blue {
   background: #e6f7ff;
   color: #096dd9;
@@ -1634,7 +1939,7 @@ defineExpose({
 }
 
 .detail-value-tag.status-tag--partial,
-.detail-value-tag.trigger-tag--scheduled,
+.detail-value-tag.status-tag--warning,
 .detail-value-tag.detail-tag--gold {
   background: #fffbe6;
   color: #d48806;

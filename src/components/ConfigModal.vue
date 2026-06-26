@@ -783,8 +783,6 @@ async function save() {
       FlagName: formData.value.flagName,
     }
 
-    console.log('提交数据:', payload)
-
     // ================= 3. 调用 API =================
     let result
 
