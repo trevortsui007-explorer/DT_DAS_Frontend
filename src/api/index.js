@@ -398,7 +398,8 @@ export const fetchInspection = ({ configId, startTime, endTime, user, pass }) =>
       endTime,
       user,
       pass
-    }
+    },
+    timeout: 120000
   })
 }
 
@@ -409,7 +410,8 @@ export const fetchGroupInspection = ({ groupId, date, user, pass }) => {
       date,
       user,
       pass
-    }
+    },
+    timeout: 120000
   })
 }
 

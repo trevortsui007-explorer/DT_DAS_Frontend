@@ -733,7 +733,11 @@ const fetchInspectionData = async (row, year, month) => {
     inspectionData.value = result
   } catch (e) {
     console.error('获取巡检数据失败:', e)
-    message.error('巡检数据获取失败')
+    if (e?.code === 'ECONNABORTED') {
+      message.error('巡检扫描超时，请缩小时间范围或检查共享目录响应')
+    } else {
+      message.error('巡检数据获取失败')
+    }
   }
 }
 
