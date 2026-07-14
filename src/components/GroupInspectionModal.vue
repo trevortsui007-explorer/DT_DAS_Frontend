@@ -59,9 +59,6 @@ const items = ref([])
 const currentIndex = ref(0)
 const selectedDate = ref('')
 
-const FTP_USER = 'et1'
-const FTP_PASS = 'dt123456#'
-
 const getToday = () => {
   const now = new Date()
   const yyyy = now.getFullYear()
@@ -110,8 +107,6 @@ const loadInspection = async () => {
     const res = await fetchGroupInspection({
       groupId: currentGroupId.value,
       date: selectedDate.value,
-      user: FTP_USER,
-      pass: FTP_PASS,
     })
     const data = res?.data ?? res
     items.value = data?.items || data?.Items || []

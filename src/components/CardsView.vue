@@ -345,6 +345,10 @@ const emitSelection = () => {
   overflow: hidden;
   will-change: transform, box-shadow;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 260px;
 }
 
 /* 5. 状态样式：预览与选中 */
@@ -377,6 +381,9 @@ const emitSelection = () => {
   text-decoration: underline;
 }
 
+.card-body {
+  flex: 1;
+}
 .card-body p { margin: 8px 0; font-size: 13px; color: #666; line-height: 1.5; }
 .card-field {
   display: flex;
@@ -393,7 +400,7 @@ const emitSelection = () => {
   word-break: break-all;
 }
 .card-actions {
-  margin-top: 12px;
+  margin-top: auto;
   padding-top: 12px;
   border-top: 1px solid #f0f0f0;
   display: flex;

@@ -725,8 +725,6 @@ const fetchInspectionData = async (row, year, month) => {
       configId: row.id,
       startTime,
       endTime,
-      user: 'et1',
-      pass: 'dt123456#',
     })
 
     const result = unwrapResult(res)?.[0] || { files: [] }
@@ -1104,6 +1102,8 @@ const BUTTON_CONFIG_MAP = {
   config: [
     [
       { text: 'Excel模板', handler: openTemplateManager, btnType: 'blue', icon: FileExcelOutlined },
+    ],
+    [
       { text: '导入配置', handler: importConfig, btnType: 'aqua', icon: CloudUploadOutlined },
       { text: '新增配置', handler: openNewConfig, btnType: 'primary', icon: PlusOutlined },
       { text: '复制配置', handler: copyConfig, btnType: 'orange', icon: CopyOutlined },
