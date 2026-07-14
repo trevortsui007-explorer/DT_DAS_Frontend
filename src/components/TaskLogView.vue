@@ -94,66 +94,109 @@
             <div v-if="detailsLoading" class="loading-placeholder">正在加载任务明细...</div>
 
             <div v-else class="task-log-detail-content">
-              <div v-if="!taskDetails.length" class="empty-placeholder">暂无任务明细</div>
+              <div v-if="detailTotal <= 0" class="empty-placeholder">暂无任务明细</div>
 
-              <div v-else-if="!filteredTaskDetails.length" class="empty-placeholder">
-                当前筛选条件下暂无记录
-              </div>
-
-              <div v-else class="task-log-detail-list">
-                <div
-                  v-for="item in filteredTaskDetails"
-                  :key="item.id || `${item.fileName}-${item.startTime}`"
-                  class="task-log-detail-item"
-                  :class="{ 'is-warning': isMissingFileDetail(item) }"
-                  role="button"
-                  tabindex="0"
-                  @click="openDetailModal(item)"
-                  @keydown.enter="openDetailModal(item)"
-                  @keydown.space.prevent="openDetailModal(item)"
-                >
-                  <div class="task-log-detail-item__top">
-                    <span class="task-log-file">{{ item.fileName || '--' }}</span>
-                    <span class="status-tag" :class="getStatusClass(getDetailDisplayStatus(item))">
-                      {{ getDetailDisplayStatus(item) || '--' }}
-                    </span>
-                  </div>
-
-                  <div class="task-log-detail-item__meta">
-                    <span class="task-log-meta-chip task-log-meta-chip--config">
-                      <span>{{ getDetailConfigDisplay(item).label }}</span>
-                      <strong>{{ getDetailConfigDisplay(item).value }}</strong>
-                    </span>
-                    <span class="task-log-row-metric">
-                      <span>起始行</span>
-                      <strong>{{ item.startRow ?? 0 }}</strong>
-                    </span>
-                    <span class="task-log-row-metric">
-                      <span>处理行数</span>
-                      <strong>{{ item.processedRows ?? 0 }}</strong>
-                    </span>
-                  </div>
-
-                  <div class="task-log-detail-item__meta">
-                    <span class="task-log-meta-chip task-log-meta-chip--time">
-                      <span>开始</span>
-                      <strong>{{ formatDateTime(item.startTime) }}</strong>
-                    </span>
-                    <span class="task-log-meta-chip task-log-meta-chip--time">
-                      <span>结束</span>
-                      <strong>{{ formatDateTime(item.endTime) }}</strong>
-                    </span>
-                  </div>
-
+              <template v-else>
+                <div class="task-log-detail-list">
                   <div
-                    v-if="item.errorMessage"
-                    class="task-log-error"
-                    :class="{ 'task-log-warning': isMissingFileDetail(item) }"
+                    v-for="item in filteredTaskDetails"
+                    :key="item.id || `${item.fileName}-${item.startTime}`"
+                    class="task-log-detail-item"
+                    :class="{ 'is-warning': isMissingFileDetail(item) }"
+                    role="button"
+                    tabindex="0"
+                    @click="openDetailModal(item)"
+                    @keydown.enter="openDetailModal(item)"
+                    @keydown.space.prevent="openDetailModal(item)"
                   >
-                    {{ item.errorMessage }}
+                    <div class="task-log-detail-item__top">
+                      <span class="task-log-file">{{ item.fileName || '--' }}</span>
+                      <span class="status-tag" :class="getStatusClass(getDetailDisplayStatus(item))">
+                        {{ getDetailDisplayStatus(item) || '--' }}
+                      </span>
+                    </div>
+
+                    <div v-if="item.fullFilePath" class="task-log-file-path">
+                      {{ item.fullFilePath }}
+                    </div>
+
+                    <div class="task-log-detail-item__meta">
+                      <span class="task-log-meta-chip task-log-meta-chip--config">
+                        <span>{{ getDetailConfigDisplay(item).label }}</span>
+                        <strong>{{ getDetailConfigDisplay(item).value }}</strong>
+                      </span>
+                      <span class="task-log-row-metric">
+                        <span>起始行</span>
+                        <strong>{{ item.startRow ?? 0 }}</strong>
+                      </span>
+                      <span class="task-log-row-metric">
+                        <span>处理行数</span>
+                        <strong>{{ item.processedRows ?? 0 }}</strong>
+                      </span>
+                    </div>
+
+                    <div class="task-log-detail-item__meta">
+                      <span class="task-log-meta-chip task-log-meta-chip--time">
+                        <span>开始</span>
+                        <strong>{{ formatDateTime(item.startTime) }}</strong>
+                      </span>
+                      <span class="task-log-meta-chip task-log-meta-chip--time">
+                        <span>结束</span>
+                        <strong>{{ formatDateTime(item.endTime) }}</strong>
+                      </span>
+                    </div>
+
+                    <div
+                      v-if="item.errorMessage"
+                      class="task-log-error"
+                      :class="{ 'task-log-warning': isMissingFileDetail(item) }"
+                    >
+                      {{ item.errorMessage }}
+                    </div>
                   </div>
                 </div>
-              </div>
+
+                <div class="task-log-detail-footer">
+                  <span class="task-log-detail-total">总 {{ detailTotal }} 条</span>
+                  <button
+                    type="button"
+                    class="task-log-page-btn"
+                    :disabled="detailPageNo <= 1 || detailsLoading"
+                    @click="changeDetailPage(detailPageNo - 1)"
+                  >
+                    &lt;
+                  </button>
+                  <button
+                    v-for="page in detailVisiblePageItems"
+                    :key="page.key"
+                    type="button"
+                    class="task-log-page-btn"
+                    :class="{ active: page.value === detailPageNo }"
+                    :disabled="page.type === 'ellipsis' || detailsLoading"
+                    @click="page.type === 'page' && changeDetailPage(page.value)"
+                  >
+                    {{ page.label }}
+                  </button>
+                  <button
+                    type="button"
+                    class="task-log-page-btn"
+                    :disabled="detailPageNo >= detailTotalPages || detailsLoading"
+                    @click="changeDetailPage(detailPageNo + 1)"
+                  >
+                    &gt;
+                  </button>
+                  <select
+                    v-model.number="detailPageSize"
+                    class="task-log-page-size"
+                    :disabled="detailsLoading"
+                    @change="changeDetailPageSize"
+                  >
+                    <option v-for="size in detailPageSizeOptions" :key="size" :value="size">
+                      {{ size }}
+                    </option>
+                  </select>
+                </div>
+              </template>
             </div>
           </div>
         </div>
@@ -382,6 +425,10 @@ const historyDateFilterError = ref('')
 const taskListTotal = ref(0)
 const taskListPageNo = ref(1)
 const taskListPageSize = ref(10)
+const detailTotal = ref(0)
+const detailPageNo = ref(1)
+const detailPageSize = ref(10)
+const detailPageSizeOptions = [10, 20, 50, 100]
 
 const listLoading = ref(false)
 const detailsLoading = ref(false)
@@ -413,6 +460,62 @@ const totalPages = computed(() => {
   const pageSize = Number(taskListPageSize.value || 10)
   return Math.max(1, Math.ceil(total / pageSize))
 })
+
+const detailTotalPages = computed(() => {
+  const total = Number(detailTotal.value || 0)
+  const pageSize = Number(detailPageSize.value || 10)
+  return Math.max(1, Math.ceil(total / pageSize))
+})
+
+const buildCompactPageItems = (total, current) => {
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, index) => ({
+      type: 'page',
+      value: index + 1,
+      label: String(index + 1),
+      key: `page-${index + 1}`,
+    }))
+  }
+
+  const pageSet = new Set([1, total, current, current - 1, current + 1])
+  if (current <= 3) {
+    pageSet.add(2)
+    pageSet.add(3)
+  }
+  if (current >= total - 2) {
+    pageSet.add(total - 1)
+    pageSet.add(total - 2)
+  }
+
+  const pages = [...pageSet]
+    .filter((page) => page >= 1 && page <= total)
+    .sort((a, b) => a - b)
+
+  const items = []
+  pages.forEach((page, index) => {
+    const previous = pages[index - 1]
+    if (previous && page - previous > 1) {
+      items.push({
+        type: 'ellipsis',
+        value: null,
+        label: '...',
+        key: `ellipsis-${previous}-${page}`,
+      })
+    }
+    items.push({
+      type: 'page',
+      value: page,
+      label: String(page),
+      key: `page-${page}`,
+    })
+  })
+
+  return items
+}
+
+const detailVisiblePageItems = computed(() =>
+  buildCompactPageItems(detailTotalPages.value, detailPageNo.value),
+)
 
 const visiblePageNumbers = computed(() => {
   const total = totalPages.value
@@ -529,10 +632,7 @@ const sortedTaskDetails = computed(() =>
 )
 
 const filteredTaskDetails = computed(() => {
-  const selectedTag = normalizeStatus(activeDetailTag.value)
-  if (selectedTag === 'all') return sortedTaskDetails.value
-
-  return sortedTaskDetails.value.filter((item) => normalizeStatus(getDetailDisplayStatus(item)) === selectedTag)
+  return taskDetails.value
 })
 
 const getStartOfDayMs = (dateString) => {
@@ -567,9 +667,15 @@ const filteredHistoryTaskList = computed(() => {
   })
 })
 
-const setActiveDetailTag = (tag) => {
+const setActiveDetailTag = async (tag) => {
   if (!detailFilterTags.includes(tag)) return
+  if (activeDetailTag.value === tag) return
   activeDetailTag.value = tag
+  detailPageNo.value = 1
+
+  if (currentTask.value?.taskLogId) {
+    await loadTaskDetails(currentTask.value.taskLogId, { force: true, pageNo: 1 })
+  }
 }
 
 const applyHistoryDateFilter = async () => {
@@ -624,6 +730,7 @@ const normalizeDetail = (raw = {}) => ({
   taskLogId: raw.taskLogId || raw.TaskLogId || '',
   configId: raw.configId ?? raw.ConfigId,
   fileName: raw.fileName || raw.FileName || '',
+  fullFilePath: raw.fullFilePath || raw.FullFilePath || '',
   status: raw.status || raw.Status || '',
   startRow: raw.startRow ?? raw.StartRow ?? 0,
   processedRows: raw.processedRows ?? raw.ProcessedRows ?? 0,
@@ -791,6 +898,7 @@ const detailModalSections = computed(() => {
       title: '日志明细',
       fields: [
         { label: '文件名', value: detail.fileName || '--', valueClass: 'detail-value--primary' },
+        { label: '完整路径', value: detail.fullFilePath || '--' },
         { label: '配置ID', value: detail.configId ?? '--', valueClass: 'detail-value--primary' },
         {
           label: '状态',
@@ -930,6 +1038,7 @@ const loadTaskList = async (pageNo = taskListPageNo.value) => {
     } else {
       currentTask.value = null
       taskDetails.value = []
+      detailTotal.value = 0
     }
   } catch (err) {
     console.error('加载任务日志列表失败', err)
@@ -953,6 +1062,16 @@ const changeTaskListPage = async (page) => {
   await loadTaskList(page)
 }
 
+const changeDetailPage = async (page) => {
+  if (page < 1 || page > detailTotalPages.value || page === detailPageNo.value) return
+  await loadTaskDetails(currentTask.value?.taskLogId, { pageNo: page })
+}
+
+const changeDetailPageSize = async () => {
+  detailPageNo.value = 1
+  await loadTaskDetails(currentTask.value?.taskLogId, { pageNo: 1 })
+}
+
 const loadTaskStatus = async (taskLogId) => {
   if (!taskLogId) return
 
@@ -970,28 +1089,32 @@ const loadTaskStatus = async (taskLogId) => {
   }
 }
 
-const loadTaskDetails = async (taskLogId, { force = false } = {}) => {
-  if (!taskLogId) return
+const getDetailStatusParam = () => {
+  const tag = activeDetailTag.value
+  return normalizeStatus(tag) === 'all' ? undefined : tag
+}
 
-  const cachedDetails = detailCacheByTaskId.value[taskLogId]
-  if (!force && cachedDetails) {
-    taskDetails.value = cachedDetails.map((item) => ({ ...item }))
-    preloadDetailConfigs(cachedDetails)
-    setTaskDisplaySummary(taskLogId, cachedDetails)
-    return
-  }
+const loadTaskDetails = async (taskLogId, { pageNo = detailPageNo.value } = {}) => {
+  if (!taskLogId) return
 
   detailsLoading.value = true
   try {
-    const res = await api.fetchTaskLogDetails(taskLogId)
-    const normalizedDetails = (res?.data || res || []).map(normalizeDetail)
-    detailCacheByTaskId.value = {
-      ...detailCacheByTaskId.value,
-      [taskLogId]: normalizedDetails,
-    }
+    const res = await api.fetchTaskLogDetails(taskLogId, {
+      pageNo,
+      pageSize: detailPageSize.value,
+      status: getDetailStatusParam(),
+    })
+    const payload = res?.data || res || {}
+    const rawDetails = Array.isArray(payload) ? payload : payload.items || payload.Items || []
+    const normalizedDetails = rawDetails.map(normalizeDetail)
+
     preloadDetailConfigs(normalizedDetails)
-    setTaskDisplaySummary(taskLogId, normalizedDetails)
     taskDetails.value = normalizedDetails
+    detailTotal.value = Array.isArray(payload) ? normalizedDetails.length : payload.total ?? payload.Total ?? normalizedDetails.length
+    detailPageNo.value = Array.isArray(payload) ? pageNo : payload.pageNo ?? payload.PageNo ?? pageNo
+    detailPageSize.value = Array.isArray(payload)
+      ? detailPageSize.value
+      : payload.pageSize ?? payload.PageSize ?? detailPageSize.value
   } catch (err) {
     console.error('加载任务明细失败', err)
     notify.error('加载任务明细失败')
@@ -1039,6 +1162,9 @@ const closeDetailModal = () => {
 const selectTask = async (item) => {
   currentTask.value = normalizeTask(item)
   activeDetailTag.value = 'All'
+  detailPageNo.value = 1
+  detailTotal.value = 0
+  taskDetails.value = []
   emit('task-selected', currentTask.value)
 
   await Promise.all([
@@ -1468,6 +1594,10 @@ defineExpose({
   padding-bottom: 12px;
 }
 
+.task-log-detail-list {
+  padding-bottom: 8px;
+}
+
 .task-log-detail-item,
 .task-log-history-item {
   background: #fff;
@@ -1595,6 +1725,14 @@ defineExpose({
   min-width: 0;
 }
 
+.task-log-file-path {
+  margin: -2px 0 8px;
+  color: var(--ant-text-secondary, rgba(0, 0, 0, 0.45));
+  font-size: 12px;
+  line-height: 1.5;
+  word-break: break-all;
+}
+
 .task-log-error {
   margin-top: 8px;
   padding: 8px 10px;
@@ -1660,6 +1798,60 @@ defineExpose({
   flex-wrap: wrap;
   justify-content: flex-end;
   align-items: center;
+}
+
+.task-log-detail-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 0 22px;
+  margin-top: 4px;
+  border-top: 1px solid #eef2f6;
+  flex-shrink: 0;
+}
+
+.task-log-detail-total {
+  margin-right: 4px;
+  color: var(--ant-text-secondary, rgba(0, 0, 0, 0.45));
+  font-size: 13px;
+}
+
+.task-log-page-btn {
+  min-width: 36px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  background: #fff;
+  color: var(--ant-text-primary, rgba(0, 0, 0, 0.85));
+  font-size: 14px;
+  line-height: 30px;
+  cursor: pointer;
+}
+
+.task-log-page-btn.active {
+  border-color: var(--ant-primary, #52c41a);
+  background: var(--ant-primary, #52c41a);
+  color: #fff;
+  font-weight: 600;
+}
+
+.task-log-page-btn:disabled {
+  cursor: not-allowed;
+  color: rgba(0, 0, 0, 0.25);
+  background: #f5f5f5;
+}
+
+.task-log-page-size {
+  height: 32px;
+  min-width: 56px;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  background: #fff;
+  padding: 0 8px;
+  color: var(--ant-text-primary, rgba(0, 0, 0, 0.85));
 }
 
 .status-tag {

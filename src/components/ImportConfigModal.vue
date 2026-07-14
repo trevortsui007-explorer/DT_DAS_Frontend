@@ -2,13 +2,31 @@
   <div>
     <div class="ant-modal-mask" :class="{ active: visible }" @click="close"></div>
     <div class="ant-modal-wrap" :class="{ active: visible }">
-      <div class="ant-modal" style="width: 850px">
+      <div class="ant-modal import-config-modal">
         <div class="ant-modal-header">
-          <span class="ant-modal-title">导入配置（第 1/2 步：解析与映射）</span>
+          <span class="ant-modal-title">{{ modalTitle }}</span>
           <span class="modal-close-btn" @click="close">×</span>
         </div>
         <div class="ant-modal-body">
-          <!-- 上传区 -->
+          <div class="mode-switch">
+            <button
+              type="button"
+              class="mode-switch__item"
+              :class="{ active: importMode === 'standard' }"
+              @click="setImportMode('standard')"
+            >
+              普通表格导入
+            </button>
+            <button
+              type="button"
+              class="mode-switch__item"
+              :class="{ active: importMode === 'template' }"
+              @click="setImportMode('template')"
+            >
+              固定模板导入
+            </button>
+          </div>
+
           <div
             class="dropzone"
             :class="{ 'has-file': fileData }"
@@ -24,18 +42,16 @@
               style="display: none"
             />
             <div class="dropzone-content" v-if="!fileData">
-              <span class="upload-icon">📁</span>
+              <span class="upload-icon">FILE</span>
               <p>拖拽或点击上传 Excel / CSV 文件</p>
             </div>
             <div class="dropzone-content success" v-else>
-              <span class="upload-icon">✅</span>
+              <span class="upload-icon">OK</span>
               <p>已加载：<strong>{{ fileData.fileName }}</strong></p>
             </div>
           </div>
 
-          <!-- 配置区域 -->
-          <div v-if="sheetData.length" class="config-area table-view-wrapper">
-            <!-- 第一行：文件名 + 文件类型 + 表头行 + 起始行 -->
+          <div v-if="importMode === 'standard' && sheetData.length" class="config-area table-view-wrapper">
             <div class="form-row">
               <div class="form-item" style="flex: 2">
                 <label>解析文件名</label>
@@ -78,7 +94,6 @@
               </div>
             </div>
 
-            <!-- 目标表名 -->
             <div class="form-item">
               <label>目标表名</label>
               <div class="table-check">
@@ -97,12 +112,12 @@
                 </button>
               </div>
               <div v-if="tableExists" class="table-info success">
-                <span class="icon">✅</span>
+                <span class="icon">通过</span>
                 表存在，已自动匹配字段映射
               </div>
               <div v-else-if="tableChecked && !tableExists" class="table-info warning">
                 <span>
-                  <span class="icon">⚠️</span>
+                  <span class="icon">提示</span>
                   表 <strong>"{{ targetTable }}"</strong> 不存在
                 </span>
                 <button
@@ -114,15 +129,18 @@
               </div>
             </div>
 
-            <!-- 字段映射 -->
             <div class="form-item">
               <div class="flex-label">
                 <span>字段映射（Excel表头 → 数据库字段）</span>
                 <div class="mapping-actions">
                   <button
                     class="ant-btn ant-btn-sm ant-btn-purple"
-                    @click="addSpecialField('id')"
-                  >+ Id主键</button>
+                    @click="addSpecialField('idGuid')"
+                  >+ Id(Guid)</button>
+                  <button
+                    class="ant-btn ant-btn-sm ant-btn-purple"
+                    @click="addSpecialField('idSnowflake')"
+                  >+ Id(雪花算法)</button>
                   <button
                     class="ant-btn ant-btn-sm ant-btn-orange"
                     @click="addSpecialField('row')"
@@ -133,8 +151,16 @@
                   >+ 完整路径追溯</button>
                   <button
                     class="ant-btn ant-btn-sm ant-btn-cyan"
-                    @click="addSpecialField('time')"
-                  >+ createdt追溯</button>
+                    @click="addSpecialField('excelname')"
+                  >+ excelname</button>
+                  <button
+                    class="ant-btn ant-btn-sm ant-btn-cyan"
+                    @click="addSpecialField('createDt')"
+                  >+ CreateDt</button>
+                  <button
+                    class="ant-btn ant-btn-sm ant-btn-cyan"
+                    @click="addSpecialField('rowData')"
+                  >+ RowData(str)</button>
                   <button
                     class="ant-btn ant-btn-primary ant-btn-sm"
                     @click="addMapping"
@@ -183,7 +209,6 @@
               </div>
             </div>
 
-            <!-- 数据预览（保留第二个版本的功能） -->
             <div class="form-item">
               <label>数据预览（前5行）</label>
               <div class="preview-table table-container">
@@ -202,6 +227,103 @@
               </div>
             </div>
           </div>
+
+          <div v-if="importMode === 'template' && sheetData.length" class="template-area">
+            <div class="form-row">
+              <div class="form-item" style="flex: 1.4">
+                <label>模板</label>
+                <select v-model="selectedTemplateId" class="ant-input" @change="parseTemplatePreview">
+                  <option
+                    v-for="tpl in importTemplates"
+                    :key="tpl.id"
+                    :value="tpl.id"
+                  >
+                    {{ tpl.templateName || tpl.TemplateName }}
+                  </option>
+                </select>
+              </div>
+              <div class="form-item" style="flex: 1">
+                <label>目标表</label>
+                <input class="ant-input" :value="templatePreview?.template?.targetTable || ''" readonly />
+              </div>
+              <div class="form-item" style="flex: 1">
+                <label>解析结果</label>
+                <input
+                  class="ant-input"
+                  :value="templatePreview ? `${templatePreview.records.length} 条记录` : ''"
+                  readonly
+                />
+              </div>
+            </div>
+
+            <div v-if="templatePreview" class="template-summary">
+              <div class="summary-item" :class="{ warning: !templatePreview.matched }">
+                <span>模板识别</span>
+                <strong>{{ templatePreview.matched ? '已匹配' : '未匹配标题，请确认文件' }}</strong>
+              </div>
+              <div
+                v-for="item in metadataItems"
+                :key="item.field"
+                class="summary-item"
+              >
+                <span>{{ item.label }}</span>
+                <strong>{{ templatePreview.metadata[item.field] || '--' }}</strong>
+              </div>
+              <div class="summary-item summary-item--wide">
+                <span>停止原因</span>
+                <strong>{{ templatePreview.stopReason }}</strong>
+              </div>
+            </div>
+
+            <div class="template-form">
+              <div class="form-item">
+                <label>配置名称 (EqName)</label>
+                <input v-model="templateForm.eqName" class="ant-input" />
+              </div>
+              <div class="form-item">
+                <label>文件路径规则</label>
+                <input
+                  v-model="templateForm.filePathPattern"
+                  class="ant-input"
+                  placeholder="例如：\\\\10.9.10.49\\文件服务器\\品质中心\\..."
+                />
+              </div>
+              <div class="form-item">
+                <label>配置组名称</label>
+                <input v-model="templateForm.groupName" class="ant-input" />
+              </div>
+              <div class="form-item">
+                <label>任务名称</label>
+                <input v-model="templateForm.taskName" class="ant-input" />
+              </div>
+              <div class="form-item">
+                <label>Cron 表达式</label>
+                <input v-model="templateForm.cronExpression" class="ant-input" />
+              </div>
+              <div class="form-item">
+                <label>文件名规则</label>
+                <input v-model="templateForm.fileNamePattern" class="ant-input" />
+              </div>
+            </div>
+
+            <div v-if="templatePreview" class="form-item">
+              <label>模板解析预览（前5行）</label>
+              <div class="preview-table table-container">
+                <table class="ant-table">
+                  <thead>
+                  <tr>
+                    <th v-for="col in templatePreview.previewHeaders" :key="col">{{ col }}</th>
+                  </tr>
+                  </thead>
+                  <tbody>
+                  <tr v-for="(row, idx) in templatePreview.previewRows" :key="idx">
+                    <td v-for="col in templatePreview.previewHeaders" :key="col">{{ formatPreviewValue(row[col]) }}</td>
+                  </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div class="ant-modal-footer">
@@ -209,11 +331,20 @@
             取消
           </button>
           <button
+            v-if="importMode === 'standard'"
             class="ant-btn ant-btn-primary"
             @click="generateConfig"
             :disabled="!sheetData.length"
           >
             下一步：完善配置
+          </button>
+          <button
+            v-else
+            class="ant-btn ant-btn-primary"
+            @click="confirmTemplateImport"
+            :disabled="!canImportTemplate || templateSubmitting"
+          >
+            {{ templateSubmitting ? '导入中...' : '确认导入模板任务' }}
           </button>
         </div>
       </div>
@@ -222,19 +353,35 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import * as XLSX from 'xlsx'
-import { checkTableExists, createTable } from '@/api/index.js'
+import {
+  checkTableExists,
+  createTable,
+  fetchImportTemplates,
+  importTaskTemplate,
+} from '@/api/index.js'
 import message from '@/components/index.js'
+import {
+  AUTOLINE_WIDTH_TEMPLATE,
+  BUILTIN_EXCEL_TEMPLATES,
+  LAMINATION_THICKNESS_TEMPLATE,
+  buildTemplateImportPayload,
+  createTemplateExcelPreview,
+  findTemplateById,
+  getTemplateId,
+  mergeImportTemplates,
+} from '@/utils/templateExcelPreview'
 
-const emit = defineEmits(['imported'])
+const emit = defineEmits(['imported', 'template-imported'])
 
-// ==================== 状态变量 ====================
 const visible = ref(false)
+const importMode = ref('standard')
 const fileInput = ref(null)
 const fileData = ref(null)
 const fileName = ref('')
 const fileType = ref('')
+const workbookData = ref(null)
 const sheetData = ref([])
 const headerRow = ref(1)
 const dataStartRow = ref(2)
@@ -245,6 +392,18 @@ const tableColumns = ref([])
 const fieldMappings = ref([])
 const previewHeaders = ref([])
 const previewData = ref([])
+const importTemplates = ref(BUILTIN_EXCEL_TEMPLATES)
+const selectedTemplateId = ref(AUTOLINE_WIDTH_TEMPLATE.id)
+const templatePreview = ref(null)
+const templateSubmitting = ref(false)
+const templateForm = ref({
+  eqName: AUTOLINE_WIDTH_TEMPLATE.configDefaults.eqName,
+  filePathPattern: AUTOLINE_WIDTH_TEMPLATE.configDefaults.filePathPattern,
+  fileNamePattern: '*.xlsx',
+  groupName: AUTOLINE_WIDTH_TEMPLATE.configDefaults.groupName,
+  taskName: AUTOLINE_WIDTH_TEMPLATE.configDefaults.taskName,
+  cronExpression: AUTOLINE_WIDTH_TEMPLATE.configDefaults.cronExpression,
+})
 
 const autoStates = ref({
   fileName: false,
@@ -253,10 +412,26 @@ const autoStates = ref({
   dataStartRow: false
 })
 
-// ==================== 模态框控制 ====================
-function open(keepState = false) {
+const modalTitle = computed(() =>
+  importMode.value === 'template'
+    ? '导入模板任务（配置 + 分组 + 任务）'
+    : '导入配置（第 1/2 步：解析与映射）',
+)
+
+const metadataItems = computed(() => templatePreview.value?.template?.metadata || [])
+
+const canImportTemplate = computed(() =>
+  templatePreview.value?.matched &&
+  templatePreview.value.records.length > 0 &&
+  templateForm.value.eqName.trim() &&
+  templateForm.value.groupName.trim() &&
+  templateForm.value.taskName.trim(),
+)
+
+async function open(keepState = false) {
   visible.value = true
   if (!keepState) reset()
+  await loadImportTemplates()
 }
 
 function close() {
@@ -268,6 +443,7 @@ function reset() {
   fileData.value = null
   fileName.value = ''
   fileType.value = ''
+  workbookData.value = null
   sheetData.value = []
   headerRow.value = 1
   dataStartRow.value = 2
@@ -278,9 +454,44 @@ function reset() {
   fieldMappings.value = []
   previewHeaders.value = []
   previewData.value = []
+  templatePreview.value = null
+  templateSubmitting.value = false
+  templateForm.value = {
+    eqName: AUTOLINE_WIDTH_TEMPLATE.configDefaults.eqName,
+    filePathPattern: AUTOLINE_WIDTH_TEMPLATE.configDefaults.filePathPattern,
+    fileNamePattern: '*.xlsx',
+    groupName: AUTOLINE_WIDTH_TEMPLATE.configDefaults.groupName,
+    taskName: AUTOLINE_WIDTH_TEMPLATE.configDefaults.taskName,
+    cronExpression: AUTOLINE_WIDTH_TEMPLATE.configDefaults.cronExpression,
+  }
 }
 
-// ==================== 文件上传 ====================
+async function loadImportTemplates() {
+  try {
+    const res = await fetchImportTemplates()
+    const list = res?.data || res || []
+    importTemplates.value = mergeImportTemplates(Array.isArray(list) ? list : [])
+  } catch {
+    importTemplates.value = BUILTIN_EXCEL_TEMPLATES
+  }
+
+  if (!findTemplateById(importTemplates.value, selectedTemplateId.value)) {
+    selectedTemplateId.value = getTemplateId(AUTOLINE_WIDTH_TEMPLATE)
+  }
+}
+
+function setImportMode(mode) {
+  importMode.value = mode
+  if (!sheetData.value.length) return
+
+  if (mode === 'template') {
+    parseTemplatePreview()
+    return
+  }
+
+  parseSheet()
+}
+
 function triggerFileInput() {
   fileInput.value.click()
 }
@@ -333,8 +544,10 @@ function processFile(file) {
   fileData.value = { fileName: file.name }
   fileName.value = file.name
   fileType.value = '.' + file.name.split('.').pop().toLowerCase()
+  templateForm.value.fileNamePattern = fileType.value === '.xlsx' || fileType.value === '.xls'
+    ? '*.xlsx'
+    : file.name
 
-  // --- 标记这些字段为自动填充状态（触发绿色背景） ---
   if (autoStates.value) {
     autoStates.value.fileName = true
     autoStates.value.fileType = true
@@ -350,13 +563,19 @@ function processFile(file) {
       ? XLSX.read(decodeCsvBuffer(data), { type: 'string', raw: true })
       : XLSX.read(new Uint8Array(data), { type: 'array' })
     const firstSheet = workbook.Sheets[workbook.SheetNames[0]]
+
+    workbookData.value = workbook
     sheetData.value = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: '' })
-    parseSheet()
+
+    if (importMode.value === 'template') {
+      parseTemplatePreview()
+    } else {
+      parseSheet()
+    }
   }
   reader.readAsArrayBuffer(file)
 }
 
-// ==================== 解析与映射 ====================
 function parseSheet() {
   if (!sheetData.value.length) return
 
@@ -375,7 +594,6 @@ function parseSheet() {
 
   previewHeaders.value = headers
 
-  // 数据预览逻辑保持不变
   const dataRows = rows.slice(dataStartIndex)
   previewData.value = dataRows.slice(0, 5).map((row) => {
     const obj = {}
@@ -385,35 +603,69 @@ function parseSheet() {
     return obj
   })
 
-  // 优化：1:1 映射并添加自动填充标记
-  const isAuto = !targetTable.value // 只有在没填目标表时才触发自动 1:1
+  const isAuto = !targetTable.value
 
   fieldMappings.value = headers
     .filter((h) => h !== '')
     .map((h) => ({
       excelHeader: h,
-      dbField: isAuto ? h : '', // 自动填入
+      dbField: isAuto ? h : '',
       dataType: 'string',
       isSystem: false,
-      isAutoFilled: isAuto      // 标记是否为自动填入
+      isAutoFilled: isAuto
     }))
 }
 
-// ==================== 特殊系统字段 ====================
+function parseTemplatePreview() {
+  if (!sheetData.value.length) return
+
+  if (!['.xlsx', '.xls'].includes(fileType.value)) {
+    templatePreview.value = null
+    message('固定模板导入仅支持 Excel 文件')
+    return
+  }
+
+  const selectedTemplate = findTemplateById(importTemplates.value, selectedTemplateId.value) || LAMINATION_THICKNESS_TEMPLATE
+  let preview = createTemplateExcelPreview(sheetData.value, fileName.value, selectedTemplate)
+
+  if (!preview.matched) {
+    const matchedPreview = importTemplates.value
+      .map((template) => createTemplateExcelPreview(sheetData.value, fileName.value, template))
+      .find((item) => item.matched && item.records.length > 0)
+
+    if (matchedPreview) {
+      selectedTemplateId.value = getTemplateId(matchedPreview.template)
+      preview = matchedPreview
+    }
+  }
+
+  const defaults = preview.template.configDefaults || {}
+  templateForm.value = {
+    ...templateForm.value,
+    eqName: defaults.eqName || templateForm.value.eqName,
+    filePathPattern: defaults.filePathPattern ?? templateForm.value.filePathPattern,
+    groupName: defaults.groupName || templateForm.value.groupName,
+    taskName: defaults.taskName || templateForm.value.taskName,
+    cronExpression: defaults.cronExpression || templateForm.value.cronExpression,
+  }
+  templatePreview.value = preview
+}
+
 function addSpecialField(type) {
   const specialMaps = {
-    id: { excelHeader: '', dbField: 'Id', dataType: 'string', isSystem: true, isAutoFilled: true },
+    idGuid: { excelHeader: '{Id(Guid)}', dbField: 'Id(Guid)', dataType: 'string', isSystem: true, isAutoFilled: true },
+    idSnowflake: { excelHeader: '{Id(雪花算法)}', dbField: 'Id(雪花算法)', dataType: 'string', isSystem: true, isAutoFilled: true },
     row: { excelHeader: '{row}', dbField: 'row', dataType: 'int', isSystem: true, isAutoFilled: true },
-    time: { excelHeader: '{createdt}', dbField: 'createdt', dataType: 'date', isSystem: true, isAutoFilled: true },
+    createDt: { excelHeader: '{CreateDt}', dbField: 'CreateDt', dataType: 'date', isSystem: true, isAutoFilled: true },
+    rowData: { excelHeader: '{RowData(str)}', dbField: 'RowData(str)', dataType: 'string', isSystem: true, isAutoFilled: true },
     path: { excelHeader: '{fullFilePath}', dbField: 'fullFilePath', dataType: 'string', isSystem: true, isAutoFilled: true },
+    excelname: { excelHeader: '{excelname}', dbField: 'excelname', dataType: 'string', isSystem: true, isAutoFilled: true },
   }
   const newItem = { ...specialMaps[type] }
 
-  if (type === 'id') {
-    // ID 主键通常放在表的第一列
+  if (type === 'idGuid' || type === 'idSnowflake') {
     fieldMappings.value.unshift(newItem)
   } else {
-    // row, fullFilePath 和 createdt 追溯字段放在表的最后
     fieldMappings.value.push(newItem)
   }
 }
@@ -431,7 +683,6 @@ function removeMapping(idx) {
   fieldMappings.value.splice(idx, 1)
 }
 
-// ==================== 表结构检查 & 自动匹配 ====================
 async function fetchTableSchema() {
   if (!targetTable.value) return
   tableChecked.value = true
@@ -455,14 +706,12 @@ async function fetchTableSchema() {
 function autoMatchMappings() {
   const dbFieldNames = tableColumns.value.map((col) => col.name.toLowerCase())
   fieldMappings.value = fieldMappings.value.map((map) => {
-    // 系统字段不参与自动匹配
     if (map.isSystem) return map
     const match = dbFieldNames.find((dbName) => dbName === map.excelHeader.toLowerCase())
     return match ? { ...map, dbField: match } : map
   })
 }
 
-// ==================== 自动建表 ====================
 async function createTableFromMapping() {
   if (!targetTable.value) {
     message('请先输入目标表名')
@@ -472,7 +721,7 @@ async function createTableFromMapping() {
   const columns = fieldMappings.value
     .filter((m) => m.dbField)
     .map((m) => {
-      let type;
+      let type
       if (m.dataType === 'string') type = 'nvarchar(255)'
       else if (m.dataType === 'number') type = 'float'
       else if (m.dataType === 'int') type = 'int'
@@ -482,7 +731,7 @@ async function createTableFromMapping() {
 
       return {
         name: m.dbField,
-        type: type,
+        type,
         comment: m.excelHeader || m.dbField
       }
     })
@@ -497,7 +746,7 @@ async function createTableFromMapping() {
     if (success) {
       tableExists.value = true
       tableColumns.value = columns
-      message('表创建成功！')
+      message('表创建成功')
       autoMatchMappings()
     } else {
       message('创建表失败')
@@ -508,12 +757,10 @@ async function createTableFromMapping() {
   }
 }
 
-// ==================== 生成最终配置 ====================
 function generateConfig() {
-  // 提取所有的扩展/追溯字段 (排除 Id 主键)
   const extFieldsList = fieldMappings.value
     .filter(m => m.isSystem && m.dbField.toLowerCase() !== 'id' && m.dbField.toLowerCase() !== 'date')
-    .map(m => m.dbField);
+    .map(m => m.dbField)
 
   const configData = {
     EqName: '',
@@ -523,6 +770,9 @@ function generateConfig() {
     FileType: fileType.value,
     HeaderRow: headerRow.value,
     StartRow: dataStartRow.value,
+    ParserType: 'standard-table',
+    TemplateId: null,
+    ParserOptions: '',
     PostProcessingType: 0,
     ProcedureName: '',
     IsEnabled: true,
@@ -538,7 +788,6 @@ function generateConfig() {
       FieldMappings: fieldMappings.value.filter(m => m.isAutoFilled).map(m => m.dbField)
     },
 
-    // 字段映射（支持系统字段）
     FieldMappings: fieldMappings.value.reduce((acc, m) => {
       if (m.dbField) {
         acc[m.excelHeader || m.dbField] = m.dbField
@@ -547,16 +796,55 @@ function generateConfig() {
     }, {})
   }
 
-  visible.value = false;
-
+  visible.value = false
   emit('imported', configData)
+}
+
+async function confirmTemplateImport() {
+  if (!canImportTemplate.value) {
+    message('请先上传匹配模板的 Excel，并填写配置组与任务名称')
+    return
+  }
+
+  templateSubmitting.value = true
+
+  try {
+    const payload = buildTemplateImportPayload(templatePreview.value, {
+      ...templateForm.value,
+      fileNamePattern: templateForm.value.fileNamePattern || '*.xlsx',
+    })
+    const result = await importTaskTemplate(payload)
+    const success = result?.success !== false && result?.code !== '0'
+
+    if (!success) {
+      throw new Error(result?.message || result?.msg || '模板任务导入失败')
+    }
+
+    visible.value = false
+    emit('template-imported', result?.data || result)
+    reset()
+  } catch (err) {
+    console.error('模板任务导入失败', err)
+    message(err?.message || '模板任务导入失败')
+  } finally {
+    templateSubmitting.value = false
+  }
+}
+
+const formatPreviewValue = (value) => {
+  if (typeof value === 'boolean') return value ? '是' : '否'
+  if (value === null || value === undefined || value === '') return '--'
+  return value
 }
 
 defineExpose({ open })
 </script>
 
 <style scoped>
-/* ==================== 保留第二个版本的全部样式 + 新增部分 ==================== */
+.import-config-modal {
+  width: 980px;
+}
+
 .modal-close-btn {
   width: 28px;
   height: 28px;
@@ -569,6 +857,7 @@ defineExpose({ open })
   transition: color 0.3s, background 0.3s;
   line-height: 1;
 }
+
 .modal-close-btn:hover { background: #f5f5f5; color: #ff4d4f; }
 
 .ant-modal-header {
@@ -577,24 +866,52 @@ defineExpose({ open })
   justify-content: space-between;
 }
 
+.mode-switch {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 16px;
+  border-radius: 8px;
+  background: #f2f4f6;
+}
+
+.mode-switch__item {
+  height: 32px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #4b5563;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.mode-switch__item.active {
+  background: #fff;
+  color: var(--ant-primary, #1677ff);
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.12);
+}
+
 .dropzone {
   border: 2px dashed var(--ant-border-color);
   border-radius: 8px;
-  padding: 32px;
+  padding: 28px;
   text-align: center;
   cursor: pointer;
   background: #fafafa;
   margin-bottom: 24px;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
+
 .dropzone:hover { border-color: var(--ant-primary); background: var(--ant-primary-light); }
 .dropzone.has-file { border-color: var(--ant-primary); border-style: solid; background: var(--ant-primary-light); }
 .dropzone-content p { margin: 8px 0 0; font-size: 14px; color: var(--ant-text-secondary); }
 .dropzone-content.success p { color: var(--ant-primary-active); }
-.upload-icon { font-size: 32px; }
+.upload-icon { font-size: 13px; font-weight: 800; letter-spacing: 0; }
 
-.config-area {
-  max-height: 550px;
+.config-area,
+.template-area {
+  max-height: 560px;
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -602,9 +919,12 @@ defineExpose({ open })
 
 .form-row { display: flex; gap: 16px; }
 .form-item label {
-  display: block; margin-bottom: 8px; font-weight: 500;
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
   color: var(--ant-text-primary);
 }
+
 .flex-label {
   display: flex !important;
   justify-content: space-between;
@@ -622,18 +942,21 @@ defineExpose({ open })
   align-items: center;
   font-size: 14px;
 }
-.table-info .icon { margin-right: 8px; }
+
+.table-info .icon { margin-right: 8px; font-weight: 700; }
 .table-info.success {
   background: var(--ant-primary-light);
   border: 1px solid #b7eb8f;
   color: var(--ant-primary-active);
 }
+
 .table-info.warning {
   background: #fffbe6;
   border: 1px solid #ffe58f;
   color: #d46b00;
   justify-content: space-between;
 }
+
 .create-btn { height: 28px; padding: 0 12px; font-size: 13px; }
 
 .mapping-list {
@@ -643,6 +966,7 @@ defineExpose({ open })
   padding: 12px;
   background: #fafafa;
 }
+
 .mapping-row {
   display: flex;
   gap: 12px;
@@ -654,15 +978,15 @@ defineExpose({ open })
   margin-bottom: 8px;
   transition: all 0.3s;
 }
+
 .mapping-row:hover {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
   border-color: #d9d9d9;
 }
+
 .mapping-row:last-child { margin-bottom: 0; }
-.mapping-row.system-field {
-  background: #f0f5ff;
-  border-color: #91caff;
-}
+.mapping-row.system-field { background: #f0f5ff; border-color: #91caff; }
+
 .system-tag {
   background: #1890ff;
   color: white;
@@ -682,6 +1006,7 @@ defineExpose({ open })
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
 .arrow { color: var(--ant-text-secondary); font-weight: bold; }
 .input-col { flex: 1; }
 .select-col { width: 140px; flex-shrink: 0; }
@@ -694,6 +1019,7 @@ defineExpose({ open })
   font-size: 14px;
   transition: color 0.3s;
 }
+
 .ant-btn-link.danger { color: #ff4d4f; }
 .ant-btn-link.danger:hover { color: #cf1322; }
 
@@ -707,7 +1033,7 @@ defineExpose({ open })
 .preview-table {
   border: 1px solid var(--ant-border-color);
   border-radius: 8px;
-  overflow: hidden;
+  overflow: auto;
 }
 
 .mapping-actions {
@@ -716,12 +1042,72 @@ defineExpose({ open })
 }
 
 .auto-filled-input {
-  background-color: #f6ffed !important; /* 浅绿色背景 */
-  border-color: #b7eb8f !important;      /* 浅绿色边框 */
+  background-color: #f6ffed !important;
+  border-color: #b7eb8f !important;
 }
 
 .mapping-row.is-auto {
-  border-left: 4px solid #52c41a; /* 绿色左边条 */
+  border-left: 4px solid #52c41a;
 }
 
+.template-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.summary-item {
+  padding: 10px 12px;
+  border: 1px solid #edf0f2;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.summary-item.warning {
+  border-color: #ffd591;
+  background: #fff7e6;
+}
+
+.summary-item--wide {
+  grid-column: span 2;
+}
+
+.summary-item span {
+  display: block;
+  color: #6b7280;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.summary-item strong {
+  color: #1f2937;
+  font-size: 14px;
+}
+
+.template-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+}
+
+@media (max-width: 860px) {
+  .import-config-modal {
+    width: calc(100vw - 24px);
+  }
+
+  .form-row,
+  .flex-label {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .template-summary,
+  .template-form {
+    grid-template-columns: 1fr;
+  }
+
+  .summary-item--wide {
+    grid-column: span 1;
+  }
+}
 </style>

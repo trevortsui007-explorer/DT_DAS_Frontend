@@ -3,19 +3,46 @@ import request from './request'
 
 // ====================== CONFIG ======================
 export const fetchConfigs = () => {
-  return request.get('/api/file-configs?all=true')
+  return request.get('/api/data-acquisition/file-configs?all=true')
 }
 
 export const fetchConfigById = (id) => {
-  return request.get(`/api/file-configs/${id}`)
+  return request.get(`/api/data-acquisition/file-configs/${id}`)
 }
 
 export const createConfig = (data) => {
-  return request.post('/api/file-configs', data)
+  return request.post('/api/data-acquisition/file-configs', data)
 }
 
 export const updateConfig = (id, data) => {
-  return request.put(`/api/file-configs/${id}`, data)
+  return request.put(`/api/data-acquisition/file-configs/${id}`, data)
+}
+
+// ====================== IMPORT TEMPLATE ======================
+export const fetchImportTemplates = () => {
+  return request.get('/api/data-acquisition/import-templates')
+}
+
+export const fetchImportTemplateById = (id) => {
+  return request.get(`/api/data-acquisition/import-templates/${id}`)
+}
+
+export const createImportTemplate = (data) => {
+  return request.post('/api/data-acquisition/import-templates', data)
+}
+
+export const updateImportTemplate = (id, data) => {
+  return request.put(`/api/data-acquisition/import-templates/${id}`, data)
+}
+
+export const previewImportTemplate = (data) => {
+  return request.post('/api/data-acquisition/import-templates/preview', data, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
+
+export const importTaskTemplate = (data) => {
+  return request.post('/api/data-acquisition/import-task-template', data)
 }
 
 // 启用/禁用配置（FormData）
@@ -24,30 +51,30 @@ export const setConfigStatus = (ids, isEnabled) => {
   formData.append('ids', ids)
   formData.append('isEnabled', isEnabled)
 
-  return request.patch('/api/file-configs/status', formData, {
+  return request.patch('/api/data-acquisition/file-configs/status', formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
   })
 }
 
 // ====================== GROUP ======================
 export const fetchGroups = () => {
-  return request.get('/api/file-configs/group')
+  return request.get('/api/data-acquisition/file-configs/group')
 }
 
 export const fetchGroupById = (id) => {
-  return request.get(`/api/file-configs/group/${id}`)
+  return request.get(`/api/data-acquisition/file-configs/group/${id}`)
 }
 
 export const createGroup = (data) => {
-  return request.post('/api/file-configs/group', data)
+  return request.post('/api/data-acquisition/file-configs/group', data)
 }
 
 export const updateGroup = (id, data) => {
-  return request.put(`/api/file-configs/group/${id}`, data)
+  return request.put(`/api/data-acquisition/file-configs/group/${id}`, data)
 }
 
 export const deleteGroup = (id) => {
-  return request.delete(`/api/file-configs/group/${id}`)
+  return request.delete(`/api/data-acquisition/file-configs/group/${id}`)
 }
 
 // group status
@@ -62,7 +89,7 @@ export const setGroupStatus = (ids, isEnabled) => {
 
   params.append('isEnabled', isEnabled)
 
-  return request.patch('/api/file-configs/group/status', null, {
+  return request.patch('/api/data-acquisition/file-configs/group/status', null, {
     params
   })
 }
@@ -73,7 +100,7 @@ export const bindConfigsToGroup = (groupId, ids) => {
   ids.forEach(id => params.append('ids', id));
 
   return request.post(
-    `/api/file-configs/group/${groupId}/configs`,
+    `/api/data-acquisition/file-configs/group/${groupId}/configs`,
     null,
     { params }
   )
@@ -84,7 +111,7 @@ export const removeConfigsFromGroup = (groupId, ids) => {
   ids.forEach(id => params.append('ids', id))
 
   return request.delete(
-    `/api/file-configs/group/${groupId}/configs`,
+    `/api/data-acquisition/file-configs/group/${groupId}/configs`,
     { params }
   )
 }
@@ -155,23 +182,23 @@ export const assignTaskGroups = (taskId, ids) => {
 
 // ====================== FILE ======================
 export const listFiles = (params) => {
-  return request.get('/api/files/list', { params })
+  return request.get('/api/data-acquisition/files/list', { params })
 }
 
 export const checkFileExists = (path) => {
-  return request.get('/api/files/exists', {
+  return request.get('/api/data-acquisition/files/exists', {
     params: { path }
   })
 }
 
 export const previewFile = (path, top = 10) => {
-  return request.get('/api/files/preview', {
+  return request.get('/api/data-acquisition/files/preview', {
     params: { path, top }
   })
 }
 
 export const downloadFile = (path, user, pass) => {
-  return request.get('/api/files/download', {
+  return request.get('/api/data-acquisition/files/download', {
     params: { path, user, pass },
     responseType: 'blob'
   })
@@ -207,8 +234,14 @@ export const fetchTaskLogStatus = (taskLogId) => {
   return request.get(`/api/data-acquisition/execution/${taskLogId}/status`)
 }
 
-export const fetchTaskLogDetails = (taskLogId) => {
-  return request.get(`/api/data-acquisition/execution/${taskLogId}/details`)
+export const fetchTaskLogDetails = (taskLogId, params = {}) => {
+  return request.get(`/api/data-acquisition/execution/${taskLogId}/details`, {
+    params: {
+      pageNo: params.pageNo ?? undefined,
+      pageSize: params.pageSize ?? undefined,
+      status: params.status ?? undefined
+    }
+  })
 }
 
 export const fetchExecutionStatus = (taskLogId) => fetchTaskLogStatus(taskLogId)
@@ -334,21 +367,21 @@ export const executeSproc = (sproc) => {
 
 // 检查表是否存在
 export const checkTableExists = (tableName) => {
-  return request.get('/api/table/check', {
+  return request.get('/api/data-acquisition/table/check', {
     params: { tableName }
   })
 }
 
 // 获取表结构
 export const getTableSchema = (tableName) => {
-  return request.get('/api/table/schema', {
+  return request.get('/api/data-acquisition/table/schema', {
     params: { tableName }
   })
 }
 
 // 创建表
 export const createTable = (tableName, columns) => {
-  return request.post('/api/table/create', {
+  return request.post('/api/data-acquisition/table/create', {
     tableName,
     columns
   })
@@ -358,7 +391,7 @@ export const createTable = (tableName, columns) => {
 // ====================== 数据源探测 ======================
 
 export const fetchInspection = ({ configId, startTime, endTime, user, pass }) => {
-  return request.get('/api/files/discovery', {
+  return request.get('/api/data-acquisition/files/discovery', {
     params: {
       configId,
       startTime,
@@ -370,13 +403,31 @@ export const fetchInspection = ({ configId, startTime, endTime, user, pass }) =>
 }
 
 export const fetchGroupInspection = ({ groupId, date, user, pass }) => {
-  return request.get('/api/files/group-discovery', {
+  return request.get('/api/data-acquisition/files/group-discovery', {
     params: {
       groupId,
       date,
       user,
       pass
     }
+  })
+}
+
+// ====================== SMB MAINTENANCE ======================
+export const fetchSmbConnections = () => {
+  return request.get('/api/data-acquisition/smb-connections')
+}
+
+export const disconnectSmbServer = ({ server, force = true }) => {
+  return request.post('/api/data-acquisition/smb-connections/disconnect-server', {
+    server,
+    force
+  })
+}
+
+export const disconnectAllSmbConnections = (force = true) => {
+  return request.post('/api/data-acquisition/smb-connections/disconnect-all', {
+    force
   })
 }
 

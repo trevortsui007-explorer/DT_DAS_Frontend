@@ -78,6 +78,10 @@
               <span class="card-field-value">{{ getConfigField(config, 'FileNamePattern', 'fileNamePattern') }}</span>
             </p>
             <p class="card-field">
+              <strong>入库表名：</strong>
+              <span class="card-field-value">{{ getConfigField(config, 'TableName', 'tableName') }}</span>
+            </p>
+            <p class="card-field">
               <strong>类型：</strong>
               <span class="ant-tag">{{ getConfigField(config, 'FileType', 'fileType') }}</span>
             </p>

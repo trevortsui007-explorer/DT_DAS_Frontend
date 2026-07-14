@@ -60,7 +60,7 @@
               </div>
 
               <div class="form-item">
-                <label class="label-with-help">
+                <label class="label-with-help template-label-row">
                   文件名规则
                   <HelpTooltip text="规则名为空，则采集这个文件夹的内容" />
                 </label>
@@ -87,6 +87,135 @@
                   <option value=".xlsx">.xlsx</option>
                   <option value=".txt">.txt</option>
                 </select>
+              </div>
+
+              <div class="form-item">
+                <label>解析方式 (ParserType)</label>
+                <select class="ant-input" v-model="formData.parserType" @change="handleParserTypeChange">
+                  <option value="standard-table">普通表格</option>
+                  <option value="template-excel">固定模板</option>
+                </select>
+              </div>
+
+              <div v-if="isTemplateParser" class="form-item">
+                <label class="label-with-help">
+                  导入模板
+                  <HelpTooltip text="按模板名称选择，保存时自动映射为模板 ID" />
+                  <button
+                    type="button"
+                    class="template-view-btn"
+                    :disabled="!formData.templateId"
+                    @click="openSelectedTemplate"
+                  >
+                    查看Excel模板
+                  </button>
+                </label>
+                <select
+                  v-if="!templateLoadFailed && templateOptions.length"
+                  class="ant-input"
+                  v-model="formData.templateId"
+                  :disabled="templateLoading"
+                >
+                  <option v-if="templateLoading" value="">模板加载中...</option>
+                  <option
+                    v-for="tpl in templateOptions"
+                    :key="getTemplateId(tpl)"
+                    :value="getTemplateId(tpl)"
+                  >
+                    {{ getTemplateLabel(tpl) }}
+                  </option>
+                </select>
+                <div v-else-if="templateLoading" class="template-state">模板加载中...</div>
+                <div v-else class="template-state template-state--error">
+                  <span>模板列表加载失败，请重新加载。</span>
+                  <button type="button" class="template-retry-btn" @click="loadImportTemplates(true)">
+                    重新加载
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="folder-scan-card">
+              <div class="folder-scan-card__header">
+                <div>
+                  <div class="folder-scan-card__title">文件夹扫描设置</div>
+                  <div class="folder-scan-card__hint">
+                    文件名规则为空时生效；填写具体文件名时仍按单文件模式采集。
+                  </div>
+                </div>
+                <label class="switch-row folder-scan-switch">
+                  <input type="checkbox" v-model="formData.folderRecursive" />
+                  <span>扫描子文件夹</span>
+                </label>
+              </div>
+
+              <div class="folder-scan-card__body">
+                <div class="form-item">
+                  <label class="label-with-help">
+                    最大递归层级
+                    <HelpTooltip text="0 表示不限制；1 表示只扫描当前文件夹的下一层子文件夹" />
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    class="ant-input"
+                    v-model="formData.folderMaxDepth"
+                    :disabled="!formData.folderRecursive"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div class="file-access-card">
+              <div class="file-access-card__header">
+                <div>
+                  <div class="file-access-card__title">访问凭据</div>
+                  <div class="file-access-card__hint">
+                    用于 FTP 或受密码保护的共享目录；密码保存后不会回显。
+                  </div>
+                </div>
+                <span v-if="formData.accessPasswordSet" class="password-state">已保存密码</span>
+              </div>
+
+              <div class="file-access-grid">
+                <div class="form-item">
+                  <label>Domain</label>
+                  <input
+                    type="text"
+                    class="ant-input"
+                    v-model.trim="formData.accessDomain"
+                    placeholder="例如: DELTON"
+                  />
+                </div>
+                <div class="form-item">
+                  <label>UserName</label>
+                  <input
+                    type="text"
+                    class="ant-input"
+                    v-model.trim="formData.accessUserName"
+                    placeholder="共享目录或 FTP 用户名"
+                  />
+                </div>
+                <div class="form-item">
+                  <label>Password</label>
+                  <input
+                    type="password"
+                    class="ant-input"
+                    v-model="formData.accessPassword"
+                    :placeholder="formData.accessPasswordSet ? '不修改则留空' : '请输入密码'"
+                    autocomplete="new-password"
+                  />
+                </div>
+                <div class="file-access-actions">
+                  <button
+                    v-if="formData.accessPasswordSet"
+                    type="button"
+                    class="file-access-clear-btn"
+                    @click="clearSavedAccessPassword"
+                  >
+                    清除已保存密码
+                  </button>
+                </div>
               </div>
             </div>
           </section>
@@ -122,14 +251,139 @@
                 扩展字段 (ExtFields)
                 <HelpTooltip text="扩展字段为非文件内字段" />
               </label>
-              <input
-                type="text"
-                class="ant-input"
-                :class="{ 'auto-filled-input': isAuto('ExtFields') }"
-                v-model="formData.extFields"
-                placeholder="例如: row, fullFilePath"
-                @input="autoMarkers.ExtFields = false"
-              />
+              <div class="ext-fields-editor" :class="{ 'auto-filled-input': isAuto('ExtFields') }">
+                <div class="ext-fields-presets">
+                  <button
+                    v-for="preset in EXT_FIELD_PRESETS"
+                    :key="preset"
+                    type="button"
+                    class="ext-field-preset"
+                    @click="addExtFieldTag(preset)"
+                  >
+                    + {{ preset }}
+                  </button>
+                </div>
+                <div class="ext-field-tags">
+                  <span
+                    v-for="tag in extFieldTags"
+                    :key="tag"
+                    class="ext-field-tag"
+                    :class="isSupportedExtField(tag) ? 'ext-field-tag--supported' : 'ext-field-tag--unsupported'"
+                  >
+                    {{ tag }}
+                    <button type="button" @click="removeExtFieldTag(tag)">×</button>
+                  </span>
+                  <span v-if="!extFieldTags.length" class="ext-field-empty">未选择扩展字段</span>
+                </div>
+                <input
+                  type="text"
+                  class="ant-input ext-field-input"
+                  v-model="extFieldInput"
+                  placeholder="输入后按 Enter，可用逗号一次添加多个"
+                  @keydown.enter.prevent="commitExtFieldInput"
+                  @input="handleExtFieldInput"
+                  @blur="commitExtFieldInput"
+                />
+              </div>
+            </div>
+
+            <div class="metadata-fields-card">
+              <div class="metadata-fields-card__header">
+                <div>
+                  <div class="metadata-fields-card__title">系统字段与固定值</div>
+                  <div class="metadata-fields-card__hint">
+                    写入每条采集数据；字段名填写目标业务表字段。
+                  </div>
+                </div>
+              </div>
+
+              <div class="system-field-grid">
+                <label class="system-field-row">
+                  <input type="checkbox" v-model="formData.fileLastWriteTimeEnabled" />
+                  <span>文件修改时间</span>
+                  <input
+                    class="ant-input"
+                    v-model.trim="formData.fileLastWriteTimeField"
+                    :disabled="!formData.fileLastWriteTimeEnabled"
+                    placeholder="FileLastWriteTime"
+                  />
+                </label>
+                <label class="system-field-row">
+                  <input type="checkbox" v-model="formData.fileSizeEnabled" />
+                  <span>文件大小</span>
+                  <input
+                    class="ant-input"
+                    v-model.trim="formData.fileSizeField"
+                    :disabled="!formData.fileSizeEnabled"
+                    placeholder="FileSize"
+                  />
+                </label>
+              </div>
+
+              <div class="fixed-field-table">
+                <div class="fixed-field-table__head">
+                  <span>入库字段</span>
+                  <span>固定值</span>
+                  <span>操作</span>
+                </div>
+                <div
+                  v-for="(row, index) in fixedFieldRows"
+                  :key="row.key"
+                  class="fixed-field-table__row"
+                >
+                  <input
+                    class="ant-input"
+                    v-model.trim="row.field"
+                    placeholder="例如: ShiftType"
+                  />
+                  <input
+                    class="ant-input"
+                    v-model="row.value"
+                    placeholder="例如: 日班"
+                  />
+                  <button
+                    type="button"
+                    class="mapping-remove-btn"
+                    @click="removeFixedFieldRow(index)"
+                  >
+                    删除
+                  </button>
+                </div>
+                <button type="button" class="mapping-add-btn" @click="addFixedFieldRow">
+                  + 新增固定字段
+                </button>
+              </div>
+            </div>
+
+            <div class="acquisition-mode-card">
+              <div class="acquisition-mode-card__header">
+                <div>
+                  <div class="acquisition-mode-card__title">采集模式</div>
+                  <div class="acquisition-mode-card__hint">
+                    增量采集保持断点续传；全量覆盖会在文件变化时先删除旧数据再重新入库。
+                  </div>
+                </div>
+              </div>
+              <div class="mode-radio-row">
+                <label>
+                  <input type="radio" value="incremental" v-model="formData.acquisitionMode" />
+                  <span>增量采集</span>
+                </label>
+                <label>
+                  <input type="radio" value="full-reload" v-model="formData.acquisitionMode" />
+                  <span>全量覆盖</span>
+                </label>
+              </div>
+              <div v-if="formData.acquisitionMode === 'full-reload'" class="reload-condition-grid">
+                <label class="switch-row">
+                  <input type="checkbox" v-model="formData.fullReloadWhenLastWriteTimeChanged" />
+                  <span>文件修改时间变化时覆盖</span>
+                </label>
+                <label class="switch-row">
+                  <input type="checkbox" v-model="formData.fullReloadWhenFileSizeChanged" />
+                  <span>文件大小变化时覆盖</span>
+                </label>
+              </div>
             </div>
 
             <div class="form-item mapping-form-item">
@@ -331,7 +585,7 @@ import * as api from '@/api'
 import message from '@/components/index.js'
 import HelpTooltip from './HelpTooltip.vue'
 
-const emit = defineEmits(['saved', 'goBack'])
+const emit = defineEmits(['saved', 'goBack', 'open-template-manager'])
 
 const visible = ref(false)
 const isEdit = ref(false)
@@ -342,6 +596,9 @@ const jsonPreviewVisible = ref(false)
 const fieldMappingJsonText = ref('{}')
 const jsonImportVisible = ref(false)
 const jsonImportText = ref('')
+const importTemplates = ref([])
+const templateLoading = ref(false)
+const templateLoadFailed = ref(false)
 
 const formData = ref({
   id: '',
@@ -361,11 +618,48 @@ const formData = ref({
   isEnabled: true,
   extFields: '',
   fieldMappings: '',
+  parserType: 'standard-table',
+  templateId: null,
+  parserOptions: '',
+  folderRecursive: false,
+  folderMaxDepth: 5,
+  fileLastWriteTimeEnabled: false,
+  fileLastWriteTimeField: 'FileLastWriteTime',
+  fileSizeEnabled: false,
+  fileSizeField: 'FileSize',
+  acquisitionMode: 'incremental',
+  fullReloadWhenLastWriteTimeChanged: true,
+  fullReloadWhenFileSizeChanged: true,
+  accessDomain: '',
+  accessUserName: '',
+  accessPassword: '',
+  accessPasswordSet: false,
+  accessClearPassword: false,
 })
 
 const autoMarkers = ref({})
 const fieldMappingRows = ref([])
+const fixedFieldRows = ref([])
+const extFieldTags = ref([])
+const extFieldInput = ref('')
 let mappingRowSeed = 0
+let fixedFieldRowSeed = 0
+
+const EXT_FIELD_PRESETS = [
+  'Id(Guid)',
+  'Id(雪花算法)',
+  'row',
+  'SourceRow',
+  'filename',
+  'FileName',
+  'excelname',
+  'fullfilepath',
+  'FullFilePath',
+  'CreateDt',
+  'RowData(str)',
+]
+
+const SUPPORTED_EXT_FIELD_KEYS = new Set(['row', 'sourcerow', 'filename', 'excelname', 'fullfilepath', 'createdt'])
 
 const postTypes = [
   { value: 0, label: '无操作' },
@@ -379,6 +673,8 @@ const modalTitle = computed(() => {
   if (modalMode.value === 'copy') return '复制配置项'
   return '新增配置项'
 })
+
+const isTemplateParser = computed(() => formData.value.parserType === 'template-excel')
 
 const normalizeFileType = (value) => {
   const fileType = String(value || '').trim().toLowerCase()
@@ -417,6 +713,357 @@ const handleFileTypeChange = () => {
   autoMarkers.value.FileType = false
   formData.value.fileType = normalizeFileType(formData.value.fileType)
   normalizeFileNamePattern()
+}
+
+const normalizeExtFieldKey = (value) =>
+  String(value || '')
+    .trim()
+    .replace(/[_-]/g, '')
+    .toLowerCase()
+
+const parseExtFields = (value) =>
+  String(value || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+
+const isSupportedExtField = (tag) => {
+  const text = String(tag || '').trim()
+  if (/^Id\((Guid|Snowflake|雪花算法)\)$/i.test(text)) return true
+  if (/^RowData\([A-Za-z_][A-Za-z0-9_]*\)$/i.test(text)) return true
+  return SUPPORTED_EXT_FIELD_KEYS.has(normalizeExtFieldKey(text))
+}
+
+const syncExtFieldsFromTags = () => {
+  formData.value.extFields = extFieldTags.value.join(', ')
+}
+
+const setExtFieldTagsFromString = (value) => {
+  const seen = new Set()
+  extFieldTags.value = parseExtFields(value).filter((tag) => {
+    const key = tag.toLowerCase()
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+  syncExtFieldsFromTags()
+}
+
+const addExtFieldTag = (value) => {
+  const tags = parseExtFields(value)
+  if (!tags.length) return
+
+  const existing = new Set(extFieldTags.value.map((tag) => tag.toLowerCase()))
+  tags.forEach((tag) => {
+    const key = tag.toLowerCase()
+    if (existing.has(key)) return
+    extFieldTags.value.push(tag)
+    existing.add(key)
+  })
+  syncExtFieldsFromTags()
+  autoMarkers.value.ExtFields = false
+}
+
+const removeExtFieldTag = (tag) => {
+  extFieldTags.value = extFieldTags.value.filter((item) => item !== tag)
+  syncExtFieldsFromTags()
+  autoMarkers.value.ExtFields = false
+}
+
+const commitExtFieldInput = () => {
+  addExtFieldTag(extFieldInput.value)
+  extFieldInput.value = ''
+}
+
+const handleExtFieldInput = () => {
+  if (!extFieldInput.value.includes(',')) return
+  commitExtFieldInput()
+}
+
+const normalizeTemplateList = (result) => {
+  const data = result?.data ?? result
+  if (Array.isArray(data)) return data
+  if (Array.isArray(data?.list)) return data.list
+  if (Array.isArray(data?.List)) return data.List
+  return []
+}
+
+const getTemplateId = (template) => template?.id ?? template?.Id
+
+const isTemplateEnabled = (template) => {
+  const enabled = template?.isEnabled ?? template?.IsEnabled ?? true
+  return enabled !== false
+}
+
+const getTemplateLabel = (template) => {
+  if (template?.isUnknown) return `未知模板（ID: ${getTemplateId(template)}）`
+  const name = template?.templateName || template?.TemplateName || template?.templateCode || template?.TemplateCode
+  const version = template?.templateVersion ?? template?.TemplateVersion
+  return version ? `${name} v${version}` : name
+}
+
+const templateOptions = computed(() => {
+  const options = importTemplates.value.filter(isTemplateEnabled)
+  const selectedId = formData.value.templateId
+
+  if (!selectedId) return options
+
+  const hasSelected = options.some((tpl) => String(getTemplateId(tpl)) === String(selectedId))
+  if (hasSelected) return options
+
+  return [
+    {
+      id: selectedId,
+      templateName: `未知模板（ID: ${selectedId}）`,
+      isUnknown: true,
+    },
+    ...options,
+  ]
+})
+
+const ensureDefaultTemplate = () => {
+  if (!isTemplateParser.value || formData.value.templateId) return
+
+  const firstTemplate = importTemplates.value.find(isTemplateEnabled)
+
+  if (firstTemplate) {
+    formData.value.templateId = getTemplateId(firstTemplate)
+  }
+}
+
+const openSelectedTemplate = () => {
+  if (!formData.value.templateId) return
+  emit('open-template-manager', formData.value.templateId)
+}
+
+const loadImportTemplates = async (force = false) => {
+  if (templateLoading.value) return
+  if (!force && importTemplates.value.length) {
+    ensureDefaultTemplate()
+    return
+  }
+
+  templateLoading.value = true
+  templateLoadFailed.value = false
+
+  try {
+    const result = await api.fetchImportTemplates()
+    importTemplates.value = normalizeTemplateList(result)
+    ensureDefaultTemplate()
+  } catch (err) {
+    console.error('加载导入模板失败:', err)
+    templateLoadFailed.value = true
+  } finally {
+    templateLoading.value = false
+  }
+}
+
+const handleParserTypeChange = () => {
+  if (!isTemplateParser.value) {
+    formData.value.templateId = null
+    return
+  }
+
+  loadImportTemplates()
+}
+
+const parseParserOptionsObject = (value) => {
+  if (!value) return {}
+  if (typeof value === 'object' && !Array.isArray(value)) return { ...value }
+  if (typeof value !== 'string') return {}
+
+  try {
+    const parsed = JSON.parse(value)
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+const readFolderScanOptions = (value) => {
+  const options = parseParserOptionsObject(value)
+  const folderScan = options.folderScan || options.FolderScan || {}
+  const rawMaxDepth = folderScan.maxDepth ?? folderScan.MaxDepth
+  return {
+    recursive: !!folderScan.recursive || !!folderScan.Recursive,
+    maxDepth: rawMaxDepth === 0 || rawMaxDepth === '0' ? 0 : Number(rawMaxDepth ?? 5) || 5,
+  }
+}
+
+const readSystemFieldOptions = (value) => {
+  const options = parseParserOptionsObject(value)
+  const systemFields = options.systemFields || options.SystemFields || {}
+  const fileLastWriteTime = systemFields.fileLastWriteTime || systemFields.FileLastWriteTime || ''
+  const fileSize = systemFields.fileSize || systemFields.FileSize || ''
+
+  return {
+    fileLastWriteTimeEnabled: !!fileLastWriteTime,
+    fileLastWriteTimeField: fileLastWriteTime || 'FileLastWriteTime',
+    fileSizeEnabled: !!fileSize,
+    fileSizeField: fileSize || 'FileSize',
+  }
+}
+
+const toBooleanOption = (value, fallback = false) => {
+  if (value === undefined || value === null) return fallback
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'number') return value !== 0
+  const text = String(value).trim().toLowerCase()
+  if (text === 'true' || text === '1' || text === 'yes') return true
+  if (text === 'false' || text === '0' || text === 'no') return false
+  return fallback
+}
+
+const readAcquisitionModeOptions = (value) => {
+  const options = parseParserOptionsObject(value)
+  const acquisitionMode = options.acquisitionMode || options.AcquisitionMode || {}
+  const mode = acquisitionMode.mode || acquisitionMode.Mode || 'incremental'
+  const reloadByWriteTime =
+    acquisitionMode.fullReloadWhenLastWriteTimeChanged ??
+    acquisitionMode.FullReloadWhenLastWriteTimeChanged
+  const reloadBySize =
+    acquisitionMode.fullReloadWhenFileSizeChanged ??
+    acquisitionMode.FullReloadWhenFileSizeChanged
+
+  return {
+    acquisitionMode: mode === 'full-reload' ? 'full-reload' : 'incremental',
+    fullReloadWhenLastWriteTimeChanged: toBooleanOption(reloadByWriteTime, true),
+    fullReloadWhenFileSizeChanged: toBooleanOption(reloadBySize, true),
+  }
+}
+
+const readFileAccessOptions = (value) => {
+  const options = parseParserOptionsObject(value)
+  const fileAccess = options.fileAccess || options.FileAccess || {}
+  const passwordProtected = fileAccess.passwordProtected || fileAccess.PasswordProtected || ''
+  const passwordSet = fileAccess.passwordSet ?? fileAccess.PasswordSet
+
+  return {
+    accessDomain: fileAccess.domain || fileAccess.Domain || '',
+    accessUserName: fileAccess.userName || fileAccess.UserName || '',
+    accessPassword: '',
+    accessPasswordSet: toBooleanOption(passwordSet, !!passwordProtected),
+    accessClearPassword: false,
+  }
+}
+
+const createFixedFieldRow = (field = '', value = '') => {
+  fixedFieldRowSeed += 1
+  return {
+    key: `fixed-field-${fixedFieldRowSeed}`,
+    field,
+    value,
+  }
+}
+
+const parseFixedFieldsToRows = (value) => {
+  const options = parseParserOptionsObject(value)
+  const fixedFields = options.fixedFields || options.FixedFields || {}
+  const rows = Object.entries(fixedFields)
+    .filter(([field]) => String(field || '').trim())
+    .map(([field, fieldValue]) => createFixedFieldRow(field, fieldValue ?? ''))
+
+  return rows.length ? rows : [createFixedFieldRow()]
+}
+
+const buildFixedFieldsObject = () => {
+  const result = {}
+  fixedFieldRows.value.forEach((row) => {
+    const field = String(row.field || '').trim()
+    if (!field) return
+    result[field] = row.value ?? ''
+  })
+  return result
+}
+
+const buildParserOptions = () => {
+  const options = parseParserOptionsObject(formData.value.parserOptions)
+  const hadFolderScan = !!(options.folderScan || options.FolderScan)
+  delete options.FolderScan
+  delete options.SystemFields
+  delete options.FixedFields
+  delete options.AcquisitionMode
+  delete options.FileAccess
+
+  if (formData.value.folderRecursive || hadFolderScan) {
+    options.folderScan = {
+      recursive: !!formData.value.folderRecursive,
+      maxDepth: Math.max(Number(formData.value.folderMaxDepth) || 0, 0),
+      includeCurrentFolder: true,
+    }
+  }
+
+  const systemFields = {}
+  if (formData.value.fileLastWriteTimeEnabled && formData.value.fileLastWriteTimeField) {
+    systemFields.fileLastWriteTime = formData.value.fileLastWriteTimeField
+  }
+  if (formData.value.fileSizeEnabled && formData.value.fileSizeField) {
+    systemFields.fileSize = formData.value.fileSizeField
+  }
+
+  if (Object.keys(systemFields).length) {
+    options.systemFields = systemFields
+  } else {
+    delete options.systemFields
+  }
+
+  const fixedFields = buildFixedFieldsObject()
+  if (Object.keys(fixedFields).length) {
+    options.fixedFields = fixedFields
+  } else {
+    delete options.fixedFields
+  }
+
+  if (formData.value.acquisitionMode === 'full-reload') {
+    options.acquisitionMode = {
+      mode: 'full-reload',
+      fullReloadWhenLastWriteTimeChanged: !!formData.value.fullReloadWhenLastWriteTimeChanged,
+      fullReloadWhenFileSizeChanged: !!formData.value.fullReloadWhenFileSizeChanged,
+      deleteKey: 'fullPathFirst',
+    }
+  } else {
+    delete options.acquisitionMode
+  }
+
+  const existingFileAccess = options.fileAccess || {}
+  const fileAccess = {
+    ...existingFileAccess,
+    domain: String(formData.value.accessDomain || '').trim(),
+    userName: String(formData.value.accessUserName || '').trim(),
+  }
+
+  if (formData.value.accessPassword) {
+    fileAccess.passwordPlain = formData.value.accessPassword
+    fileAccess.passwordSet = true
+    delete fileAccess.passwordProtected
+    delete fileAccess.clearPassword
+  } else if (formData.value.accessClearPassword) {
+    fileAccess.clearPassword = true
+    delete fileAccess.passwordProtected
+    delete fileAccess.passwordSet
+    delete fileAccess.passwordPlain
+  } else {
+    delete fileAccess.passwordPlain
+    delete fileAccess.clearPassword
+    if (fileAccess.passwordProtected) {
+      fileAccess.passwordSet = true
+    }
+  }
+
+  const hasFileAccess =
+    !!fileAccess.domain ||
+    !!fileAccess.userName ||
+    !!fileAccess.passwordPlain ||
+    !!fileAccess.passwordProtected ||
+    !!fileAccess.clearPassword
+
+  if (hasFileAccess) {
+    options.fileAccess = fileAccess
+  } else {
+    delete options.fileAccess
+  }
+
+  return Object.keys(options).length ? JSON.stringify(options) : ''
 }
 
 const createMappingRow = (source = '', target = '') => {
@@ -505,6 +1152,17 @@ const removeMappingRow = (index) => {
   }
 }
 
+const addFixedFieldRow = () => {
+  fixedFieldRows.value.push(createFixedFieldRow())
+}
+
+const removeFixedFieldRow = (index) => {
+  fixedFieldRows.value.splice(index, 1)
+  if (!fixedFieldRows.value.length) {
+    fixedFieldRows.value.push(createFixedFieldRow())
+  }
+}
+
 const mergeMappingRows = (mappingObject) => {
   const merged = new Map()
 
@@ -544,30 +1202,15 @@ const pillStyle = computed(() => {
 watch(
   () => formData.value.postProcessingType,
   (newVal) => {
-    // 将当前的扩展字段转为数组处理，去除空格并过滤掉空值
-    let fields = formData.value.extFields
-      ? formData.value.extFields
-          .split(',')
-          .map((f) => f.trim())
-          .filter((f) => f)
-      : []
-
     const targetField = 'IsProcessed'
 
     if (newVal !== 0) {
-      // 切换到非 0 (C#服务或存储过程): 如果没有 IsProcessed，则添加
-      if (!fields.includes(targetField)) {
-        fields.push(targetField)
-      }
+      addExtFieldTag(targetField)
     } else {
-      // 切换到 0 (无操作): 如果有 IsProcessed，则移除
-      fields = fields.filter((f) => f !== targetField)
+      extFieldTags.value = extFieldTags.value.filter((f) => f !== targetField)
+      syncExtFieldsFromTags()
     }
 
-    // 重新拼回字符串，并更新标记让它也变绿（如果是自动新增的话）
-    formData.value.extFields = fields.join(', ')
-
-    // 如果是由于切换导致的变动，我们可以视其为一种“自动填充”
     if (newVal !== 0) {
       autoMarkers.value.ExtFields = true
     }
@@ -589,6 +1232,14 @@ function open(edit = false, data = null, fromImport = false, options = {}) {
       typeof (data.fieldMappings || data.FieldMappings) === 'object'
         ? JSON.stringify(data.fieldMappings || data.FieldMappings, null, 2)
         : data.fieldMappings || data.FieldMappings || ''
+    const rawParserOptions =
+      typeof (data.parserOptions || data.ParserOptions) === 'object'
+        ? JSON.stringify(data.parserOptions || data.ParserOptions)
+        : data.parserOptions || data.ParserOptions || ''
+    const folderScan = readFolderScanOptions(rawParserOptions)
+    const systemFields = readSystemFieldOptions(rawParserOptions)
+    const acquisitionMode = readAcquisitionModeOptions(rawParserOptions)
+    const fileAccess = readFileAccessOptions(rawParserOptions)
 
     formData.value = {
       id: data.id || data.Id || '',
@@ -608,9 +1259,31 @@ function open(edit = false, data = null, fromImport = false, options = {}) {
       isEnabled: data.isEnabled ?? data.IsEnabled ?? true,
       extFields: data.extFields || data.ExtFields || '',
       fieldMappings: rawFieldMappings,
+      parserType: data.parserType || data.ParserType || 'standard-table',
+      templateId: data.templateId ?? data.TemplateId ?? null,
+      parserOptions: rawParserOptions,
+      folderRecursive: folderScan.recursive,
+      folderMaxDepth: folderScan.maxDepth,
+      fileLastWriteTimeEnabled: systemFields.fileLastWriteTimeEnabled,
+      fileLastWriteTimeField: systemFields.fileLastWriteTimeField,
+      fileSizeEnabled: systemFields.fileSizeEnabled,
+      fileSizeField: systemFields.fileSizeField,
+      acquisitionMode: acquisitionMode.acquisitionMode,
+      fullReloadWhenLastWriteTimeChanged: acquisitionMode.fullReloadWhenLastWriteTimeChanged,
+      fullReloadWhenFileSizeChanged: acquisitionMode.fullReloadWhenFileSizeChanged,
+      accessDomain: fileAccess.accessDomain,
+      accessUserName: fileAccess.accessUserName,
+      accessPassword: fileAccess.accessPassword,
+      accessPasswordSet: fileAccess.accessPasswordSet,
+      accessClearPassword: fileAccess.accessClearPassword,
     }
 
+    setExtFieldTagsFromString(formData.value.extFields)
     fieldMappingRows.value = parseFieldMappingsToRows(rawFieldMappings)
+    fixedFieldRows.value = parseFixedFieldsToRows(rawParserOptions)
+    if (formData.value.parserType === 'template-excel') {
+      loadImportTemplates()
+    }
 
     // 如果是导入，才处理绿色高亮标记
     if (fromImport && data._autoFilledFields) {
@@ -652,8 +1325,34 @@ const resetForm = () => {
     isEnabled: true,
     extFields: '',
     fieldMappings: '',
+    parserType: 'standard-table',
+    templateId: null,
+    parserOptions: '',
+    folderRecursive: false,
+    folderMaxDepth: 5,
+    fileLastWriteTimeEnabled: false,
+    fileLastWriteTimeField: 'FileLastWriteTime',
+    fileSizeEnabled: false,
+    fileSizeField: 'FileSize',
+    acquisitionMode: 'incremental',
+    fullReloadWhenLastWriteTimeChanged: true,
+    fullReloadWhenFileSizeChanged: true,
+    accessDomain: '',
+    accessUserName: '',
+    accessPassword: '',
+    accessPasswordSet: false,
+    accessClearPassword: false,
   }
   fieldMappingRows.value = [createMappingRow()]
+  fixedFieldRows.value = [createFixedFieldRow()]
+  extFieldTags.value = []
+  extFieldInput.value = ''
+}
+
+const clearSavedAccessPassword = () => {
+  formData.value.accessPassword = ''
+  formData.value.accessPasswordSet = false
+  formData.value.accessClearPassword = true
 }
 
 const getConfigId = (item) => item?.id ?? item?.Id ?? ''
@@ -755,9 +1454,16 @@ async function save() {
       return
     }
 
+    if (formData.value.parserType === 'template-excel' && !formData.value.templateId) {
+      message('请选择导入模板')
+      return
+    }
+
     // ================= 2. 构造 payload =================
     formData.value.fileType = normalizeFileType(formData.value.fileType)
     normalizeFileNamePattern()
+    commitExtFieldInput()
+    syncExtFieldsFromTags()
     syncFieldMappingsFromRows()
 
     const payload = {
@@ -773,6 +1479,9 @@ async function save() {
       ProcedureName: formData.value.procedureName,
       ExtFields: formData.value.extFields,
       FieldMappings: formData.value.fieldMappings,
+      ParserType: formData.value.parserType || 'standard-table',
+      TemplateId: formData.value.parserType === 'template-excel' ? formData.value.templateId : null,
+      ParserOptions: buildParserOptions(),
 
       PostTableName: formData.value.postTableName,
       ServiceName:
@@ -901,6 +1610,88 @@ defineExpose({ open })
   font-weight: 500;
 }
 
+.ext-fields-editor {
+  padding: 10px;
+  border: 1px solid #d9d9d9;
+  border-radius: 7px;
+  background: #fff;
+}
+
+.ext-fields-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.ext-field-preset {
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid #d9d9d9;
+  border-radius: 999px;
+  background: #fafafa;
+  color: #4b5563;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ext-field-preset:hover {
+  border-color: #52c41a;
+  color: #389e0d;
+  background: #f6ffed;
+}
+
+.ext-field-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 28px;
+  margin-bottom: 8px;
+}
+
+.ext-field-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ext-field-tag button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0;
+}
+
+.ext-field-tag--supported {
+  border: 1px solid #b7eb8f;
+  background: #f6ffed;
+  color: #389e0d;
+}
+
+.ext-field-tag--unsupported {
+  border: 1px solid #ffccc7;
+  background: #fff2f0;
+  color: #cf1322;
+}
+
+.ext-field-empty {
+  color: #9ca3af;
+  font-size: 12px;
+  line-height: 26px;
+}
+
+.ext-field-input {
+  width: 100%;
+}
+
 .label-row {
   display: flex;
   align-items: center;
@@ -936,6 +1727,125 @@ defineExpose({ open })
 
 .post-type-item {
   grid-column: 1 / -1;
+}
+
+.metadata-fields-card {
+  margin: 12px 0 14px;
+  padding: 12px;
+  border: 1px solid #dfe7f3;
+  border-radius: 8px;
+  background: #fbfdff;
+}
+
+.metadata-fields-card__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.metadata-fields-card__title {
+  color: #1f2937;
+  font-weight: 700;
+}
+
+.metadata-fields-card__hint {
+  margin-top: 3px;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.system-field-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.system-field-row {
+  display: grid;
+  grid-template-columns: 18px 92px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  color: #374151;
+  font-weight: 500;
+}
+
+.fixed-field-table {
+  border: 1px solid #edf0f2;
+  border-radius: 7px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.fixed-field-table__head,
+.fixed-field-table__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 68px;
+  gap: 8px;
+  align-items: center;
+}
+
+.fixed-field-table__head {
+  padding: 8px 10px;
+  background: #fafafa;
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.fixed-field-table__row {
+  padding: 8px 10px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.fixed-field-table__row .ant-input {
+  height: 32px;
+}
+
+.acquisition-mode-card {
+  margin: 12px 0 14px;
+  padding: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.acquisition-mode-card__header {
+  margin-bottom: 10px;
+}
+
+.acquisition-mode-card__title {
+  color: #1f2937;
+  font-weight: 700;
+}
+
+.acquisition-mode-card__hint {
+  margin-top: 3px;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.mode-radio-row,
+.reload-condition-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+}
+
+.mode-radio-row label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 30px;
+  color: #374151;
+  font-weight: 500;
+}
+
+.reload-condition-grid {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #f0f0f0;
 }
 
 .mapping-table {
@@ -1085,6 +1995,177 @@ defineExpose({ open })
   gap: 10px;
 }
 
+.folder-scan-card {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 7px;
+  background: #fbfcfd;
+}
+
+.folder-scan-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.folder-scan-card__title {
+  color: #1f2937;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.folder-scan-card__hint {
+  margin-top: 4px;
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.folder-scan-card__body {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px);
+  margin-top: 12px;
+}
+
+.file-access-card {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid #dfe7f3;
+  border-radius: 7px;
+  background: #fbfdff;
+}
+
+.file-access-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.file-access-card__title {
+  color: #1f2937;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.file-access-card__hint {
+  margin-top: 4px;
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.file-access-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) 120px;
+  gap: 12px;
+  align-items: end;
+}
+
+.file-access-actions {
+  display: flex;
+  align-items: flex-end;
+  min-height: 58px;
+}
+
+.file-access-clear-btn {
+  width: 100%;
+  height: 34px;
+  border: 1px solid #ffccc7;
+  border-radius: 7px;
+  background: #fff2f0;
+  color: #f5222d;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.file-access-clear-btn:hover {
+  border-color: #ff7875;
+  background: #fff1f0;
+}
+
+.password-state {
+  flex: 0 0 auto;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #f6ffed;
+  color: #389e0d;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+@media (max-width: 720px) {
+  .file-access-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .file-access-actions {
+    min-height: 0;
+  }
+}
+
+@media (max-width: 520px) {
+  .file-access-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.template-state {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid #d9d9d9;
+  border-radius: 7px;
+  background: #fafafa;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.template-state--error {
+  border-color: #ffd8bf;
+  background: #fff7e6;
+  color: #ad4e00;
+}
+
+.template-retry-btn {
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid #52c41a;
+  border-radius: 6px;
+  background: #fff;
+  color: #389e0d;
+  cursor: pointer;
+}
+
+.template-retry-btn:hover {
+  background: #f6ffed;
+}
+
+.folder-scan-switch {
+  flex: 0 0 auto;
+  margin-bottom: 0;
+}
+
+.switch-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  color: #374151;
+  font-size: 14px;
+}
+
+.switch-row input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
 .segmented-control {
   position: relative;
   display: flex;
@@ -1141,5 +2222,27 @@ defineExpose({ open })
   background-color: #ffffff !important;
   border-color: var(--ant-primary, #1677ff) !important;
   box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.2) !important;
+}
+.template-view-btn {
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #52c41a;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.template-label-row {
+  width: 100%;
+}
+
+.template-view-btn:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.template-view-btn:disabled {
+  color: #bfbfbf;
+  cursor: not-allowed;
 }
 </style>

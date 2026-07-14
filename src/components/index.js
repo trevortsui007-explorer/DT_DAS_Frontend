@@ -14,6 +14,7 @@ export { default as InspectionModal } from './InspectionModal.vue'
 export { default as GroupInspectionModal } from './GroupInspectionModal.vue'
 export { default as AcquisitionModal } from './AcquisitionModal.vue'
 export { default as ReportExportModal } from './ReportExportModal.vue'
+export { default as TemplateManagerModal } from './TemplateManagerModal.vue'
 export { default as TaskLogView } from './TaskLogView.vue'
 
 //封装bubble调用

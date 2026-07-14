@@ -17,9 +17,19 @@
           <input type="hidden" v-model="formData.id" />
 
           <!-- 基础信息 -->
-          <div class="form-item">
-            <label class="required">配置组名称</label>
-            <input class="ant-input" v-model="formData.groupName" />
+          <div class="form-grid top-form-grid">
+            <div class="form-item">
+              <label class="required">配置组名称</label>
+              <input class="ant-input" v-model="formData.groupName" />
+            </div>
+
+            <div class="form-item status-form-item">
+              <label>启用状态</label>
+              <label class="toggle-switch">
+                <input type="checkbox" v-model="formData.isEnabled" />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
           </div>
 
           <div class="form-item">
@@ -39,15 +49,6 @@
               v-model.trim="formData.exportProcedureName"
               placeholder="例如：Proc_Export_DailyReport"
             />
-          </div>
-
-          <!-- 状态 -->
-          <div class="form-item inline-flex">
-            <label>启用状态</label>
-            <label class="toggle-switch">
-              <input type="checkbox" v-model="formData.isEnabled" />
-              <span class="toggle-slider"></span>
-            </label>
           </div>
 
           <!-- 配置项选择 -->
@@ -336,6 +337,30 @@ defineExpose({ open })
 
 .form-item {
   margin-bottom: 18px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 190px;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.top-form-grid {
+  align-items: end;
+}
+
+.top-form-grid .form-item {
+  margin-bottom: 0;
+}
+
+.status-form-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.status-form-item .toggle-switch {
+  margin-top: 0;
 }
 
 .form-item label {

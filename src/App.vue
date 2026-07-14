@@ -105,10 +105,20 @@
     </div>
   </div>
 
-  <ConfigModal ref="configModalRef" @saved="onConfigSaved" @goBack="handleGoBackToImport" />
+  <ConfigModal
+    ref="configModalRef"
+    @saved="onConfigSaved"
+    @goBack="handleGoBackToImport"
+    @open-template-manager="openTemplateManager"
+  />
   <GroupModal ref="groupModalRef" @saved="onGroupSaved" />
   <TaskModal ref="taskModalRef" @saved="onTaskSaved" />
-  <ImportConfigModal ref="importConfigModalRef" @imported="handleImportSuccess" />
+  <ImportConfigModal
+    ref="importConfigModalRef"
+    @imported="handleImportSuccess"
+    @template-imported="handleTemplateImportSuccess"
+  />
+  <TemplateManagerModal ref="templateManagerModalRef" />
   <BatchAssignModal ref="assignModalRef" @confirm="handleAssignConfirm" />
   <InspectionModal
     ref="inspectionModalRef"
@@ -184,6 +194,7 @@ import message, {
   TaskModal, ImportConfigModal, BatchAssignModal,
   InspectionModal, GroupInspectionModal, AcquisitionModal,
   ReportExportModal,
+  TemplateManagerModal,
   TaskLogView,
 } from './components'
 
@@ -201,6 +212,7 @@ import {
   SelectOutlined,
   FieldTimeOutlined,
   LoginOutlined,
+  FileExcelOutlined,
 } from '@ant-design/icons-vue'
 
 import * as api from './api'
@@ -214,6 +226,7 @@ const drawerRef = ref(null)
 const groupModalRef = ref(null)
 const taskModalRef = ref(null)
 const importConfigModalRef = ref(null)
+const templateManagerModalRef = ref(null)
 const assignModalRef = ref(null)
 const inspectionModalRef = ref(null)
 const taskLogViewRef = ref(null)
@@ -639,9 +652,15 @@ const deleteConfig = () => console.log('删除配置')
 
 // 导入配置
 const importConfig = () => importConfigModalRef.value?.open(false)
+const openTemplateManager = (templateId) => templateManagerModalRef.value?.open(templateId)
 const handleImportSuccess = (data) => {
   message.success('导入成功，请继续确认配置')
   configModalRef.value?.open(false, data, true, { existingConfigs: configs.value })
+}
+const handleTemplateImportSuccess = async () => {
+  message.success('模板任务导入成功')
+  await loadAllData()
+  activeTab.value = 'task'
 }
 const handleGoBackToImport = () => importConfigModalRef.value?.open(true)
 
@@ -1084,6 +1103,7 @@ const BUTTON_CONFIG_MAP = {
   ],
   config: [
     [
+      { text: 'Excel模板', handler: openTemplateManager, btnType: 'blue', icon: FileExcelOutlined },
       { text: '导入配置', handler: importConfig, btnType: 'aqua', icon: CloudUploadOutlined },
       { text: '新增配置', handler: openNewConfig, btnType: 'primary', icon: PlusOutlined },
       { text: '复制配置', handler: copyConfig, btnType: 'orange', icon: CopyOutlined },
@@ -1112,6 +1132,9 @@ const BUTTON_CONFIG_MAP = {
 }
 
 const LIMITED_BUTTON_CONFIG_MAP = {
+  overview: [
+    { text: '刷新大盘', handler: loadAllData, btnType: 'primary', icon: ReloadOutlined, className: 'overview-refresh-btn' },
+  ],
   group:
   [
     { text: '报表导出', handler: exportReport, btnType: 'orange', icon: ExportOutlined, className: 'report-export-btn' },

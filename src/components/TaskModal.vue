@@ -11,14 +11,24 @@
         <div class="ant-modal-body scrollable-body">
           <input type="hidden" v-model="formData.id" />
 
-          <div class="form-item">
-            <label class="required">任务名称</label>
-            <input
-              type="text"
-              class="ant-input"
-              v-model="formData.taskName"
-              placeholder="请输入任务名称"
-            />
+          <div class="form-grid top-form-grid">
+            <div class="form-item">
+              <label class="required">任务名称</label>
+              <input
+                type="text"
+                class="ant-input"
+                v-model="formData.taskName"
+                placeholder="请输入任务名称"
+              />
+            </div>
+
+            <div class="form-item status-form-item">
+              <label>启用状态</label>
+              <label class="toggle-switch">
+                <input type="checkbox" v-model="formData.isEnabled" />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
           </div>
 
           <div class="form-item">
@@ -157,13 +167,6 @@
             </div>
           </div>
 
-          <div class="form-item inline-flex">
-            <label>立即启用</label>
-            <label class="toggle-switch">
-              <input type="checkbox" v-model="formData.isEnabled" />
-              <span class="toggle-slider"></span>
-            </label>
-          </div>
         </div>
 
         <div class="ant-modal-footer task-modal-footer">
@@ -478,6 +481,31 @@ defineExpose({ open })
 }
 
 .form-item { margin-bottom: 20px; }
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 190px;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.top-form-grid {
+  align-items: end;
+}
+
+.top-form-grid .form-item {
+  margin-bottom: 0;
+}
+
+.status-form-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.status-form-item .toggle-switch {
+  margin-top: 0;
+}
+
 .form-item label { display: block; margin-bottom: 8px; font-weight: 500; color: #333; }
 .form-item label.required::before { content: '*'; color: #ff4d4f; margin-right: 4px; }
 

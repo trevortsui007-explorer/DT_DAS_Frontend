@@ -11,11 +11,30 @@ const getTaskLogIdFromUrl = (url) => {
   return taskLogId || ''
 }
 
+const parseRequestData = (data) => {
+  if (!data) return {}
+  if (typeof data === 'string') return JSON.parse(data)
+  return data
+}
+
 const createMockTaskLogId = () => {
   return `TL${Date.now()}`
 }
 
 // ====================== Mock 数据（扩展版） ======================
+
+export const mockImportTemplates = {
+  data: [
+    {
+      id: 1,
+      templateCode: 'lamination-thickness-daily',
+      templateName: '层压工序板厚检验日报表',
+      parserType: 'template-excel',
+      templateVersion: 1,
+      isEnabled: true,
+    },
+  ],
+}
 
 // 任务数据 - 共18个
 export const mockTasks = {
@@ -808,6 +827,7 @@ const createMockExecutionTask = ({ ids, startDate, endDate }) => {
       taskLogId,
       configId,
       fileName: `${config?.TableName || 'unknown'}_${startDate || 'today'}.${config?.FileType || 'csv'}`,
+      fullFilePath: `${config?.FilePathPattern || 'D:/Mock'}/${config?.TableName || 'unknown'}_${startDate || 'today'}.${config?.FileType || 'csv'}`,
       status: index === 0 ? 'Running' : 'Pending',
       startRow: 0,
       processedRows: 0,
@@ -885,41 +905,126 @@ export const mockRequest = (config) => {
   const { url, method, data } = config
   const pathname = url.split('?')[0]
 
+  // ====================== IMPORT TEMPLATE ======================
+  if (pathname === '/api/data-acquisition/import-templates' && method === 'get') {
+    return delay({ data: mockImportTemplates.data })
+  }
+
+  if (pathname.startsWith('/api/data-acquisition/import-templates/') && method === 'get') {
+    const id = getIdFromUrl(url)
+    const item = mockImportTemplates.data.find(i => i.id === id)
+    return delay({ data: item })
+  }
+
+  if (pathname === '/api/data-acquisition/import-templates' && method === 'post') {
+    const body = parseRequestData(data)
+    const newItem = {
+      ...body,
+      id: Date.now(),
+    }
+    mockImportTemplates.data.push(newItem)
+    return delay({ success: true, data: newItem })
+  }
+
+  if (pathname.startsWith('/api/data-acquisition/import-templates/') && method === 'put') {
+    const id = getIdFromUrl(url)
+    const body = parseRequestData(data)
+    const index = mockImportTemplates.data.findIndex(i => i.id === id)
+    if (index !== -1) {
+      mockImportTemplates.data[index] = { ...mockImportTemplates.data[index], ...body }
+    }
+    return delay({ success: true })
+  }
+
+  if (pathname === '/api/data-acquisition/import-templates/preview' && method === 'post') {
+    return delay({ success: true, data: null })
+  }
+
+  if (pathname === '/api/data-acquisition/import-task-template' && method === 'post') {
+    const body = parseRequestData(data)
+    const configId = Date.now()
+    const groupId = configId + 1
+    const taskId = configId + 2
+    const configPayload = body.config || {}
+    const groupPayload = body.group || {}
+    const taskPayload = body.task || {}
+
+    const newConfig = {
+      ...configPayload,
+      Id: configId,
+      id: configId,
+      EqName: configPayload.EqName || '层压板厚测量仪',
+      eqName: configPayload.EqName || '层压板厚测量仪',
+    }
+    const newGroup = {
+      ...groupPayload,
+      Id: groupId,
+      id: groupId,
+      GroupName: groupPayload.GroupName || '层压板厚测量数据',
+      groupName: groupPayload.GroupName || '层压板厚测量数据',
+      ConfigCount: 1,
+      configCount: 1,
+      AssociatedConfigs: [{ Id: configId, EqName: newConfig.EqName }],
+    }
+    const newTask = {
+      ...taskPayload,
+      Id: taskId,
+      id: taskId,
+      TaskName: taskPayload.TaskName || '层压板厚测量数据采集',
+      taskName: taskPayload.TaskName || '层压板厚测量数据采集',
+      groupIds: [groupId],
+      taskGroups: [newGroup],
+    }
+
+    mockConfigs.data.unshift(newConfig)
+    mockGroups.data.unshift(newGroup)
+    mockTasks.data.unshift(newTask)
+
+    return delay({
+      success: true,
+      data: {
+        configId,
+        groupId,
+        taskId,
+      },
+    })
+  }
+
   // ====================== GROUP ======================
-  if (pathname === '/api/file-configs/group' && method === 'get') {
+  if (pathname === '/api/data-acquisition/file-configs/group' && method === 'get') {
     return delay({ data: mockGroups.data })
   }
 
   // ====================== CONFIG ======================
-  if (pathname === '/api/file-configs' && method === 'get') {
+  if (pathname === '/api/data-acquisition/file-configs' && method === 'get') {
     return delay({ data: mockConfigs.data })
   }
 
-  if (pathname.startsWith('/api/file-configs/') && method === 'get') {
+  if (pathname.startsWith('/api/data-acquisition/file-configs/') && method === 'get') {
     const id = getIdFromUrl(url)
     const item = mockConfigs.data.find(i => i.Id === id)
     return delay({ data: item })
   }
 
-  if (pathname === '/api/file-configs' && method === 'post') {
+  if (pathname === '/api/data-acquisition/file-configs' && method === 'post') {
     const newItem = {
-      ...JSON.parse(data),
+      ...parseRequestData(data),
       Id: Date.now()
     }
     mockConfigs.data.push(newItem)
     return delay({ success: true, data: newItem })
   }
 
-  if (url.includes('/api/file-configs') && method === 'put') {
+  if (url.includes('/api/data-acquisition/file-configs') && method === 'put') {
     const id = getIdFromUrl(url)
     const index = mockConfigs.data.findIndex(i => i.Id === id)
     if (index !== -1) {
-      mockConfigs.data[index] = { ...mockConfigs.data[index], ...JSON.parse(data) }
+      mockConfigs.data[index] = { ...mockConfigs.data[index], ...parseRequestData(data) }
     }
     return delay({ success: true })
   }
 
-  if (url.includes('/api/file-configs') && method === 'delete') {
+  if (url.includes('/api/data-acquisition/file-configs') && method === 'delete') {
     const id = getIdFromUrl(url)
     mockConfigs.data = mockConfigs.data.filter(i => i.Id !== id)
     return delay({ success: true })
@@ -954,7 +1059,37 @@ export const mockRequest = (config) => {
     method === 'get'
   ) {
     const taskLogId = pathname.split('/').filter(Boolean).at(-2)
-    return delay({ data: mockTaskLogDetailsMap[taskLogId] || [] }, 350)
+    const params = config.params || {}
+    const details = mockTaskLogDetailsMap[taskLogId] || []
+
+    if (!params.pageNo && !params.pageSize && !params.status) {
+      return delay({ data: details }, 350)
+    }
+
+    const status = String(params.status || '').replace(/\s+/g, '').toLowerCase()
+    const filteredDetails =
+      !status || status === 'all'
+        ? details
+        : details.filter((item) => {
+            const errorMessage = String(item.errorMessage || item.ErrorMessage || '')
+            const isMissingFile = errorMessage.includes('文件未找到')
+            const itemStatus = String(item.status || item.Status || '').replace(/\s+/g, '').toLowerCase()
+            if (status === 'warning') return isMissingFile
+            if (status === 'failed') return itemStatus === 'failed' && !isMissingFile
+            return itemStatus === status
+          })
+    const pageNo = Number(params.pageNo || 1)
+    const pageSize = Number(params.pageSize || 10)
+    const start = (pageNo - 1) * pageSize
+
+    return delay({
+      data: {
+        items: filteredDetails.slice(start, start + pageSize),
+        total: filteredDetails.length,
+        pageNo,
+        pageSize,
+      },
+    }, 350)
   }
 
   if (
