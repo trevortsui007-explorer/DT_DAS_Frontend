@@ -230,6 +230,12 @@ export const fetchTaskLogs = (params = {}) => {
   })
 }
 
+export const fetchTaskLogWarningSummary = (taskLogIds = []) => {
+  return request.post('/api/data-acquisition/execution/task-logs/warning-summary', {
+    taskLogIds,
+  })
+}
+
 export const fetchTaskLogStatus = (taskLogId) => {
   return request.get(`/api/data-acquisition/execution/${taskLogId}/status`)
 }
@@ -239,7 +245,8 @@ export const fetchTaskLogDetails = (taskLogId, params = {}) => {
     params: {
       pageNo: params.pageNo ?? undefined,
       pageSize: params.pageSize ?? undefined,
-      status: params.status ?? undefined
+      status: params.status ?? undefined,
+      errorCategory: params.errorCategory ?? undefined
     }
   })
 }
@@ -249,6 +256,14 @@ export const fetchExecutionDetails = (taskLogId) => fetchTaskLogDetails(taskLogI
 
 // ====================== EXECUTION ======================
 export const executeById = (id, processDate) => {
+export const fetchTaskDetailSummary = (taskLogId) => {
+  return request.get(`/api/data-acquisition/execution/${taskLogId}/details/summary`)
+}
+
+export const cancelTaskLog = (taskLogId) => {
+  return request.post(`/api/data-acquisition/execution/${taskLogId}/cancel`)
+}
+
   return request.post(`/api/data-acquisition/execute-by-id/${id}`, null, {
     params: { processDate }
   })

@@ -211,6 +211,7 @@ import {
   DeleteOutlined,
   SelectOutlined,
   FieldTimeOutlined,
+  CloseCircleOutlined,
   LoginOutlined,
   FileExcelOutlined,
 } from '@ant-design/icons-vue'
@@ -994,6 +995,47 @@ const handleRefreshTaskStatus = async () => {
   await taskLogViewRef.value.refreshCurrentTask()
 }
 
+const handleCancelCurrentTask = async () => {
+  if (!taskLogViewRef.value?.getCurrentTask) {
+    message.warning('日志视图尚未就绪')
+    return
+  }
+
+  const task = taskLogViewRef.value.getCurrentTask()
+  const taskLogId = task?.taskLogId || ''
+
+  if (!taskLogId) {
+    message.warning('请先选择任务')
+    return
+  }
+
+  if (String(task.status || '').replace(/\s+/g, '').toLowerCase() !== 'running') {
+    message.warning('当前任务已结束，无需取消')
+    return
+  }
+
+  const confirmed = await message.confirm({
+    title: '取消任务',
+    content: '确认取消当前采集任务？取消后任务会停止继续采集，已完成的文件明细会保留。',
+    okText: '取消任务',
+    cancelText: '返回',
+  })
+  if (!confirmed) return
+
+  try {
+    const res = await api.cancelTaskLog(taskLogId)
+    const payload = res?.data || res || {}
+    message.success(payload.message || payload.Message || '任务已取消')
+    await Promise.all([
+      taskLogViewRef.value.refreshCurrentTask?.(),
+      taskLogViewRef.value.refreshHistoryList?.(),
+    ])
+  } catch (err) {
+    message.error('取消任务失败')
+    console.error(err)
+  }
+}
+
 const handleRefreshHistoryLogs = async () => {
   if (!taskLogViewRef.value?.refreshHistoryList) {
     message.warning('日志视图尚未就绪')
@@ -1126,6 +1168,9 @@ const BUTTON_CONFIG_MAP = {
     ]
   ],
   log: [
+    [
+      { text: '取消当前任务', handler: handleCancelCurrentTask, btnType: 'red', icon: CloseCircleOutlined },
+    ],
     [
       { text: '刷新任务状态', handler: handleRefreshTaskStatus, btnType: 'blue', icon: ReloadOutlined },
     ],

@@ -4,7 +4,25 @@
       <section class="task-log-card">
         <div class="task-log-card__header">
           <div class="task-log-card__header-left">
+            <div class="task-log-title-row">
             <h3 class="task-log-card__title">当前任务</h3>
+              <button
+                v-if="currentTask"
+                type="button"
+                class="summary-toggle-btn"
+                @click="toggleCurrentTaskSummary"
+              >
+                {{ currentTaskSummaryCollapsed ? '展开概览' : '收起概览' }}
+              </button>
+              <button
+                v-if="currentTask"
+                type="button"
+                class="summary-toggle-btn"
+                @click="toggleCurrentTaskDetailSummary"
+              >
+                {{ currentTaskDetailSummaryCollapsed ? '展开明细' : '收起明细' }}
+              </button>
+            </div>
             <p class="task-log-card__desc">查看当前选中任务的状态、进度和明细</p>
           </div>
           <div class="task-log-card__header-right">
@@ -24,6 +42,7 @@
         </div>
 
         <div v-if="currentTask" class="task-log-current">
+          <div v-show="!currentTaskSummaryCollapsed" class="task-log-summary-panel">
           <div class="task-log-summary-grid">
             <div class="task-log-summary-item">
               <span class="label">任务编号</span>
@@ -55,22 +74,22 @@
             </div>
 
             <div class="task-log-summary-item">
-              <span class="label">总任务数</span>
+              <span class="label">采集单元总数</span>
               <span class="value">{{ currentTask.totalConfigs ?? 0 }}</span>
             </div>
 
             <div class="task-log-summary-item">
-              <span class="label">已处理</span>
+              <span class="label">已处理单元</span>
               <span class="value">{{ currentTaskDisplaySummary.processedCount ?? 0 }}</span>
             </div>
 
             <div class="task-log-summary-item">
-              <span class="label">成功</span>
+              <span class="label">成功单元</span>
               <span class="value success-text">{{ currentTaskDisplaySummary.successCount ?? 0 }}</span>
             </div>
 
             <div class="task-log-summary-item">
-              <span class="label">失败</span>
+              <span class="label">失败单元</span>
               <span class="value danger-text">{{ currentTaskDisplaySummary.failureCount ?? 0 }}</span>
             </div>
           </div>
@@ -89,8 +108,86 @@
               <span>上次刷新：{{ formatDateTime(lastRefreshTime) }}</span>
             </div>
           </div>
+          </div>
 
           <div class="task-log-detail">
+            <div v-show="!currentTaskDetailSummaryCollapsed" class="task-log-file-summary-grid">
+              <button
+                type="button"
+                class="task-log-file-summary-item"
+                :class="{ 'task-log-file-summary-item--active': isSummaryFilterActive('All') }"
+                @click="setActiveDetailTag('All')"
+              >
+                <span class="label">总文件数</span>
+                <span class="value">{{ currentTaskFileSummary.totalFiles }}</span>
+              </button>
+              <button
+                type="button"
+                class="task-log-file-summary-item"
+                :class="{ 'task-log-file-summary-item--active': isSummaryFilterActive('Success') }"
+                @click="setActiveDetailTag('Success')"
+              >
+                <span class="label">成功文件</span>
+                <span class="value success-text">{{ currentTaskFileSummary.successFiles }}</span>
+              </button>
+              <button
+                type="button"
+                class="task-log-file-summary-item"
+                :class="{ 'task-log-file-summary-item--active': isSummaryFilterActive('Warning') }"
+                @click="setActiveDetailTag('Warning')"
+              >
+                <span class="label">Warning 文件</span>
+                <span class="value warning-text">{{ currentTaskFileSummary.warningFiles }}</span>
+              </button>
+              <button
+                type="button"
+                class="task-log-file-summary-item"
+                :class="{ 'task-log-file-summary-item--active': isSummaryFilterActive('Failed') }"
+                @click="setActiveDetailTag('Failed')"
+              >
+                <span class="label">失败文件</span>
+                <span class="value danger-text">{{ currentTaskFileSummary.failedFiles }}</span>
+              </button>
+              <div class="task-log-file-summary-rows">
+                入库行数 {{ currentTaskFileSummary.processedRows }}
+              </div>
+            </div>
+            <div
+              v-show="!currentTaskDetailSummaryCollapsed && activeDetailTag !== 'Success' && hasErrorFiles"
+              class="task-log-error-category-panel"
+            >
+              <div class="task-log-error-category-head">
+                <div>
+                  <strong>报错分类</strong>
+                  <span>按错误原因聚合，点击分类可筛选明细</span>
+                </div>
+                <button
+                  v-if="activeErrorCategory"
+                  type="button"
+                  class="task-log-error-category-clear"
+                  @click="clearActiveErrorCategory"
+                >
+                  清除分类
+                </button>
+              </div>
+              <div v-if="currentTaskErrorCategories.length" class="task-log-error-category-grid">
+                <button
+                  v-for="category in currentTaskErrorCategories"
+                  :key="category.category"
+                  type="button"
+                  class="task-log-error-category-item"
+                  :class="{ 'task-log-error-category-item--active': activeErrorCategory === category.category }"
+                  @click="setActiveErrorCategory(category.category)"
+                >
+                  <span class="label">{{ category.categoryName }}</span>
+                  <strong>{{ category.count }}</strong>
+                  <span class="percent">{{ formatPercent(category.percent) }}</span>
+                </button>
+              </div>
+              <div v-else class="task-log-error-category-empty">
+                暂无报错分类统计，请刷新任务状态后查看
+              </div>
+            </div>
             <div v-if="detailsLoading" class="loading-placeholder">正在加载任务明细...</div>
 
             <div v-else class="task-log-detail-content">
@@ -120,30 +217,31 @@
                       {{ item.fullFilePath }}
                     </div>
 
-                    <div class="task-log-detail-item__meta">
-                      <span class="task-log-meta-chip task-log-meta-chip--config">
-                        <span>{{ getDetailConfigDisplay(item).label }}</span>
-                        <strong>{{ getDetailConfigDisplay(item).value }}</strong>
-                      </span>
-                      <span class="task-log-row-metric">
-                        <span>起始行</span>
-                        <strong>{{ item.startRow ?? 0 }}</strong>
-                      </span>
-                      <span class="task-log-row-metric">
-                        <span>处理行数</span>
-                        <strong>{{ item.processedRows ?? 0 }}</strong>
-                      </span>
-                    </div>
-
-                    <div class="task-log-detail-item__meta">
-                      <span class="task-log-meta-chip task-log-meta-chip--time">
-                        <span>开始</span>
-                        <strong>{{ formatDateTime(item.startTime) }}</strong>
-                      </span>
-                      <span class="task-log-meta-chip task-log-meta-chip--time">
-                        <span>结束</span>
-                        <strong>{{ formatDateTime(item.endTime) }}</strong>
-                      </span>
+                    <div class="task-log-detail-item__meta task-log-detail-item__meta--combined">
+                      <div class="task-log-detail-item__meta-left">
+                        <span class="task-log-meta-chip task-log-meta-chip--config">
+                          <span>{{ getDetailConfigDisplay(item).label }}</span>
+                          <strong>{{ getDetailConfigDisplay(item).value }}</strong>
+                        </span>
+                        <span class="task-log-row-metric">
+                          <span>起始行</span>
+                          <strong>{{ item.startRow ?? 0 }}</strong>
+                        </span>
+                        <span class="task-log-row-metric">
+                          <span>处理行数</span>
+                          <strong>{{ item.processedRows ?? 0 }}</strong>
+                        </span>
+                      </div>
+                      <div class="task-log-detail-item__meta-time">
+                        <span class="task-log-meta-chip task-log-meta-chip--time">
+                          <span>开始</span>
+                          <strong>{{ formatDateTime(item.startTime) }}</strong>
+                        </span>
+                        <span class="task-log-meta-chip task-log-meta-chip--time">
+                          <span>结束</span>
+                          <strong>{{ formatDateTime(item.endTime) }}</strong>
+                        </span>
+                      </div>
                     </div>
 
                     <div
@@ -151,6 +249,9 @@
                       class="task-log-error"
                       :class="{ 'task-log-warning': isMissingFileDetail(item) }"
                     >
+                      <span v-if="item.errorCategoryName" class="task-log-error-category-tag">
+                        {{ item.errorCategoryName }}
+                      </span>
                       {{ item.errorMessage }}
                     </div>
                   </div>
@@ -414,8 +515,11 @@ const detailCacheByTaskId = ref({})
 const configCacheById = ref({})
 const taskDisplaySummaryById = ref({})
 const warningSummaryLoadingIds = new Set()
-const detailFilterTags = ['All', 'Running', 'Success', 'Warning', 'Failed']
+const detailFilterTags = ['All', 'Success', 'Warning', 'Failed']
 const activeDetailTag = ref('All')
+const activeErrorCategory = ref('')
+const currentTaskSummaryCollapsed = ref(false)
+const currentTaskDetailSummaryCollapsed = ref(true)
 const historyStartDateInput = ref('')
 const historyEndDateInput = ref('')
 const effectiveHistoryStartDate = ref('')
@@ -429,11 +533,29 @@ const detailTotal = ref(0)
 const detailPageNo = ref(1)
 const detailPageSize = ref(10)
 const detailPageSizeOptions = [10, 20, 50, 100]
+const taskFileSummaryById = ref({})
+
+const toggleCurrentTaskSummary = () => {
+  const nextCollapsed = !currentTaskSummaryCollapsed.value
+  currentTaskSummaryCollapsed.value = nextCollapsed
+  if (!nextCollapsed) {
+    currentTaskDetailSummaryCollapsed.value = true
+  }
+}
+
+const toggleCurrentTaskDetailSummary = () => {
+  const nextCollapsed = !currentTaskDetailSummaryCollapsed.value
+  currentTaskDetailSummaryCollapsed.value = nextCollapsed
+  if (!nextCollapsed) {
+    currentTaskSummaryCollapsed.value = true
+  }
+}
 
 const listLoading = ref(false)
 const detailsLoading = ref(false)
 const polling = ref(false)
 const pollingTimer = ref(null)
+const pollingRefreshing = ref(false)
 const lastRefreshTime = ref(null)
 const detailModalVisible = ref(false)
 const detailModalLoading = ref(false)
@@ -453,6 +575,11 @@ const progressPercent = computed(() => {
 
   if (!total) return 0
   return Math.max(0, Math.min(100, Math.round((processed / total) * 100)))
+})
+
+const hasRunningTask = computed(() => {
+  if (normalizeStatus(currentTask.value?.status) === 'running') return true
+  return taskList.value.some((item) => normalizeStatus(item.status) === 'running')
 })
 
 const totalPages = computed(() => {
@@ -545,13 +672,9 @@ const getDetailDisplayStatus = (item = {}) => (isMissingFileDetail(item) ? 'Warn
 
 const calculateWarningSummary = (details = []) => {
   const warningCount = details.filter(isMissingFileDetail).length
-  const failureCount = details.filter(
-    (item) => normalizeStatus(item.status) === 'failed' && !isMissingFileDetail(item),
-  ).length
 
   return {
     warningCount,
-    failureCount,
   }
 }
 
@@ -581,31 +704,52 @@ const getTaskDisplaySummary = (task = {}) => {
   const rawProcessedCount = Number(task.processedCount ?? rawSuccessCount + rawFailureCount)
   const summary = taskDisplaySummaryById.value[task.taskLogId]
 
-  if (!summary) {
-    return {
-      ...task,
-      successCount: rawSuccessCount,
-      failureCount: rawFailureCount,
-      processedCount: rawProcessedCount,
-      warningCount: 0,
-      status: getTaskDisplayStatus(task, rawSuccessCount, rawFailureCount),
-    }
-  }
-
-  const displaySuccessCount = rawSuccessCount + summary.warningCount
-  const displayFailureCount = summary.failureCount
-
   return {
     ...task,
-    successCount: displaySuccessCount,
-    failureCount: displayFailureCount,
+    successCount: rawSuccessCount,
+    failureCount: rawFailureCount,
     processedCount: rawProcessedCount,
-    warningCount: summary.warningCount,
-    status: getTaskDisplayStatus(task, displaySuccessCount, displayFailureCount),
+    warningCount: summary?.warningCount ?? 0,
+    status: getTaskDisplayStatus(task, rawSuccessCount, rawFailureCount),
   }
 }
 
 const currentTaskDisplaySummary = computed(() => getTaskDisplaySummary(currentTask.value || {}))
+
+const emptyTaskFileSummary = {
+  totalFiles: 0,
+  successFiles: 0,
+  warningFiles: 0,
+  failedFiles: 0,
+  processedRows: 0,
+  errorCategories: [],
+}
+
+const normalizeTaskFileSummary = (raw = {}) => ({
+  totalFiles: Number(raw.totalFiles ?? raw.TotalFiles ?? 0),
+  successFiles: Number(raw.successFiles ?? raw.SuccessFiles ?? 0),
+  warningFiles: Number(raw.warningFiles ?? raw.WarningFiles ?? 0),
+  failedFiles: Number(raw.failedFiles ?? raw.FailedFiles ?? 0),
+  processedRows: Number(raw.processedRows ?? raw.ProcessedRows ?? 0),
+  errorCategories: (raw.errorCategories || raw.ErrorCategories || []).map((item = {}) => ({
+    category: item.category || item.Category || '',
+    categoryName: item.categoryName || item.CategoryName || item.category || item.Category || '',
+    count: Number(item.count ?? item.Count ?? 0),
+    percent: Number(item.percent ?? item.Percent ?? 0),
+  })).filter((item) => item.category && item.count > 0),
+})
+
+const currentTaskFileSummary = computed(() => {
+  const taskLogId = currentTask.value?.taskLogId
+  if (!taskLogId) return emptyTaskFileSummary
+  return taskFileSummaryById.value[taskLogId] || emptyTaskFileSummary
+})
+
+const currentTaskErrorCategories = computed(() => currentTaskFileSummary.value.errorCategories || [])
+
+const hasErrorFiles = computed(() =>
+  Number(currentTaskFileSummary.value.warningFiles || 0) + Number(currentTaskFileSummary.value.failedFiles || 0) > 0
+)
 
 const detailNameCollator = new Intl.Collator('zh-Hans-CN', {
   numeric: true,
@@ -669,8 +813,34 @@ const filteredHistoryTaskList = computed(() => {
 
 const setActiveDetailTag = async (tag) => {
   if (!detailFilterTags.includes(tag)) return
-  if (activeDetailTag.value === tag) return
+  if (activeDetailTag.value === tag && !activeErrorCategory.value) return
   activeDetailTag.value = tag
+  activeErrorCategory.value = ''
+  detailPageNo.value = 1
+
+  if (currentTask.value?.taskLogId) {
+    await loadTaskDetails(currentTask.value.taskLogId, { force: true, pageNo: 1 })
+  }
+}
+
+const isSummaryFilterActive = (tag) => activeDetailTag.value === tag
+
+const setActiveErrorCategory = async (category) => {
+  if (!category) return
+  activeErrorCategory.value = activeErrorCategory.value === category ? '' : category
+  if (activeDetailTag.value === 'Success') {
+    activeDetailTag.value = 'All'
+  }
+  detailPageNo.value = 1
+
+  if (currentTask.value?.taskLogId) {
+    await loadTaskDetails(currentTask.value.taskLogId, { force: true, pageNo: 1 })
+  }
+}
+
+const clearActiveErrorCategory = async () => {
+  if (!activeErrorCategory.value) return
+  activeErrorCategory.value = ''
   detailPageNo.value = 1
 
   if (currentTask.value?.taskLogId) {
@@ -737,6 +907,8 @@ const normalizeDetail = (raw = {}) => ({
   startTime: raw.startTime || raw.StartTime || '',
   endTime: raw.endTime || raw.EndTime || '',
   errorMessage: raw.errorMessage || raw.ErrorMessage || '',
+  errorCategory: raw.errorCategory || raw.ErrorCategory || '',
+  errorCategoryName: raw.errorCategoryName || raw.ErrorCategoryName || '',
   config: raw.config || raw.Config || null,
 })
 
@@ -911,6 +1083,12 @@ const detailModalSections = computed(() => {
         { label: '开始时间', value: formatDateTime(detail.startTime) },
         { label: '结束时间', value: formatDateTime(detail.endTime) },
         {
+          label: '报错分类',
+          value: detail.errorCategoryName || '--',
+          tag: Boolean(detail.errorCategoryName),
+          tagClass: 'detail-tag--gold',
+        },
+        {
           label: '错误信息',
           value: detail.errorMessage || '--',
           danger: Boolean(detail.errorMessage) && !isMissingFileDetail(detail),
@@ -931,6 +1109,12 @@ const formatDateTime = (value) => {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
 }
 
+const formatPercent = (value) => {
+  const num = Number(value)
+  if (!Number.isFinite(num) || num <= 0) return '0%'
+  return `${num.toFixed(num >= 10 ? 0 : 1)}%`
+}
+
 const getTodayDateString = () => {
   const today = new Date()
   const pad = (n) => String(n).padStart(2, '0')
@@ -945,6 +1129,7 @@ const getStatusClass = (status) => {
   if (s === 'running') return 'status-tag--running'
   if (s === 'warning') return 'status-tag--warning'
   if (s === 'partialsuccess') return 'status-tag--partial'
+  if (s === 'cancelled' || s === 'canceled') return 'status-tag--cancelled'
   return 'status-tag--default'
 }
 
@@ -969,7 +1154,7 @@ const getTriggerTypeClass = (triggerType) => {
 const shouldLoadWarningSummary = (task = {}) =>
   Number(task.failureCount || 0) > 0 || ['failed', 'partialsuccess'].includes(normalizeStatus(task.status))
 
-const loadTaskWarningSummary = async (task = {}) => {
+const loadTaskWarningSummaryLegacy = async (task = {}) => {
   const taskLogId = task.taskLogId
   if (!taskLogId || taskDisplaySummaryById.value[taskLogId] || warningSummaryLoadingIds.has(taskLogId)) return
 
@@ -991,13 +1176,46 @@ const loadTaskWarningSummary = async (task = {}) => {
 }
 
 const hydrateTaskWarningSummaries = (list = []) => {
-  list.filter(shouldLoadWarningSummary).forEach((task) => {
-    void loadTaskWarningSummary(task)
-  })
+  const taskLogIds = list
+    .filter(shouldLoadWarningSummary)
+    .map((task) => task.taskLogId)
+    .filter((taskLogId) => taskLogId && !taskDisplaySummaryById.value[taskLogId] && !warningSummaryLoadingIds.has(taskLogId))
+
+  if (!taskLogIds.length) return
+
+  taskLogIds.forEach((taskLogId) => warningSummaryLoadingIds.add(taskLogId))
+
+  void (async () => {
+    try {
+      const res = await api.fetchTaskLogWarningSummary(taskLogIds)
+      const rows = res?.data || res || []
+      const nextSummary = { ...taskDisplaySummaryById.value }
+
+      taskLogIds.forEach((taskLogId) => {
+        nextSummary[taskLogId] = { warningCount: 0 }
+      })
+
+      ;(Array.isArray(rows) ? rows : []).forEach((row) => {
+        const taskLogId = row.taskLogId || row.TaskLogId
+        if (!taskLogId) return
+        nextSummary[taskLogId] = {
+          warningCount: Number(row.warningCount ?? row.WarningCount ?? 0),
+        }
+      })
+
+      taskDisplaySummaryById.value = nextSummary
+    } catch (err) {
+      console.error('鍔犺浇浠诲姟鍛婅缁熻澶辫触', err)
+    } finally {
+      taskLogIds.forEach((taskLogId) => warningSummaryLoadingIds.delete(taskLogId))
+    }
+  })()
 }
 
-const loadTaskList = async (pageNo = taskListPageNo.value) => {
-  listLoading.value = true
+const loadTaskList = async (pageNo = taskListPageNo.value, { silent = false } = {}) => {
+  if (!silent) {
+    listLoading.value = true
+  }
   try {
     const params = {
       pageNo,
@@ -1017,7 +1235,7 @@ const loadTaskList = async (pageNo = taskListPageNo.value) => {
     taskListPageSize.value = res?.data?.pageSize ?? taskListPageSize.value
     hydrateTaskWarningSummaries(list)
 
-    if (props.initialTaskLogId) {
+    if (!silent && props.initialTaskLogId) {
       const matched = list.find((item) => item.taskLogId === props.initialTaskLogId)
       if (matched) {
         await selectTask(matched)
@@ -1033,9 +1251,9 @@ const loadTaskList = async (pageNo = taskListPageNo.value) => {
       }
     }
 
-    if (list.length) {
+    if (!silent && list.length) {
       await selectTask(list[0])
-    } else {
+    } else if (!silent) {
       currentTask.value = null
       taskDetails.value = []
       detailTotal.value = 0
@@ -1044,7 +1262,9 @@ const loadTaskList = async (pageNo = taskListPageNo.value) => {
     console.error('加载任务日志列表失败', err)
     notify.error('加载任务日志列表失败')
   } finally {
-    listLoading.value = false
+    if (!silent) {
+      listLoading.value = false
+    }
   }
 }
 
@@ -1089,20 +1309,38 @@ const loadTaskStatus = async (taskLogId) => {
   }
 }
 
+const loadTaskFileSummary = async (taskLogId) => {
+  if (!taskLogId) return
+
+  try {
+    const res = await api.fetchTaskDetailSummary(taskLogId)
+    const summary = normalizeTaskFileSummary(res?.data || res || {})
+    taskFileSummaryById.value = {
+      ...taskFileSummaryById.value,
+      [taskLogId]: summary,
+    }
+  } catch (err) {
+    console.error('加载任务文件统计失败', err)
+  }
+}
+
 const getDetailStatusParam = () => {
   const tag = activeDetailTag.value
   return normalizeStatus(tag) === 'all' ? undefined : tag
 }
 
-const loadTaskDetails = async (taskLogId, { pageNo = detailPageNo.value } = {}) => {
+const loadTaskDetails = async (taskLogId, { pageNo = detailPageNo.value, silent = false } = {}) => {
   if (!taskLogId) return
 
-  detailsLoading.value = true
+  if (!silent) {
+    detailsLoading.value = true
+  }
   try {
     const res = await api.fetchTaskLogDetails(taskLogId, {
       pageNo,
       pageSize: detailPageSize.value,
       status: getDetailStatusParam(),
+      errorCategory: activeDetailTag.value === 'Success' ? undefined : activeErrorCategory.value || undefined,
     })
     const payload = res?.data || res || {}
     const rawDetails = Array.isArray(payload) ? payload : payload.items || payload.Items || []
@@ -1119,7 +1357,9 @@ const loadTaskDetails = async (taskLogId, { pageNo = detailPageNo.value } = {}) 
     console.error('加载任务明细失败', err)
     notify.error('加载任务明细失败')
   } finally {
-    detailsLoading.value = false
+    if (!silent) {
+      detailsLoading.value = false
+    }
   }
 }
 
@@ -1162,6 +1402,7 @@ const closeDetailModal = () => {
 const selectTask = async (item) => {
   currentTask.value = normalizeTask(item)
   activeDetailTag.value = 'All'
+  activeErrorCategory.value = ''
   detailPageNo.value = 1
   detailTotal.value = 0
   taskDetails.value = []
@@ -1169,19 +1410,23 @@ const selectTask = async (item) => {
 
   await Promise.all([
     loadTaskStatus(currentTask.value.taskLogId),
+    loadTaskFileSummary(currentTask.value.taskLogId),
     loadTaskDetails(currentTask.value.taskLogId),
   ])
 }
 
-const refreshCurrentTask = async () => {
+const refreshCurrentTask = async ({ silent = false } = {}) => {
   if (!currentTask.value?.taskLogId) {
-    notify.warning('当前没有可刷新的任务')
+    if (!silent) {
+      notify.warning('当前没有可刷新的任务')
+    }
     return
   }
 
   await Promise.all([
     loadTaskStatus(currentTask.value.taskLogId),
-    loadTaskDetails(currentTask.value.taskLogId, { force: true }),
+    loadTaskFileSummary(currentTask.value.taskLogId),
+    loadTaskDetails(currentTask.value.taskLogId, { force: true, silent }),
   ])
 }
 
@@ -1197,42 +1442,39 @@ const stopPolling = () => {
   polling.value = false
 }
 
-const startPolling = () => {
-  if (!currentTask.value?.taskLogId) {
-    notify.warning('请先选择任务')
-    return
-  }
+const refreshRunningTaskState = async () => {
+  if (pollingRefreshing.value) return
+  pollingRefreshing.value = true
+  try {
+    await refreshCurrentTask({ silent: true })
 
-  stopPolling()
+    await loadTaskList(taskListPageNo.value, { silent: true })
+  } finally {
+    pollingRefreshing.value = false
+  }
+}
+
+const startPolling = () => {
+  if (pollingTimer.value) return
   polling.value = true
 
   pollingTimer.value = setInterval(async () => {
-    await loadTaskStatus(currentTask.value.taskLogId)
-
-    const status = normalizeStatus(currentTask.value?.status)
-    if (['success', 'failed', 'partialsuccess'].includes(status)) {
-      await loadTaskDetails(currentTask.value.taskLogId, { force: true })
+    await refreshRunningTaskState()
+    if (!hasRunningTask.value) {
       stopPolling()
     }
   }, 3000)
 }
 
-// 自动轮询
-const status = normalizeStatus(currentTask.value?.status)
-if (status === 'running') {
-  startPolling()
-} else {
-  stopPolling()
-}
-
-// TODO: 轮询开关
-const togglePolling = () => {
-  if (polling.value) {
-    stopPolling()
-  } else {
+const syncPollingState = () => {
+  if (hasRunningTask.value) {
     startPolling()
+  } else {
+    stopPolling()
   }
 }
+
+watch(hasRunningTask, syncPollingState)
 
 watch(
   () => props.initialTaskLogId,
@@ -1274,6 +1516,7 @@ onBeforeUnmount(() => {
 defineExpose({
   refreshHistoryList,
   refreshCurrentTask,
+  getCurrentTask: () => currentTask.value,
 })
 </script>
 
@@ -1451,6 +1694,14 @@ defineExpose({
   color: var(--ant-text-primary, rgba(0, 0, 0, 0.85));
 }
 
+.task-log-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-width: 0;
+}
+
 .task-log-card__desc {
   margin: 4px 0 0;
   font-size: 12px;
@@ -1463,6 +1714,33 @@ defineExpose({
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.task-log-summary-panel {
+  flex-shrink: 0;
+}
+
+.summary-toggle-btn {
+  height: 26px;
+  padding: 0 12px;
+  border: 1px solid #52c41a;
+  border-radius: 999px;
+  background: #fff;
+  color: #52c41a;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.summary-toggle-btn:hover {
+  background: #f6ffed;
+  border-color: #3fad0f;
+  color: #3fad0f;
 }
 
 .task-log-summary-grid {
@@ -1482,6 +1760,32 @@ defineExpose({
   flex-direction: column;
   gap: 6px;
   position: relative;
+}
+
+.task-log-summary-item--clickable {
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease,
+    transform 0.2s ease;
+}
+
+.task-log-summary-item--clickable:hover {
+  border-color: #52c41a;
+  box-shadow: 0 4px 12px rgba(82, 196, 26, 0.12);
+  transform: translateY(-1px);
+}
+
+.task-log-summary-item--clickable:focus-visible {
+  outline: 2px solid rgba(82, 196, 26, 0.35);
+  outline-offset: 2px;
+}
+
+.task-log-summary-item--active {
+  background: #f6ffed;
+  border-color: #52c41a;
+  box-shadow: 0 0 0 2px rgba(82, 196, 26, 0.14);
 }
 
 .task-log-summary-trigger {
@@ -1550,6 +1854,187 @@ defineExpose({
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.task-log-file-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  padding-top: 2px;
+  margin-bottom: 12px;
+  flex-shrink: 0;
+}
+
+.task-log-file-summary-item,
+.task-log-file-summary-rows {
+  min-height: 54px;
+  border: 1px solid var(--ant-border-color, #f0f0f0);
+  border-radius: 10px;
+  background: #fff;
+  padding: 8px 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+}
+
+.task-log-file-summary-item {
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease,
+    transform 0.2s ease;
+}
+
+.task-log-file-summary-item:hover {
+  border-color: #52c41a;
+  background: #fbfff7;
+  box-shadow: inset 0 0 0 1px rgba(82, 196, 26, 0.18);
+}
+
+.task-log-file-summary-item:focus-visible {
+  outline: 2px solid rgba(82, 196, 26, 0.35);
+  outline-offset: 2px;
+}
+
+.task-log-file-summary-item--active {
+  background: #f6ffed;
+  border-color: #52c41a;
+  box-shadow: inset 0 0 0 1px rgba(82, 196, 26, 0.28);
+}
+
+.task-log-file-summary-item .label,
+.task-log-file-summary-rows {
+  font-size: 12px;
+  color: var(--ant-text-secondary, rgba(0, 0, 0, 0.45));
+}
+
+.task-log-file-summary-item .value {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ant-text-primary, rgba(0, 0, 0, 0.85));
+}
+
+.task-log-file-summary-rows {
+  white-space: normal;
+  align-items: flex-start;
+  font-weight: 600;
+}
+
+.task-log-error-category-panel {
+  border: 1px solid #ffccc7;
+  border-radius: 10px;
+  background: #fffafa;
+  padding: 10px 12px 12px;
+  margin: 0 0 12px;
+  flex-shrink: 0;
+}
+
+.task-log-error-category-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.task-log-error-category-head > div {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.task-log-error-category-head strong {
+  color: #cf1322;
+  font-size: 13px;
+}
+
+.task-log-error-category-head span {
+  color: var(--ant-text-secondary, rgba(0, 0, 0, 0.45));
+  font-size: 12px;
+}
+
+.task-log-error-category-clear {
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid #ffa39e;
+  border-radius: 999px;
+  background: #fff;
+  color: #cf1322;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.task-log-error-category-clear:hover {
+  background: #fff1f0;
+}
+
+.task-log-error-category-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 8px;
+}
+
+.task-log-error-category-item {
+  min-height: 48px;
+  border: 1px solid #ffd8bf;
+  border-radius: 10px;
+  background: #fff7e6;
+  padding: 7px 10px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    "label count"
+    "percent percent";
+  gap: 3px 8px;
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease;
+}
+
+.task-log-error-category-item:hover,
+.task-log-error-category-item--active {
+  border-color: #ff7875;
+  background: #fff1f0;
+  box-shadow: inset 0 0 0 1px rgba(255, 120, 117, 0.18);
+}
+
+.task-log-error-category-item .label {
+  grid-area: label;
+  color: var(--ant-text-secondary, rgba(0, 0, 0, 0.45));
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-log-error-category-item strong {
+  grid-area: count;
+  color: #cf1322;
+  font-size: 15px;
+}
+
+.task-log-error-category-item .percent {
+  grid-area: percent;
+  color: #8c8c8c;
+  font-size: 11px;
+}
+
+.task-log-error-category-empty {
+  padding: 10px 12px;
+  border: 1px dashed #ffa39e;
+  border-radius: 8px;
+  background: #fff;
+  color: #cf1322;
+  font-size: 12px;
 }
 
 .task-log-detail-content {
@@ -1665,6 +2150,30 @@ defineExpose({
   gap: 8px 10px;
 }
 
+.task-log-detail-item__meta--combined {
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  gap: 8px 16px;
+}
+
+.task-log-detail-item__meta-left,
+.task-log-detail-item__meta-time {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+}
+
+.task-log-detail-item__meta-left {
+  min-width: 0;
+}
+
+.task-log-detail-item__meta-time {
+  margin-left: auto;
+  justify-content: flex-end;
+}
+
 .task-log-row-metric {
   display: inline-flex;
   align-items: center;
@@ -1748,6 +2257,21 @@ defineExpose({
   background: #fffbe6;
   border-color: #ffe58f;
   color: #d48806;
+}
+
+.task-log-error-category-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  margin-right: 8px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #fff1f0;
+  border: 1px solid #ffa39e;
+  color: #cf1322;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .task-log-history-id {
@@ -1911,6 +2435,12 @@ defineExpose({
   background: #fffbe6;
   color: #d48806;
   border: 1px solid #ffe58f;
+}
+
+.status-tag--cancelled {
+  background: #f5f5f5;
+  color: #595959;
+  border: 1px solid #bfbfbf;
 }
 
 .status-tag--default {
