@@ -174,7 +174,28 @@
                     用于 FTP 或受密码保护的共享目录；密码保存后不会回显。
                   </div>
                 </div>
-                <span v-if="formData.accessPasswordSet" class="password-state">已保存密码</span>
+                <span v-if="formData.accessPasswordSet && !formData.accessUseCurrentWindowsIdentity" class="password-state">已保存密码</span>
+              </div>
+
+              <div class="file-access-mode">
+                <label class="file-access-mode__item">
+                  <input
+                    type="radio"
+                    :value="true"
+                    v-model="formData.accessUseCurrentWindowsIdentity"
+                    @change="handleAccessModeChange"
+                  />
+                  <span>使用当前 Windows 身份</span>
+                </label>
+                <label class="file-access-mode__item">
+                  <input
+                    type="radio"
+                    :value="false"
+                    v-model="formData.accessUseCurrentWindowsIdentity"
+                    @change="handleAccessModeChange"
+                  />
+                  <span>使用指定账号</span>
+                </label>
               </div>
 
               <div class="file-access-grid">
@@ -184,6 +205,7 @@
                     type="text"
                     class="ant-input"
                     v-model.trim="formData.accessDomain"
+                    :disabled="formData.accessUseCurrentWindowsIdentity"
                     placeholder="例如: DELTON"
                   />
                 </div>
@@ -193,6 +215,7 @@
                     type="text"
                     class="ant-input"
                     v-model.trim="formData.accessUserName"
+                    :disabled="formData.accessUseCurrentWindowsIdentity"
                     placeholder="共享目录或 FTP 用户名"
                   />
                 </div>
@@ -202,13 +225,14 @@
                     type="password"
                     class="ant-input"
                     v-model="formData.accessPassword"
+                    :disabled="formData.accessUseCurrentWindowsIdentity"
                     :placeholder="formData.accessPasswordSet ? '不修改则留空' : '请输入密码'"
                     autocomplete="new-password"
                   />
                 </div>
                 <div class="file-access-actions">
                   <button
-                    v-if="formData.accessPasswordSet"
+                    v-if="formData.accessPasswordSet && !formData.accessUseCurrentWindowsIdentity"
                     type="button"
                     class="file-access-clear-btn"
                     @click="clearSavedAccessPassword"
@@ -630,6 +654,7 @@ const formData = ref({
   acquisitionMode: 'incremental',
   fullReloadWhenLastWriteTimeChanged: true,
   fullReloadWhenFileSizeChanged: true,
+  accessUseCurrentWindowsIdentity: false,
   accessDomain: '',
   accessUserName: '',
   accessPassword: '',
@@ -937,8 +962,11 @@ const readFileAccessOptions = (value) => {
   const fileAccess = options.fileAccess || options.FileAccess || {}
   const passwordProtected = fileAccess.passwordProtected || fileAccess.PasswordProtected || ''
   const passwordSet = fileAccess.passwordSet ?? fileAccess.PasswordSet
+  const useCurrentWindowsIdentity =
+    fileAccess.useCurrentWindowsIdentity ?? fileAccess.UseCurrentWindowsIdentity
 
   return {
+    accessUseCurrentWindowsIdentity: toBooleanOption(useCurrentWindowsIdentity, false),
     accessDomain: fileAccess.domain || fileAccess.Domain || '',
     accessUserName: fileAccess.userName || fileAccess.UserName || '',
     accessPassword: '',
@@ -1025,32 +1053,45 @@ const buildParserOptions = () => {
     delete options.acquisitionMode
   }
 
+  const accessUseCurrentWindowsIdentity = !!formData.value.accessUseCurrentWindowsIdentity
   const existingFileAccess = options.fileAccess || {}
   const fileAccess = {
     ...existingFileAccess,
-    domain: String(formData.value.accessDomain || '').trim(),
-    userName: String(formData.value.accessUserName || '').trim(),
+    useCurrentWindowsIdentity: accessUseCurrentWindowsIdentity,
   }
 
-  if (formData.value.accessPassword) {
-    fileAccess.passwordPlain = formData.value.accessPassword
-    fileAccess.passwordSet = true
-    delete fileAccess.passwordProtected
-    delete fileAccess.clearPassword
-  } else if (formData.value.accessClearPassword) {
-    fileAccess.clearPassword = true
+  if (accessUseCurrentWindowsIdentity) {
+    delete fileAccess.domain
+    delete fileAccess.userName
+    delete fileAccess.passwordPlain
     delete fileAccess.passwordProtected
     delete fileAccess.passwordSet
-    delete fileAccess.passwordPlain
-  } else {
-    delete fileAccess.passwordPlain
     delete fileAccess.clearPassword
-    if (fileAccess.passwordProtected) {
+  } else {
+    fileAccess.domain = String(formData.value.accessDomain || '').trim()
+    fileAccess.userName = String(formData.value.accessUserName || '').trim()
+
+    if (formData.value.accessPassword) {
+      fileAccess.passwordPlain = formData.value.accessPassword
       fileAccess.passwordSet = true
+      delete fileAccess.passwordProtected
+      delete fileAccess.clearPassword
+    } else if (formData.value.accessClearPassword) {
+      fileAccess.clearPassword = true
+      delete fileAccess.passwordProtected
+      delete fileAccess.passwordSet
+      delete fileAccess.passwordPlain
+    } else {
+      delete fileAccess.passwordPlain
+      delete fileAccess.clearPassword
+      if (fileAccess.passwordProtected) {
+        fileAccess.passwordSet = true
+      }
     }
   }
 
   const hasFileAccess =
+    fileAccess.useCurrentWindowsIdentity ||
     !!fileAccess.domain ||
     !!fileAccess.userName ||
     !!fileAccess.passwordPlain ||
@@ -1271,6 +1312,7 @@ function open(edit = false, data = null, fromImport = false, options = {}) {
       acquisitionMode: acquisitionMode.acquisitionMode,
       fullReloadWhenLastWriteTimeChanged: acquisitionMode.fullReloadWhenLastWriteTimeChanged,
       fullReloadWhenFileSizeChanged: acquisitionMode.fullReloadWhenFileSizeChanged,
+      accessUseCurrentWindowsIdentity: fileAccess.accessUseCurrentWindowsIdentity,
       accessDomain: fileAccess.accessDomain,
       accessUserName: fileAccess.accessUserName,
       accessPassword: fileAccess.accessPassword,
@@ -1337,6 +1379,7 @@ const resetForm = () => {
     acquisitionMode: 'incremental',
     fullReloadWhenLastWriteTimeChanged: true,
     fullReloadWhenFileSizeChanged: true,
+    accessUseCurrentWindowsIdentity: false,
     accessDomain: '',
     accessUserName: '',
     accessPassword: '',
@@ -1350,6 +1393,15 @@ const resetForm = () => {
 }
 
 const clearSavedAccessPassword = () => {
+  formData.value.accessPassword = ''
+  formData.value.accessPasswordSet = false
+  formData.value.accessClearPassword = true
+}
+
+const handleAccessModeChange = () => {
+  if (!formData.value.accessUseCurrentWindowsIdentity) return
+  formData.value.accessDomain = ''
+  formData.value.accessUserName = ''
   formData.value.accessPassword = ''
   formData.value.accessPasswordSet = false
   formData.value.accessClearPassword = true
@@ -2056,6 +2108,32 @@ defineExpose({ open })
   color: #6b7280;
   font-size: 12px;
   line-height: 1.4;
+}
+
+.file-access-mode {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.file-access-mode__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid #d9f7be;
+  border-radius: 999px;
+  background: #fbfffa;
+  color: #334155;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.file-access-mode__item input {
+  margin: 0;
+  accent-color: #52c41a;
 }
 
 .file-access-grid {

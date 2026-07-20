@@ -224,13 +224,9 @@ const isMissingFileDetail = (item = {}) => String(item.errorMessage || '').inclu
 
 const calculateLogDetailSummary = (details = []) => {
   const warningCount = details.filter(isMissingFileDetail).length
-  const failureCount = details.filter(
-    (item) => normalizeStatus(item.status) === 'failed' && !isMissingFileDetail(item),
-  ).length
 
   return {
     warningCount,
-    failureCount,
   }
 }
 
@@ -253,8 +249,6 @@ const normalizedLogs = computed(() =>
       const key = taskLogId || `log-${index}`
       const detailSummary = taskLogId ? logDetailSummaryById.value[taskLogId] : null
       const warningCount = detailSummary?.warningCount ?? 0
-      const displayFailureCount = detailSummary ? detailSummary.failureCount : failureCount
-      const displaySuccessCount = detailSummary ? successCount + warningCount : successCount
 
       return {
         key,
@@ -265,8 +259,8 @@ const normalizedLogs = computed(() =>
         endTime,
         timestamp: new Date(startTime || endTime || 0).getTime(),
         totalConfigs: getNumber(raw.totalConfigs, raw.TotalConfigs),
-        successCount: displaySuccessCount,
-        failureCount: displayFailureCount,
+        successCount,
+        failureCount,
         warningCount,
         hasDetailSummary: Boolean(detailSummary),
         rawSuccessCount: successCount,
