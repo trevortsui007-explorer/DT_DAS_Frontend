@@ -251,11 +251,6 @@ export const fetchTaskLogDetails = (taskLogId, params = {}) => {
   })
 }
 
-export const fetchExecutionStatus = (taskLogId) => fetchTaskLogStatus(taskLogId)
-export const fetchExecutionDetails = (taskLogId) => fetchTaskLogDetails(taskLogId)
-
-// ====================== EXECUTION ======================
-export const executeById = (id, processDate) => {
 export const fetchTaskDetailSummary = (taskLogId) => {
   return request.get(`/api/data-acquisition/execution/${taskLogId}/details/summary`)
 }
@@ -264,6 +259,33 @@ export const cancelTaskLog = (taskLogId) => {
   return request.post(`/api/data-acquisition/execution/${taskLogId}/cancel`)
 }
 
+export const startTestAcquisition = (data) => {
+  return request.post('/api/data-acquisition/test-acquisition/start', data, {
+    timeout: 300000
+  })
+}
+
+export const fetchTestAcquisition = (testRunId) => {
+  return request.get(`/api/data-acquisition/test-acquisition/${testRunId}`)
+}
+
+export const selectTestAcquisitionSource = (testRunId, data) => {
+  return request.post(`/api/data-acquisition/test-acquisition/${testRunId}/select-source`, data, {
+    timeout: 300000
+  })
+}
+
+export const cleanupTestAcquisition = (testRunId) => {
+  return request.post(`/api/data-acquisition/test-acquisition/${testRunId}/cleanup`, null, {
+    timeout: 120000
+  })
+}
+
+export const fetchExecutionStatus = (taskLogId) => fetchTaskLogStatus(taskLogId)
+export const fetchExecutionDetails = (taskLogId) => fetchTaskLogDetails(taskLogId)
+
+// ====================== EXECUTION ======================
+export const executeById = (id, processDate) => {
   return request.post(`/api/data-acquisition/execute-by-id/${id}`, null, {
     params: { processDate }
   })

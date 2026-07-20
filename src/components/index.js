@@ -16,6 +16,7 @@ export { default as AcquisitionModal } from './AcquisitionModal.vue'
 export { default as ReportExportModal } from './ReportExportModal.vue'
 export { default as TemplateManagerModal } from './TemplateManagerModal.vue'
 export { default as TaskLogView } from './TaskLogView.vue'
+export { default as TestAcquisitionModal } from './TestAcquisitionModal.vue'
 
 //封装bubble调用
 import { h, render } from 'vue'

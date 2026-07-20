@@ -88,6 +88,10 @@
           </div>
           <div class="card-actions" @click.stop>
             <a @click="viewDetail(config)">详情 →</a>
+            <a class="card-action-test" @click="testConfig(config)">
+              <ExperimentOutlined class="card-action-icon" />
+              <span>测试采集</span>
+            </a>
             <a @click="viewSourceDetail(config)">查看源路径情况</a>
           </div>
 
@@ -112,6 +116,7 @@
 
 <script setup>
 import { ref, watch } from 'vue'
+import { ExperimentOutlined } from '@ant-design/icons-vue'
 
 const props = defineProps({
   type: { type: String, required: true },
@@ -120,7 +125,7 @@ const props = defineProps({
   error: String,
 })
 
-const emit = defineEmits(['view-detail', 'edit-config', 'edit-group', 'selection-change', 'inspect-source'])
+const emit = defineEmits(['view-detail', 'edit-config', 'edit-group', 'selection-change', 'inspect-source', 'test-config'])
 
 // ================= 状态管理 =================
 const gridRef = ref(null)
@@ -275,6 +280,10 @@ const viewSourceDetail = (item) => {
   emit('inspect-source', item)
 }
 
+const testConfig = (item) => {
+  emit('test-config', item)
+}
+
 const emitSelection = () => {
   const selectedData = props.items
     .filter(item => {
@@ -410,6 +419,14 @@ const emitSelection = () => {
 }
 .card-actions a { color: #52c41a; font-size: 13px; text-decoration: none; cursor: pointer; }
 .card-actions a:hover { opacity: 0.8; }
+.card-action-test {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.card-action-icon {
+  font-size: 13px;
+}
 
 /* 7. 悬停详细信息面板 */
 .hover-detail {

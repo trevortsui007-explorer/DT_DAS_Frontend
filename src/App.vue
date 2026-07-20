@@ -101,6 +101,7 @@
         @edit-group="editGroup"
         @selection-change="handleSelectionChange"
         @inspect-source="openInspection"
+        @test-config="openTestAcquisition"
       />
     </div>
   </div>
@@ -139,6 +140,7 @@
     v-model:visible="reportExportVisible"
     :groups="reportExportGroups"
   />
+  <TestAcquisitionModal ref="testAcquisitionModalRef" />
 
   <DetailDrawer ref="drawerRef" />
 
@@ -196,6 +198,7 @@ import message, {
   ReportExportModal,
   TemplateManagerModal,
   TaskLogView,
+  TestAcquisitionModal,
 } from './components'
 
 import {
@@ -209,11 +212,12 @@ import {
   CloudUploadOutlined,
   PartitionOutlined,
   DeleteOutlined,
+  CloseCircleOutlined,
   SelectOutlined,
   FieldTimeOutlined,
-  CloseCircleOutlined,
   LoginOutlined,
   FileExcelOutlined,
+  ExperimentOutlined,
 } from '@ant-design/icons-vue'
 
 import * as api from './api'
@@ -231,6 +235,7 @@ const templateManagerModalRef = ref(null)
 const assignModalRef = ref(null)
 const inspectionModalRef = ref(null)
 const taskLogViewRef = ref(null)
+const testAcquisitionModalRef = ref(null)
 
 // ====================== state ======================
 const activeTab = ref('overview')
@@ -640,6 +645,27 @@ const copyConfig = () => {
     mode: 'copy',
     existingConfigs: configs.value,
   })
+}
+
+const openTestAcquisition = (config) => {
+  testAcquisitionModalRef.value?.open(config)
+}
+
+const openSelectedTestAcquisition = () => {
+  if (selectedItems.value.length !== 1) {
+    message.warning('请选择且只能选择 1 个配置进行测试采集')
+    return
+  }
+
+  const selectedId = String(selectedItems.value[0].id)
+  const sourceConfig = configs.value.find((item) => String(item.id ?? item.Id) === selectedId)
+
+  if (!sourceConfig) {
+    message.error('未找到选中的配置')
+    return
+  }
+
+  openTestAcquisition(sourceConfig)
 }
 
 // 当配置保存成功后，清空巡检缓存，防止显示旧状态
@@ -1160,6 +1186,7 @@ const BUTTON_CONFIG_MAP = {
       { text: '暂停', handler: pauseConfig, btnType: 'darkgray', icon: PauseCircleOutlined },
     ],
     [
+      { text: '测试采集', handler: openSelectedTestAcquisition, btnType: 'orange', icon: ExperimentOutlined },
       { text: '今日采集', handler: handleAcquisition, btnType: 'aqua', icon: SelectOutlined },
       { text: '时间段采集', handler: handleTimeRangeAcquisition, btnType: 'blue', icon: FieldTimeOutlined },
     ],
