@@ -246,10 +246,19 @@ export const fetchTaskLogDetails = (taskLogId, params = {}) => {
       pageNo: params.pageNo ?? undefined,
       pageSize: params.pageSize ?? undefined,
       status: params.status ?? undefined,
-      errorCategory: params.errorCategory ?? undefined
+      errorCategory: params.errorCategory ?? undefined,
+      hasProcessedRows: params.hasProcessedRows ?? undefined
     }
   })
 }
+
+export {
+  getActiveApiBaseUrl,
+  getDefaultApiBaseUrl,
+  getRuntimeApiBaseUrl,
+  setRuntimeApiBaseUrl,
+  clearRuntimeApiBaseUrl,
+} from './request'
 
 export const fetchTaskDetailSummary = (taskLogId) => {
   return request.get(`/api/data-acquisition/execution/${taskLogId}/details/summary`)

@@ -146,6 +146,61 @@
 
   <div
     class="ant-modal-mask"
+    :class="{ active: apiAddressModalVisible }"
+    @click="closeApiAddressModal"
+  ></div>
+  <div class="ant-modal-wrap" :class="{ active: apiAddressModalVisible }">
+    <div class="ant-modal api-address-modal" @click.stop>
+      <div class="ant-modal-header">
+        <h3 class="ant-modal-title">切换 API 地址</h3>
+        <button type="button" class="modal-close-btn" @click="closeApiAddressModal">×</button>
+      </div>
+
+      <div class="ant-modal-body">
+        <div class="api-address-current">
+          <span>当前生效</span>
+          <strong>{{ activeApiBaseUrl || '--' }}</strong>
+        </div>
+        <div class="api-address-default">
+          <span>.env 默认</span>
+          <code>{{ defaultApiBaseUrl || '--' }}</code>
+        </div>
+
+        <div class="api-address-section-title">预设地址</div>
+        <div class="api-address-options">
+          <button
+            v-for="preset in apiBaseUrlPresets"
+            :key="preset.url"
+            type="button"
+            class="api-address-option"
+            :class="{ active: apiAddressDraft === preset.url }"
+            @click="selectApiAddress(preset.url)"
+          >
+            {{ preset.label }}
+          </button>
+        </div>
+
+        <label class="api-address-custom">
+          <span>自定义地址</span>
+          <input
+            v-model.trim="apiAddressDraft"
+            class="ant-input"
+            type="text"
+            placeholder="例如：http://10.9.10.135:1001"
+          />
+        </label>
+      </div>
+
+      <div class="ant-modal-footer">
+        <button type="button" class="ant-btn ant-btn-default" @click="closeApiAddressModal">取消</button>
+        <button type="button" class="ant-btn ant-btn-default" @click="restoreDefaultApiAddress">恢复默认</button>
+        <button type="button" class="ant-btn ant-btn-primary" @click="saveApiAddress">保存并刷新</button>
+      </div>
+    </div>
+  </div>
+
+  <div
+    class="ant-modal-mask"
     :class="{ active: loginVisible }"
     @click="closeLoginModal"
   ></div>
@@ -249,6 +304,18 @@ const overviewTaskLogs = ref([])
 
 const dashboardLoading = ref(false)
 const dashboardError = ref('')
+const apiBaseUrlPresets = [
+  { label: 'http://10.9.10.135:1001（广州正式服）', url: 'http://10.9.10.135:1001' },
+  { label: 'http://10.6.9.15:1001（东莞正式服）', url: 'http://10.6.9.15:1001' },
+  { label: 'http://localhost:31173', url: 'http://localhost:31173' },
+  { label: 'http://localhost:31177', url: 'http://localhost:31177' },
+  { label: 'http://localhost:31175', url: 'http://localhost:31175' },
+  { label: 'http://10.6.9.15:8888', url: 'http://10.6.9.15:8888' },
+]
+const apiAddressModalVisible = ref(false)
+const apiAddressDraft = ref('')
+const defaultApiBaseUrl = api.getDefaultApiBaseUrl()
+const activeApiBaseUrl = ref(api.getActiveApiBaseUrl())
 
 // 统一用“选中的对象数组”保存，避免 modal 里拿不到名称
 const selectedItems = ref([])
@@ -510,6 +577,52 @@ const refreshOverviewTaskLogs = async () => {
   } finally {
     overviewLogsRefreshing = false
   }
+}
+
+const openApiAddressModal = () => {
+  activeApiBaseUrl.value = api.getActiveApiBaseUrl()
+  apiAddressDraft.value = activeApiBaseUrl.value
+  apiAddressModalVisible.value = true
+}
+
+const closeApiAddressModal = () => {
+  apiAddressModalVisible.value = false
+}
+
+const selectApiAddress = (url) => {
+  apiAddressDraft.value = url
+}
+
+const isValidApiBaseUrl = (url) => {
+  try {
+    const parsed = new URL(url)
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:'
+  } catch (err) {
+    return false
+  }
+}
+
+const saveApiAddress = async () => {
+  const nextUrl = String(apiAddressDraft.value || '').trim()
+  if (!isValidApiBaseUrl(nextUrl)) {
+    message.warning('请输入有效的 http/https API 地址')
+    return
+  }
+
+  api.setRuntimeApiBaseUrl(nextUrl)
+  activeApiBaseUrl.value = api.getActiveApiBaseUrl()
+  apiAddressModalVisible.value = false
+  message.success('API 地址已切换，正在刷新大盘')
+  await loadAllData()
+}
+
+const restoreDefaultApiAddress = async () => {
+  api.clearRuntimeApiBaseUrl()
+  activeApiBaseUrl.value = api.getActiveApiBaseUrl()
+  apiAddressDraft.value = activeApiBaseUrl.value
+  apiAddressModalVisible.value = false
+  message.success('已恢复 .env 默认 API 地址，正在刷新大盘')
+  await loadAllData()
 }
 
 const loadAllData = async () => {
@@ -1133,6 +1246,7 @@ const stopOverviewLogAutoRefresh = () => {
 // ====================== 按钮相关 ======================
 const BUTTON_CONFIG_MAP = {
   overview: [
+    { text: '切换地址', handler: openApiAddressModal, btnType: 'default', icon: SyncOutlined, className: 'api-switch-btn' },
     { text: '刷新大盘', handler: loadAllData, btnType: 'primary', icon: ReloadOutlined, className: 'overview-refresh-btn' },
     { text: '导出报告', handler: exportReport, btnType: 'aqua', icon: ExportOutlined },
   ],
@@ -1209,6 +1323,7 @@ const BUTTON_CONFIG_MAP = {
 
 const LIMITED_BUTTON_CONFIG_MAP = {
   overview: [
+    { text: '切换地址', handler: openApiAddressModal, btnType: 'default', icon: SyncOutlined, className: 'api-switch-btn' },
     { text: '刷新大盘', handler: loadAllData, btnType: 'primary', icon: ReloadOutlined, className: 'overview-refresh-btn' },
   ],
   group:
@@ -1405,8 +1520,129 @@ onBeforeUnmount(() => {
   margin-right: 10px;
 }
 
+.api-switch-btn {
+  margin-right: 10px;
+}
+
 .inspection-btn {
   margin-right: 10px;
+}
+
+.api-address-modal {
+  width: 560px;
+}
+
+.api-address-modal .ant-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.api-address-modal .modal-close-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #8c8c8c;
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
+}
+
+.api-address-modal .modal-close-btn:hover {
+  background: #f5f5f5;
+  color: #ff4d4f;
+}
+
+.api-address-modal .ant-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.api-address-modal .ant-modal-footer .ant-btn {
+  min-width: 86px;
+}
+
+.api-address-current,
+.api-address-default {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 38px;
+  padding: 8px 12px;
+  border: 1px solid #edf0f5;
+  border-radius: 6px;
+  background: #fafafa;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.api-address-current {
+  margin-bottom: 8px;
+}
+
+.api-address-current strong,
+.api-address-default code {
+  color: #111827;
+  font-size: 13px;
+  word-break: break-all;
+}
+
+.api-address-section-title {
+  margin: 16px 0 8px;
+  color: #1f2937;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.api-address-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.api-address-option {
+  min-width: 0;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  background: #fff;
+  color: #374151;
+  cursor: pointer;
+  font-size: 12px;
+  text-align: left;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    color 0.2s ease;
+}
+
+.api-address-option:hover,
+.api-address-option.active {
+  border-color: #52c41a;
+  background: #f6ffed;
+  color: #389e0d;
+}
+
+.api-address-custom {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 16px;
+  color: #1f2937;
+  font-size: 13px;
 }
 
 .das-login-modal {

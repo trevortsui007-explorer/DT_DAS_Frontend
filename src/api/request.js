@@ -1,16 +1,42 @@
 import axios from 'axios'
 import { mockRequest } from './mock'
+const USE_MOCK = false
+const API_BASE_URL_STORAGE_KEY = 'das_api_base_url'
+const DEFAULT_API_BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
+
+export const getDefaultApiBaseUrl = () => DEFAULT_API_BASE_URL
+
+export const getRuntimeApiBaseUrl = () => {
+  try {
+    return localStorage.getItem(API_BASE_URL_STORAGE_KEY) || ''
+  } catch (err) {
+    return ''
+  }
+}
+
+export const getActiveApiBaseUrl = () => getRuntimeApiBaseUrl() || DEFAULT_API_BASE_URL
+
+export const setRuntimeApiBaseUrl = (url) => {
+  const normalizedUrl = String(url || '').trim()
+  if (!normalizedUrl) return
+  localStorage.setItem(API_BASE_URL_STORAGE_KEY, normalizedUrl)
+}
+
+export const clearRuntimeApiBaseUrl = () => {
+  localStorage.removeItem(API_BASE_URL_STORAGE_KEY)
+}
 
 // MOCK控制开关
-const USE_MOCK = false
 
 const request = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL,
+  baseURL: getActiveApiBaseUrl(),
   timeout: 15000
 })
 
 // ====================== 请求拦截 ======================
 request.interceptors.request.use((config) => {
+  config.baseURL = getActiveApiBaseUrl()
+
   if (USE_MOCK) {
     const mockRes = mockRequest(config)
 
