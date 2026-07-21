@@ -368,6 +368,9 @@
               <span v-if="getTaskDisplaySummary(item).warningCount > 0" class="warning-summary-tag">
                 存在{{ getTaskDisplaySummary(item).warningCount }}项无文件
               </span>
+              <span v-if="getHistoryTaskProcessedRows(item) > 1" class="processed-rows-summary-tag">
+                采集{{ getHistoryTaskProcessedRows(item) }}行
+              </span>
               <span class="status-tag" :class="getStatusClass(getTaskDisplaySummary(item).status)">
                 {{ getTaskDisplaySummary(item).status || '--' }}
               </span>
@@ -515,7 +518,8 @@ const detailCacheByTaskId = ref({})
 const configCacheById = ref({})
 const taskDisplaySummaryById = ref({})
 const warningSummaryLoadingIds = new Set()
-const detailFilterTags = ['All', 'Success', 'Warning', 'Failed']
+const taskFileSummaryLoadingIds = new Set()
+const detailFilterTags = ['All', 'Success', 'Warning', 'Failed', 'New']
 const activeDetailTag = ref('All')
 const activeErrorCategory = ref('')
 const currentTaskSummaryCollapsed = ref(false)
@@ -665,8 +669,13 @@ const normalizeStatus = (status) =>
 
 const MISSING_FILE_TEXT = '文件未找到'
 
-const isMissingFileDetail = (item = {}) =>
-  String(item.errorMessage || '').includes(MISSING_FILE_TEXT)
+const FILE_MISSING_ERROR_KEYWORDS = [MISSING_FILE_TEXT, '文件未找到', '未找到可处理文件', '不存在', 'File not found']
+
+const isMissingFileDetail = (item = {}) => {
+  if (String(item.errorCategory || '').toLowerCase() === 'filemissing') return true
+  const errorMessage = String(item.errorMessage || '')
+  return FILE_MISSING_ERROR_KEYWORDS.some((keyword) => errorMessage.includes(keyword))
+}
 
 const getDetailDisplayStatus = (item = {}) => (isMissingFileDetail(item) ? 'Warning' : item.status || '')
 
@@ -703,14 +712,17 @@ const getTaskDisplaySummary = (task = {}) => {
   const rawFailureCount = Number(task.failureCount ?? 0)
   const rawProcessedCount = Number(task.processedCount ?? rawSuccessCount + rawFailureCount)
   const summary = taskDisplaySummaryById.value[task.taskLogId]
+  const warningCount = Number(summary?.warningCount ?? 0)
+  const displayFailureCount = Math.max(rawFailureCount - warningCount, 0)
 
   return {
     ...task,
     successCount: rawSuccessCount,
-    failureCount: rawFailureCount,
+    rawFailureCount,
+    failureCount: displayFailureCount,
     processedCount: rawProcessedCount,
-    warningCount: summary?.warningCount ?? 0,
-    status: getTaskDisplayStatus(task, rawSuccessCount, rawFailureCount),
+    warningCount,
+    status: getTaskDisplayStatus(task, rawSuccessCount, displayFailureCount),
   }
 }
 
@@ -744,6 +756,12 @@ const currentTaskFileSummary = computed(() => {
   if (!taskLogId) return emptyTaskFileSummary
   return taskFileSummaryById.value[taskLogId] || emptyTaskFileSummary
 })
+
+const getHistoryTaskProcessedRows = (task = {}) => {
+  const taskLogId = task.taskLogId
+  if (!taskLogId) return 0
+  return Number(taskFileSummaryById.value[taskLogId]?.processedRows ?? 0)
+}
 
 const currentTaskErrorCategories = computed(() => currentTaskFileSummary.value.errorCategories || [])
 
@@ -828,7 +846,7 @@ const isSummaryFilterActive = (tag) => activeDetailTag.value === tag
 const setActiveErrorCategory = async (category) => {
   if (!category) return
   activeErrorCategory.value = activeErrorCategory.value === category ? '' : category
-  if (activeDetailTag.value === 'Success') {
+  if (activeDetailTag.value === 'Success' || activeDetailTag.value === 'New') {
     activeDetailTag.value = 'All'
   }
   detailPageNo.value = 1
@@ -1128,6 +1146,7 @@ const getStatusClass = (status) => {
   if (s === 'failed') return 'status-tag--failed'
   if (s === 'running') return 'status-tag--running'
   if (s === 'warning') return 'status-tag--warning'
+  if (s === 'new') return 'status-tag--new'
   if (s === 'partialsuccess') return 'status-tag--partial'
   if (s === 'cancelled' || s === 'canceled') return 'status-tag--cancelled'
   return 'status-tag--default'
@@ -1212,6 +1231,33 @@ const hydrateTaskWarningSummaries = (list = []) => {
   })()
 }
 
+const hydrateTaskFileSummaries = (list = []) => {
+  const taskLogIds = list
+    .map((task) => task.taskLogId)
+    .filter((taskLogId) => taskLogId && !taskFileSummaryById.value[taskLogId] && !taskFileSummaryLoadingIds.has(taskLogId))
+
+  if (!taskLogIds.length) return
+
+  taskLogIds.forEach((taskLogId) => taskFileSummaryLoadingIds.add(taskLogId))
+
+  void (async () => {
+    await Promise.all(taskLogIds.map(async (taskLogId) => {
+      try {
+        const res = await api.fetchTaskDetailSummary(taskLogId)
+        const summary = normalizeTaskFileSummary(res?.data || res || {})
+        taskFileSummaryById.value = {
+          ...taskFileSummaryById.value,
+          [taskLogId]: summary,
+        }
+      } catch (err) {
+        console.error('加载历史任务文件统计失败', err)
+      } finally {
+        taskFileSummaryLoadingIds.delete(taskLogId)
+      }
+    }))
+  })()
+}
+
 const loadTaskList = async (pageNo = taskListPageNo.value, { silent = false } = {}) => {
   if (!silent) {
     listLoading.value = true
@@ -1234,6 +1280,7 @@ const loadTaskList = async (pageNo = taskListPageNo.value, { silent = false } = 
     taskListPageNo.value = res?.data?.pageNo ?? pageNo
     taskListPageSize.value = res?.data?.pageSize ?? taskListPageSize.value
     hydrateTaskWarningSummaries(list)
+    hydrateTaskFileSummaries(list)
 
     if (!silent && props.initialTaskLogId) {
       const matched = list.find((item) => item.taskLogId === props.initialTaskLogId)
@@ -1326,8 +1373,11 @@ const loadTaskFileSummary = async (taskLogId) => {
 
 const getDetailStatusParam = () => {
   const tag = activeDetailTag.value
-  return normalizeStatus(tag) === 'all' ? undefined : tag
+  const normalizedTag = normalizeStatus(tag)
+  return normalizedTag === 'all' || normalizedTag === 'new' ? undefined : tag
 }
+
+const isProcessedRowsFilterActive = () => normalizeStatus(activeDetailTag.value) === 'new'
 
 const loadTaskDetails = async (taskLogId, { pageNo = detailPageNo.value, silent = false } = {}) => {
   if (!taskLogId) return
@@ -1340,7 +1390,8 @@ const loadTaskDetails = async (taskLogId, { pageNo = detailPageNo.value, silent 
       pageNo,
       pageSize: detailPageSize.value,
       status: getDetailStatusParam(),
-      errorCategory: activeDetailTag.value === 'Success' ? undefined : activeErrorCategory.value || undefined,
+      errorCategory: activeDetailTag.value === 'Success' || isProcessedRowsFilterActive() ? undefined : activeErrorCategory.value || undefined,
+      hasProcessedRows: isProcessedRowsFilterActive() ? true : undefined,
     })
     const payload = res?.data || res || {}
     const rawDetails = Array.isArray(payload) ? payload : payload.items || payload.Items || []
@@ -2298,6 +2349,23 @@ defineExpose({
   flex-shrink: 0;
 }
 
+.processed-rows-summary-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 6px;
+  background: #e6f4ff;
+  color: #1677ff;
+  border: 1px solid #91caff;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 .task-log-history-footer {
   display: flex;
   justify-content: space-between;
@@ -2435,6 +2503,12 @@ defineExpose({
   background: #fffbe6;
   color: #d48806;
   border: 1px solid #ffe58f;
+}
+
+.status-tag--new {
+  background: #e6f4ff;
+  color: #1677ff;
+  border: 1px solid #91caff;
 }
 
 .status-tag--cancelled {
