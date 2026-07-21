@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="table-view">
     <div v-if="loading" class="loading-placeholder">加载中...</div>
     <div v-else-if="error" class="error-placeholder">{{ error }}</div>
@@ -30,6 +30,7 @@
           <th style="width: 48px"></th>
           <th>任务名称</th>
           <th>模式</th>
+          <th class="post-processing-col">后处理</th>
           <th>执行频率</th>
           <th>关联组</th>
           <th>状态</th>
@@ -64,6 +65,9 @@
             <td>
               <span :class="['task-mode-tag', getTaskModeClass(task)]">{{ getTaskMode(task) }}</span>
             </td>
+            <td class="post-processing-col">
+              <span :class="['task-post-tag', getPostProcessingTimingClass(task)]">{{ getPostProcessingTimingText(task) }}</span>
+            </td>
             <td><code>{{ translateCron(task.cronExpression || task.CronExpression) }}</code></td>
             <td>
                 <span class="group-count-link" @click.stop="toggleRow(getTaskId(task))">
@@ -83,7 +87,7 @@
           <tr v-if="expandedRows.has(getTaskId(task))" class="sub-table-row">
             <td></td>
             <td></td>
-            <td colspan="6">
+            <td colspan="7">
             <div class="sub-table-container">
               <div class="sub-header">关联的配置组详情：</div>
               <div v-if="getTaskGroups(task).length > 0" class="sub-grid">
@@ -130,7 +134,7 @@
           </tr>
         </template>
         <tr v-if="tasks.length === 0">
-          <td colspan="8" class="empty-placeholder">暂无任务数据</td>
+          <td colspan="9" class="empty-placeholder">暂无任务数据</td>
         </tr>
         </tbody>
       </table>
@@ -186,10 +190,22 @@ const toggleRow = (id) => {
 
 const normalizeId = (id) => String(id ?? '')
 const getTaskId = (task) => normalizeId(task?.id ?? task?.Id)
+const getTaskPostProcessingTiming = (task) => Number(task?.postProcessingTiming ?? task?.PostProcessingTiming ?? 0)
+const getPostProcessingTimingText = (task) => getTaskPostProcessingTiming(task) === 1 ? '任务后处理' : '按文件'
+const getPostProcessingTimingClass = (task) => getTaskPostProcessingTiming(task) === 1 ? 'is-after-task' : 'is-per-file'
 const getGroupId = (group) => normalizeId(group?.id ?? group?.Id ?? group?.groupId ?? group?.GroupId)
 const getGroupName = (group) => group?.groupName || group?.GroupName || `配置组 ${getGroupId(group)}`
 const getGroupConfigCount = (group) => group?.configCount ?? group?.ConfigCount ?? 0
-const isTaskEnabled = (task) => task?.isEnabled ?? task?.IsEnabled ?? false
+const normalizeBoolean = (value) => {
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'number') return value === 1
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase()
+    return normalized === '1' || normalized === 'true'
+  }
+  return false
+}
+const isTaskEnabled = (task) => normalizeBoolean(task?.isEnabled ?? task?.IsEnabled)
 const getConfigId = (config) => normalizeId(config?.id ?? config?.Id ?? config?.configId ?? config?.ConfigId)
 const getConfigName = (config) =>
   config?.eqName ||
@@ -754,5 +770,33 @@ code {
   flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-start;
+}
+</style>
+
+<style scoped>
+.post-processing-col {
+  width: 116px;
+  text-align: center;
+}
+
+.task-post-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 68px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid #d9d9d9;
+  color: #595959;
+  background: #fafafa;
+}
+
+.task-post-tag.is-after-task {
+  border-color: #91d5ff;
+  color: #096dd9;
+  background: #e6f7ff;
 }
 </style>

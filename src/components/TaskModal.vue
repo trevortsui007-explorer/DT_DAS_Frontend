@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div>
     <div class="ant-modal-mask" :class="{ active: visible }" @click="close"></div>
     <div class="ant-modal-wrap" :class="{ active: visible }">
@@ -62,6 +62,22 @@
             </div>
           </div>
 
+          <div class="form-item">
+            <label>后处理时机</label>
+            <div class="post-timing-options">
+              <button
+                v-for="item in postProcessingTimingOptions"
+                :key="item.value"
+                type="button"
+                class="post-timing-card"
+                :class="{ 'post-timing-card--active': formData.postProcessingTiming === item.value }"
+                @click="formData.postProcessingTiming = item.value"
+              >
+                <span>{{ item.label }}</span>
+                <small>{{ item.desc }}</small>
+              </button>
+            </div>
+          </div>
           <div v-if="formData.taskMode === 1" class="frequency-section">
             <label>执行频率</label>
             <div class="frequency-selector">
@@ -221,11 +237,16 @@ const formData = ref({
   taskMode: 1,
   cronExpression: '',
   isEnabled: true,
+  postProcessingTiming: 0,
   groupIds: [],
 })
 
 // 任务模式配置
 const taskModes = [{ value: 0, label: '常规任务' }, { value: 1, label: '周期执行' }]
+const postProcessingTimingOptions = [
+  { value: 0, label: '按文件执行', desc: '每个文件入库后立即后处理' },
+  { value: 1, label: '任务完成后执行一次', desc: '适合同表更新，降低死锁概率' },
+]
 const modePillLeft = computed(() => {
   const index = taskModes.findIndex(m => m.value === formData.value.taskMode)
   return `${index * 100}%`
@@ -236,6 +257,16 @@ const cronExpression = computed(() => formData.value.cronExpression)
 const cronDescription = computed(() => describeCron(cronExpression.value))
 
 const unwrapResult = (res) => res?.data ?? res
+const normalizeBoolean = (value) => {
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'number') return value === 1
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase()
+    return normalized === '1' || normalized === 'true'
+  }
+  return false
+}
+
 const assertSuccess = (res) => {
   const result = unwrapResult(res)
 
@@ -407,14 +438,15 @@ function open(edit = false, data = null, groups = []) {
       description: data.description || data.Description,
       taskMode: data.taskMode ?? data.TaskMode ?? 1,
       cronExpression: data.cronExpression || data.CronExpression,
-      isEnabled: data.isEnabled ?? data.IsEnabled ?? true,
+      isEnabled: normalizeBoolean(data.isEnabled ?? data.IsEnabled),
+      postProcessingTiming: Number(data.postProcessingTiming ?? data.PostProcessingTiming ?? 0),
       groupIds: extractGroupIds(data),
     }
     syncPresetFromCron(formData.value.cronExpression)
   } else {
     frequencyPreset.value = 'minutes'
     minutesInterval.value = 30
-    formData.value = { id: null, taskName: '', description: '', taskMode: 1, cronExpression: '', isEnabled: true, groupIds: [] }
+    formData.value = { id: null, taskName: '', description: '', taskMode: 1, cronExpression: '', isEnabled: true, postProcessingTiming: 0, groupIds: [] }
     updateCronFromPreset()
   }
   visible.value = true
@@ -437,7 +469,8 @@ async function save() {
     Description: formData.value.description,
     TaskMode: taskMode,
     CronExpression: taskMode === 1 ? formData.value.cronExpression.trim() : '',
-    IsEnabled: formData.value.isEnabled ? 1 : 0,
+    IsEnabled: normalizeBoolean(formData.value.isEnabled) ? 1 : 0,
+    PostProcessingTiming: Number(formData.value.postProcessingTiming || 0),
   }
 
   try {
@@ -500,10 +533,12 @@ defineExpose({ open })
 .status-form-item {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
 }
 
 .status-form-item .toggle-switch {
   margin-top: 0;
+  align-self: flex-start;
 }
 
 .form-item label { display: block; margin-bottom: 8px; font-weight: 500; color: #333; }
@@ -627,6 +662,45 @@ defineExpose({ open })
 .inline-flex { display: flex; align-items: center; gap: 12px; }
 .empty-inline { grid-column: span 2; text-align: center; color: #999; padding: 20px; font-size: 13px; }
 
+.post-timing-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.post-timing-card {
+  min-height: 58px;
+  padding: 10px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  color: #374151;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
+}
+
+.post-timing-card span {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.post-timing-card small {
+  display: block;
+  color: #8c8c8c;
+  line-height: 1.4;
+}
+
+.post-timing-card--active {
+  border-color: #52c41a;
+  background: #f6ffed;
+  color: #237804;
+}
+
+.post-timing-card--active small {
+  color: #52a41a;
+}
 .task-modal-footer {
   display: flex;
   justify-content: flex-end;
