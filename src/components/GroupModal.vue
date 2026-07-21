@@ -150,6 +150,16 @@ const getConfigName = (conf) => conf?.eqName || conf?.EqName || conf?.name || co
 const getAssociatedConfigId = (conf) => String(conf?.id ?? conf?.Id ?? conf?.configId ?? conf?.ConfigId ?? '')
 
 const unwrapResult = (res) => res?.data ?? res
+const normalizeBoolean = (value) => {
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'number') return value === 1
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase()
+    return normalized === '1' || normalized === 'true'
+  }
+  return false
+}
+
 const assertSuccess = (res) => {
   const result = unwrapResult(res)
 
@@ -234,7 +244,7 @@ function open(edit = false, data = null, configs = []) {
       groupCategory: data.groupCategory || data.GroupCategory || '',
       groupType: data.groupType || data.GroupType || '',
       exportProcedureName: data.exportProcedureName || data.ExportProcedureName || '',
-      isEnabled: data.isEnabled ?? data.IsEnabled ?? true,
+      isEnabled: normalizeBoolean(data.isEnabled ?? data.IsEnabled),
 
       // 回显
       configIds: selectedIds,
@@ -272,7 +282,7 @@ async function save() {
     GroupCategory: formData.value.groupCategory,
     GroupType: formData.value.groupType,
     ExportProcedureName: formData.value.exportProcedureName,
-    IsEnabled: formData.value.isEnabled,
+    IsEnabled: normalizeBoolean(formData.value.isEnabled),
   }
 
   try {
@@ -357,10 +367,12 @@ defineExpose({ open })
 .status-form-item {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
 }
 
 .status-form-item .toggle-switch {
   margin-top: 0;
+  align-self: flex-start;
 }
 
 .form-item label {

@@ -185,6 +185,7 @@
                     v-model="formData.accessUseCurrentWindowsIdentity"
                     @change="handleAccessModeChange"
                   />
+                  <span class="file-access-mode__dot"></span>
                   <span>使用当前 Windows 身份</span>
                 </label>
                 <label class="file-access-mode__item">
@@ -194,6 +195,7 @@
                     v-model="formData.accessUseCurrentWindowsIdentity"
                     @change="handleAccessModeChange"
                   />
+                  <span class="file-access-mode__dot"></span>
                   <span>使用指定账号</span>
                 </label>
               </div>
@@ -705,6 +707,16 @@ const normalizeFileType = (value) => {
   const fileType = String(value || '').trim().toLowerCase()
   if (!fileType) return '.csv'
   return fileType.startsWith('.') ? fileType : `.${fileType}`
+}
+
+const normalizeBoolean = (value) => {
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'number') return value === 1
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase()
+    return normalized === '1' || normalized === 'true'
+  }
+  return false
 }
 
 const supportedFileTypes = ['.csv', '.xlsx', '.txt']
@@ -1297,7 +1309,7 @@ function open(edit = false, data = null, fromImport = false, options = {}) {
       serviceName: data.serviceName || data.ServiceName || '',
       flag: data.flag || data.Flag || '',
       flagName: data.flagName || data.FlagName || '',
-      isEnabled: data.isEnabled ?? data.IsEnabled ?? true,
+      isEnabled: normalizeBoolean(data.isEnabled ?? data.IsEnabled),
       extFields: data.extFields || data.ExtFields || '',
       fieldMappings: rawFieldMappings,
       parserType: data.parserType || data.ParserType || 'standard-table',
@@ -1526,7 +1538,7 @@ async function save() {
       FileType: formData.value.fileType,
       HeaderRow: Number(formData.value.headerRow) || 0,
       StartRow: Number(formData.value.startRow) || 1,
-      IsEnabled: formData.value.isEnabled,
+      IsEnabled: normalizeBoolean(formData.value.isEnabled),
       PostProcessingType: parseInt(formData.value.postProcessingType),
       ProcedureName: formData.value.procedureName,
       ExtFields: formData.value.extFields,
@@ -1771,10 +1783,12 @@ defineExpose({ open })
 .status-form-item {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
 }
 
 .status-form-item .toggle-switch {
   margin-top: 0;
+  align-self: flex-start;
 }
 
 .post-type-item {
@@ -2118,6 +2132,7 @@ defineExpose({ open })
 }
 
 .file-access-mode__item {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -2129,11 +2144,44 @@ defineExpose({ open })
   color: #334155;
   font-size: 13px;
   cursor: pointer;
+  transition: border-color .16s ease, background .16s ease, color .16s ease, box-shadow .16s ease;
 }
 
 .file-access-mode__item input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
   margin: 0;
-  accent-color: #52c41a;
+  outline: none;
+  pointer-events: none;
+}
+
+.file-access-mode__dot {
+  width: 14px;
+  height: 14px;
+  border: 1px solid #b7d9a8;
+  border-radius: 50%;
+  background: #fff;
+  box-sizing: border-box;
+  transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
+}
+
+.file-access-mode__item:has(input:checked) .file-access-mode__dot {
+  border: 4px solid #52c41a;
+  background: #fff;
+}
+
+.file-access-mode__item:has(input:checked) {
+  border-color: #52c41a;
+  background: #f6ffed;
+  color: #237804;
+  font-weight: 600;
+}
+
+.file-access-mode__item:has(input:focus-visible) {
+  border-color: #52c41a;
+  box-shadow: 0 0 0 2px rgba(82, 196, 26, .12);
 }
 
 .file-access-grid {
