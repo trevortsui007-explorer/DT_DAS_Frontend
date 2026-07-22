@@ -16,7 +16,7 @@
           <div class="info-content">
             <div v-for="item in taskData" :key="item.id" class="task-item-wrapper">
               <span class="task-tag">
-                {{ item.eqName || item.groupName || '未命名任务' }}
+                {{ getTaskDisplayName(item) }}
               </span>
             </div>
 
@@ -83,6 +83,17 @@ const form = reactive({
   startTime: '',
   endTime: ''
 })
+
+const getTaskDisplayName = (item = {}) =>
+  item.taskName ||
+  item.TaskName ||
+  item.eqName ||
+  item.EqName ||
+  item.groupName ||
+  item.GroupName ||
+  item.name ||
+  item.Name ||
+  '未命名任务'
 
 watch(() => props.visible, (newVal) => {
   if (newVal) {
