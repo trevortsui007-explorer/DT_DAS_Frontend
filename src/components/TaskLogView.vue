@@ -199,7 +199,7 @@
                     v-for="item in filteredTaskDetails"
                     :key="item.id || `${item.fileName}-${item.startTime}`"
                     class="task-log-detail-item"
-                    :class="{ 'is-warning': isMissingFileDetail(item) }"
+                    :class="{ 'is-warning': isWarningDetail(item) }"
                     role="button"
                     tabindex="0"
                     @click="openDetailModal(item)"
@@ -207,7 +207,7 @@
                     @keydown.space.prevent="openDetailModal(item)"
                   >
                     <div class="task-log-detail-item__top">
-                      <span class="task-log-file">{{ item.fileName || '--' }}</span>
+                      <span class="task-log-file">{{ getDetailTitle(item) }}</span>
                       <span class="status-tag" :class="getStatusClass(getDetailDisplayStatus(item))">
                         {{ getDetailDisplayStatus(item) || '--' }}
                       </span>
@@ -247,7 +247,7 @@
                     <div
                       v-if="item.errorMessage"
                       class="task-log-error"
-                      :class="{ 'task-log-warning': isMissingFileDetail(item) }"
+                      :class="{ 'task-log-warning': isWarningDetail(item) }"
                     >
                       <span v-if="item.errorCategoryName" class="task-log-error-category-tag">
                         {{ item.errorCategoryName }}
@@ -677,10 +677,36 @@ const isMissingFileDetail = (item = {}) => {
   return FILE_MISSING_ERROR_KEYWORDS.some((keyword) => errorMessage.includes(keyword))
 }
 
-const getDetailDisplayStatus = (item = {}) => (isMissingFileDetail(item) ? 'Warning' : item.status || '')
+const isPostProcessingDetail = (item = {}) => {
+  if (String(item.errorCategory || '').toLowerCase() === 'postprocessing') return true
+  return String(item.errorMessage || '').includes('Post processing failed')
+}
+
+const isWarningDetail = (item = {}) => isMissingFileDetail(item) || isPostProcessingDetail(item)
+
+const getDetailDisplayStatus = (item = {}) => (isWarningDetail(item) ? 'Warning' : item.status || '')
+
+const hasFileExtension = (name = '') => /\.[^\\/.\s]+$/.test(String(name || '').trim())
+
+const isPathSegmentOnlyFileName = (name = '') => {
+  const value = String(name || '').trim()
+  if (!value) return true
+  if (hasFileExtension(value)) return false
+  if (/^\d{1,4}$/.test(value)) return true
+  if (/^\d{4}[-_/]?\d{1,2}([-_/]?\d{1,2})?$/.test(value)) return true
+  return !/[\\/]/.test(value)
+}
+
+const getDetailTitle = (item = {}) => {
+  const fileName = String(item.fileName || '').trim()
+  if (isMissingFileDetail(item) && isPathSegmentOnlyFileName(fileName)) {
+    return '文件缺失'
+  }
+  return fileName || '--'
+}
 
 const calculateWarningSummary = (details = []) => {
-  const warningCount = details.filter(isMissingFileDetail).length
+  const warningCount = details.filter(isWarningDetail).length
 
   return {
     warningCount,
@@ -712,17 +738,20 @@ const getTaskDisplaySummary = (task = {}) => {
   const rawFailureCount = Number(task.failureCount ?? 0)
   const rawProcessedCount = Number(task.processedCount ?? rawSuccessCount + rawFailureCount)
   const summary = taskDisplaySummaryById.value[task.taskLogId]
-  const warningCount = Number(summary?.warningCount ?? 0)
+  const fileSummary = taskFileSummaryById.value[task.taskLogId]
+  const warningCount = Math.max(Number(summary?.warningCount ?? 0), Number(fileSummary?.warningFiles ?? 0))
+  const displaySuccessCount = rawSuccessCount + warningCount
   const displayFailureCount = Math.max(rawFailureCount - warningCount, 0)
 
   return {
     ...task,
-    successCount: rawSuccessCount,
+    successCount: displaySuccessCount,
+    rawSuccessCount,
     rawFailureCount,
     failureCount: displayFailureCount,
     processedCount: rawProcessedCount,
     warningCount,
-    status: getTaskDisplayStatus(task, rawSuccessCount, displayFailureCount),
+    status: getTaskDisplayStatus(task, displaySuccessCount, displayFailureCount),
   }
 }
 
@@ -737,19 +766,36 @@ const emptyTaskFileSummary = {
   errorCategories: [],
 }
 
-const normalizeTaskFileSummary = (raw = {}) => ({
-  totalFiles: Number(raw.totalFiles ?? raw.TotalFiles ?? 0),
-  successFiles: Number(raw.successFiles ?? raw.SuccessFiles ?? 0),
-  warningFiles: Number(raw.warningFiles ?? raw.WarningFiles ?? 0),
-  failedFiles: Number(raw.failedFiles ?? raw.FailedFiles ?? 0),
-  processedRows: Number(raw.processedRows ?? raw.ProcessedRows ?? 0),
-  errorCategories: (raw.errorCategories || raw.ErrorCategories || []).map((item = {}) => ({
+const normalizeErrorCategory = (value = '') => String(value || '').replace(/\s+/g, '').toLowerCase()
+
+const getErrorCategoryCount = (categories = [], category) => {
+  const normalizedCategory = normalizeErrorCategory(category)
+  const item = categories.find((entry = {}) => normalizeErrorCategory(entry.category) === normalizedCategory)
+  return Number(item?.count ?? 0)
+}
+
+const normalizeTaskFileSummary = (raw = {}) => {
+  const errorCategories = (raw.errorCategories || raw.ErrorCategories || []).map((item = {}) => ({
     category: item.category || item.Category || '',
     categoryName: item.categoryName || item.CategoryName || item.category || item.Category || '',
     count: Number(item.count ?? item.Count ?? 0),
     percent: Number(item.percent ?? item.Percent ?? 0),
-  })).filter((item) => item.category && item.count > 0),
-})
+  })).filter((item) => item.category && item.count > 0)
+  const rawWarningFiles = Number(raw.warningFiles ?? raw.WarningFiles ?? 0)
+  const rawFailedFiles = Number(raw.failedFiles ?? raw.FailedFiles ?? 0)
+  const postProcessingFiles = getErrorCategoryCount(errorCategories, 'PostProcessing')
+
+  return {
+    totalFiles: Number(raw.totalFiles ?? raw.TotalFiles ?? 0),
+    successFiles: Number(raw.successFiles ?? raw.SuccessFiles ?? 0),
+    rawWarningFiles,
+    rawFailedFiles,
+    warningFiles: rawWarningFiles + postProcessingFiles,
+    failedFiles: Math.max(rawFailedFiles - postProcessingFiles, 0),
+    processedRows: Number(raw.processedRows ?? raw.ProcessedRows ?? 0),
+    errorCategories,
+  }
+}
 
 const currentTaskFileSummary = computed(() => {
   const taskLogId = currentTask.value?.taskLogId
@@ -1087,7 +1133,7 @@ const detailModalSections = computed(() => {
     {
       title: '日志明细',
       fields: [
-        { label: '文件名', value: detail.fileName || '--', valueClass: 'detail-value--primary' },
+        { label: '文件名', value: getDetailTitle(detail), valueClass: 'detail-value--primary' },
         { label: '完整路径', value: detail.fullFilePath || '--' },
         { label: '配置ID', value: detail.configId ?? '--', valueClass: 'detail-value--primary' },
         {
@@ -1109,8 +1155,8 @@ const detailModalSections = computed(() => {
         {
           label: '错误信息',
           value: detail.errorMessage || '--',
-          danger: Boolean(detail.errorMessage) && !isMissingFileDetail(detail),
-          warning: isMissingFileDetail(detail),
+          danger: Boolean(detail.errorMessage) && !isWarningDetail(detail),
+          warning: isWarningDetail(detail),
         },
       ],
     },
