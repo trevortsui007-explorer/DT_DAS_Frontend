@@ -371,6 +371,7 @@ import {
   findTemplateById,
   getTemplateId,
   mergeImportTemplates,
+  normalizeExcelTemplate,
 } from '@/utils/templateExcelPreview'
 
 const emit = defineEmits(['imported', 'template-imported'])
@@ -617,28 +618,53 @@ function parseSheet() {
 }
 
 function parseTemplatePreview() {
-  if (!sheetData.value.length) return
-
   if (!['.xlsx', '.xls'].includes(fileType.value)) {
     templatePreview.value = null
     message('固定模板导入仅支持 Excel 文件')
     return
   }
 
-  const selectedTemplate = findTemplateById(importTemplates.value, selectedTemplateId.value) || LAMINATION_THICKNESS_TEMPLATE
-  let preview = createTemplateExcelPreview(sheetData.value, fileName.value, selectedTemplate)
+  const createCandidate = (rawTemplate) => {
+    const template = normalizeExcelTemplate(rawTemplate)
+    const sheet = template.sheetName
+      ? workbookData.value?.Sheets?.[template.sheetName]
+      : workbookData.value?.Sheets?.[workbookData.value?.SheetNames?.[0]]
+    if (!sheet) return null
 
-  if (!preview.matched) {
-    const matchedPreview = importTemplates.value
-      .map((template) => createTemplateExcelPreview(sheetData.value, fileName.value, template))
-      .find((item) => item.matched && item.records.length > 0)
-
-    if (matchedPreview) {
-      selectedTemplateId.value = getTemplateId(matchedPreview.template)
-      preview = matchedPreview
+    const range = XLSX.utils.decode_range(sheet['!ref'] || 'A1')
+    range.s = { r: 0, c: 0 }
+    const rows = XLSX.utils.sheet_to_json(sheet, {
+      header: 1,
+      defval: '',
+      range: XLSX.utils.encode_range(range),
+    })
+    return {
+      preview: createTemplateExcelPreview(rows, fileName.value, template),
+      rows,
     }
   }
 
+  const selectedTemplate = findTemplateById(importTemplates.value, selectedTemplateId.value) || LAMINATION_THICKNESS_TEMPLATE
+  let candidate = createCandidate(selectedTemplate)
+  if (!candidate) {
+    templatePreview.value = null
+    message('\u672a\u627e\u5230\u6a21\u677f\u914d\u7f6e\u7684\u5de5\u4f5c\u8868\uff1a' + (normalizeExcelTemplate(selectedTemplate).sheetName || 'Sheet 1'))
+    return
+  }
+
+  if (!candidate.preview.matched) {
+    const matchedCandidate = importTemplates.value
+      .map(createCandidate)
+      .find((item) => item?.preview.matched && item.preview.records.length > 0)
+
+    if (matchedCandidate) {
+      selectedTemplateId.value = getTemplateId(matchedCandidate.preview.template)
+      candidate = matchedCandidate
+    }
+  }
+
+  sheetData.value = candidate.rows
+  const preview = candidate.preview
   const defaults = preview.template.configDefaults || {}
   templateForm.value = {
     ...templateForm.value,

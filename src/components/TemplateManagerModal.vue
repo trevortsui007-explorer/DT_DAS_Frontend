@@ -15,10 +15,27 @@
                 <PlusOutlined />
                 新增模板
               </button>
-              <button type="button" class="ant-btn ant-btn-default" :disabled="loading" @click="loadTemplates">
-                <ReloadOutlined />
-                刷新
+              <button type="button" class="ant-btn ant-btn-default" @click="triggerQuickImport">
+                <UploadOutlined />
+                快速导入
               </button>
+              <button
+                type="button"
+                class="ant-btn ant-btn-default icon-only-btn"
+                title="刷新模板"
+                aria-label="刷新模板"
+                :disabled="loading"
+                @click="loadTemplates"
+              >
+                <ReloadOutlined />
+              </button>
+              <input
+                ref="quickImportInput"
+                class="quick-import-input"
+                type="file"
+                accept=".json,application/json"
+                @change="handleQuickImport"
+              />
             </div>
 
             <div v-if="loading" class="template-empty">模板加载中...</div>
@@ -97,6 +114,10 @@
               <section class="template-section">
                 <div class="template-section-title">模板识别</div>
                 <div class="template-form-grid">
+                  <label class="template-form-item">
+                    <span>Sheet名称</span>
+                    <input v-model.trim="definition.sheetName" class="ant-input" type="text" placeholder="例如 2.1 FHS" />
+                  </label>
                   <label class="template-form-item">
                     <span>标题单元格</span>
                     <input v-model.trim="definition.identity.titleCell" class="ant-input" type="text" placeholder="例如 B2" />
@@ -321,6 +342,7 @@ import {
   PlusOutlined,
   ReloadOutlined,
   SaveOutlined,
+  UploadOutlined,
 } from '@ant-design/icons-vue'
 import message from '@/components/index.js'
 import * as api from '@/api'
@@ -333,6 +355,10 @@ const parseError = ref('')
 const rawDefinitionJson = ref('')
 const showJson = ref(false)
 
+const quickImportInput = ref(null)
+
+const TEMPLATE_PACKAGE_FORMAT = 'das-excel-template-package'
+const TEMPLATE_PACKAGE_VERSION = 1
 const form = reactive(createEmptyForm())
 const definition = reactive(createEmptyDefinition())
 
@@ -373,6 +399,7 @@ function createEmptyForm() {
 
 function createEmptyDefinition() {
   return {
+    sheetName: '',
     identity: {
       templateCode: '',
       templateName: '',
@@ -420,6 +447,8 @@ const normalizeDefinition = (value) => {
     ? value.dataRegion.carryForwardColumns
     : []
 
+  delete next.filenameParsing
+  delete next.FilenameParsing
   return next
 }
 
@@ -460,6 +489,57 @@ const createNewTemplate = () => {
   parseError.value = ''
   rawDefinitionJson.value = ''
   showJson.value = false
+}
+
+const triggerQuickImport = () => {
+  if (!quickImportInput.value) return
+  quickImportInput.value.value = ''
+  quickImportInput.value.click()
+}
+
+const handleQuickImport = async (event) => {
+  const file = event.target.files?.[0]
+  if (!file) return
+
+  try {
+    const packageValue = JSON.parse(await file.text())
+    if (packageValue?.format !== TEMPLATE_PACKAGE_FORMAT) {
+      throw new Error(`format must be ${TEMPLATE_PACKAGE_FORMAT}`)
+    }
+    if (Number(packageValue?.formatVersion) !== TEMPLATE_PACKAGE_VERSION) {
+      throw new Error(`formatVersion must be ${TEMPLATE_PACKAGE_VERSION}`)
+    }
+
+    const imported = packageValue?.template
+    const importedDefinition = imported?.definition
+    if (!imported || !importedDefinition || Array.isArray(importedDefinition)) {
+      throw new Error('template.definition is required')
+    }
+
+    const templateCode = imported.templateCode ?? imported.TemplateCode ?? ''
+    const templateName = imported.templateName ?? imported.TemplateName ?? ''
+    if (!templateCode || !templateName) {
+      throw new Error('templateCode and templateName are required')
+    }
+
+    resetObject(form, {
+      id: '',
+      templateCode,
+      templateName,
+      parserType: imported.parserType ?? imported.ParserType ?? 'template-excel',
+      templateVersion: Number(imported.templateVersion ?? imported.TemplateVersion) || 1,
+      isEnabled: Boolean(imported.isEnabled ?? imported.IsEnabled ?? true),
+    })
+    resetObject(definition, normalizeDefinition(importedDefinition))
+    definition.identity.templateCode = templateCode
+    definition.identity.templateName = templateName
+    parseError.value = ''
+    rawDefinitionJson.value = ''
+    showJson.value = true
+    message.success(`\u5df2\u5bfc\u5165 ${file.name}\uff0c\u8bf7\u786e\u8ba4\u540e\u4fdd\u5b58`)
+  } catch (error) {
+    message.error(`\u5feb\u901f\u5bfc\u5165\u5931\u8d25\uff1a${error?.message || 'invalid package'}`)
+  }
 }
 
 const selectTemplate = (template) => {
@@ -554,6 +634,8 @@ const copyTemplate = () => {
 
 const buildDefinitionPayload = () => {
   const payload = JSON.parse(JSON.stringify(definition))
+  delete payload.filenameParsing
+  delete payload.FilenameParsing
   payload.identity = {
     ...(payload.identity || {}),
     templateCode: form.templateCode,
@@ -703,7 +785,28 @@ defineExpose({ open })
 }
 
 .template-sidebar-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 36px;
   margin-bottom: 12px;
+}
+
+.template-sidebar-actions .ant-btn {
+  min-width: 0;
+  padding-inline: 8px;
+}
+
+.template-sidebar-actions .icon-only-btn {
+  width: 36px;
+  padding: 0;
+  font-size: 0;
+}
+
+.template-sidebar-actions .icon-only-btn :deep(svg) {
+  font-size: 16px;
+}
+
+.quick-import-input {
+  display: none;
 }
 
 .template-list-card {

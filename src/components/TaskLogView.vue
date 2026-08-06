@@ -5,9 +5,9 @@
         <div class="task-log-card__header">
           <div class="task-log-card__header-left">
             <div class="task-log-title-row">
-            <h3 class="task-log-card__title">当前任务</h3>
+            <h3 class="task-log-card__title">{{ isFileLogView ? '当前文件状态' : isConfigLogView ? '当前配置' : '当前任务' }}</h3>
               <button
-                v-if="currentTask"
+                v-if="!usesConfigRightList && currentTask"
                 type="button"
                 class="summary-toggle-btn"
                 @click="toggleCurrentTaskSummary"
@@ -15,7 +15,7 @@
                 {{ currentTaskSummaryCollapsed ? '展开概览' : '收起概览' }}
               </button>
               <button
-                v-if="currentTask"
+                v-if="!usesConfigRightList && currentTask"
                 type="button"
                 class="summary-toggle-btn"
                 @click="toggleCurrentTaskDetailSummary"
@@ -23,12 +23,14 @@
                 {{ currentTaskDetailSummaryCollapsed ? '展开明细' : '收起明细' }}
               </button>
             </div>
-            <p class="task-log-card__desc">查看当前选中任务的状态、进度和明细</p>
+            <p class="task-log-card__desc">
+              {{ isFileLogView ? '查看当前配置在日期范围内的文件采集水位' : isConfigLogView ? '查看当前配置在日期范围内的采集历史' : '查看当前选中任务的状态、进度和明细' }}
+            </p>
           </div>
           <div class="task-log-card__header-right">
             <div class="task-log-filter-row">
               <button
-                v-for="tag in detailFilterTags"
+                v-for="tag in visibleDetailFilterTags"
                 :key="tag"
                 type="button"
                 class="status-tag status-tag--filter"
@@ -41,73 +43,94 @@
           </div>
         </div>
 
-        <div v-if="currentTask" class="task-log-current">
-          <div v-show="!currentTaskSummaryCollapsed" class="task-log-summary-panel">
-          <div class="task-log-summary-grid">
-            <div class="task-log-summary-item">
-              <span class="label">任务编号</span>
-              <span class="task-log-summary-trigger">
-                <span class="trigger-tag" :class="getTriggerTypeClass(currentTask.triggerType)">
-                  {{ formatTriggerType(currentTask.triggerType) }}
+        <div v-if="currentLogTargetAvailable" class="task-log-current">
+          <div v-if="!usesConfigRightList" v-show="!currentTaskSummaryCollapsed" class="task-log-summary-panel">
+            <div class="task-log-summary-grid">
+              <div class="task-log-summary-item">
+                <span class="label">任务编号</span>
+                <span class="task-log-summary-trigger">
+                  <span class="trigger-tag" :class="getTriggerTypeClass(currentTask.triggerType)">
+                    {{ formatTriggerType(currentTask.triggerType) }}
+                  </span>
                 </span>
-              </span>
-              <span class="value mono">{{ currentTask.taskCode || currentTask.taskLogId || '--' }}</span>
-            </div>
+                <span class="value mono">{{ currentTask.taskCode || currentTask.taskLogId || '--' }}</span>
+              </div>
 
-            <div class="task-log-summary-item">
-              <span class="label">状态</span>
-              <span class="value">
-                <span class="status-tag" :class="getStatusClass(currentTaskDisplaySummary.status)">
-                  {{ currentTaskDisplaySummary.status || '--' }}
+              <div class="task-log-summary-item">
+                <span class="label">状态</span>
+                <span class="value">
+                  <span class="status-tag" :class="getStatusClass(currentTaskDisplaySummary.status)">
+                    {{ currentTaskDisplaySummary.status || '--' }}
+                  </span>
                 </span>
-              </span>
+              </div>
+
+              <div class="task-log-summary-item">
+                <span class="label">开始时间</span>
+                <span class="value">{{ formatDateTime(currentTask.startTime) }}</span>
+              </div>
+
+              <div class="task-log-summary-item">
+                <span class="label">结束时间</span>
+                <span class="value">{{ formatDateTime(currentTask.endTime) }}</span>
+              </div>
+
+              <div class="task-log-summary-item">
+                <span class="label">采集单元总数</span>
+                <span class="value">{{ currentTask.totalConfigs ?? 0 }}</span>
+              </div>
+
+              <div class="task-log-summary-item">
+                <span class="label">已处理单元</span>
+                <span class="value">{{ currentTaskDisplaySummary.processedCount ?? 0 }}</span>
+              </div>
+
+              <div class="task-log-summary-item">
+                <span class="label">成功单元</span>
+                <span class="value success-text">{{ currentTaskDisplaySummary.successCount ?? 0 }}</span>
+              </div>
+
+              <div class="task-log-summary-item">
+                <span class="label">失败单元</span>
+                <span class="value danger-text">{{ currentTaskDisplaySummary.failureCount ?? 0 }}</span>
+              </div>
             </div>
 
-            <div class="task-log-summary-item">
-              <span class="label">开始时间</span>
-              <span class="value">{{ formatDateTime(currentTask.startTime) }}</span>
-            </div>
+            <div class="task-progress-block">
+              <div class="task-progress-meta">
+                <span>执行进度</span>
+                <span>{{ progressPercent }}%</span>
+              </div>
 
-            <div class="task-log-summary-item">
-              <span class="label">结束时间</span>
-              <span class="value">{{ formatDateTime(currentTask.endTime) }}</span>
-            </div>
+              <div class="task-progress-bar">
+                <div class="task-progress-bar__inner" :style="{ width: `${progressPercent}%` }" />
+              </div>
 
-            <div class="task-log-summary-item">
-              <span class="label">采集单元总数</span>
-              <span class="value">{{ currentTask.totalConfigs ?? 0 }}</span>
-            </div>
-
-            <div class="task-log-summary-item">
-              <span class="label">已处理单元</span>
-              <span class="value">{{ currentTaskDisplaySummary.processedCount ?? 0 }}</span>
-            </div>
-
-            <div class="task-log-summary-item">
-              <span class="label">成功单元</span>
-              <span class="value success-text">{{ currentTaskDisplaySummary.successCount ?? 0 }}</span>
-            </div>
-
-            <div class="task-log-summary-item">
-              <span class="label">失败单元</span>
-              <span class="value danger-text">{{ currentTaskDisplaySummary.failureCount ?? 0 }}</span>
+              <div class="task-progress-foot">
+                <span>上次刷新：{{ formatDateTime(lastRefreshTime) }}</span>
+              </div>
             </div>
           </div>
 
-          <div class="task-progress-block">
-            <div class="task-progress-meta">
-              <span>执行进度</span>
-              <span>{{ progressPercent }}%</span>
+          <div v-else class="task-log-summary-panel">
+            <div class="task-log-summary-grid">
+              <div class="task-log-summary-item">
+                <span class="label">配置名称</span>
+                <span class="value mono">{{ getConfigName(selectedConfig) || '--' }}</span>
+              </div>
+              <div class="task-log-summary-item">
+                <span class="label">入库表名</span>
+                <span class="value">{{ getField(selectedConfig, ['tableName', 'TableName']) }}</span>
+              </div>
+              <div class="task-log-summary-item">
+                <span class="label">文件类型</span>
+                <span class="value">{{ getField(selectedConfig, ['fileType', 'FileType']) }}</span>
+              </div>
+              <div class="task-log-summary-item">
+                <span class="label">采集行数</span>
+                <span class="value success-text">{{ selectedConfigHistorySummary.processedRows }}</span>
+              </div>
             </div>
-
-            <div class="task-progress-bar">
-              <div class="task-progress-bar__inner" :style="{ width: `${progressPercent}%` }" />
-            </div>
-
-            <div class="task-progress-foot">
-              <span>上次刷新：{{ formatDateTime(lastRefreshTime) }}</span>
-            </div>
-          </div>
           </div>
 
           <div class="task-log-detail">
@@ -119,7 +142,7 @@
                 @click="setActiveDetailTag('All')"
               >
                 <span class="label">总文件数</span>
-                <span class="value">{{ currentTaskFileSummary.totalFiles }}</span>
+                <span class="value">{{ currentLogFileSummary.totalFiles }}</span>
               </button>
               <button
                 type="button"
@@ -128,16 +151,17 @@
                 @click="setActiveDetailTag('Success')"
               >
                 <span class="label">成功文件</span>
-                <span class="value success-text">{{ currentTaskFileSummary.successFiles }}</span>
+                <span class="value success-text">{{ currentLogFileSummary.successFiles }}</span>
               </button>
               <button
+                v-if="!isFileLogView"
                 type="button"
                 class="task-log-file-summary-item"
                 :class="{ 'task-log-file-summary-item--active': isSummaryFilterActive('Warning') }"
                 @click="setActiveDetailTag('Warning')"
               >
                 <span class="label">Warning 文件</span>
-                <span class="value warning-text">{{ currentTaskFileSummary.warningFiles }}</span>
+                <span class="value warning-text">{{ currentLogFileSummary.warningFiles }}</span>
               </button>
               <button
                 type="button"
@@ -146,14 +170,14 @@
                 @click="setActiveDetailTag('Failed')"
               >
                 <span class="label">失败文件</span>
-                <span class="value danger-text">{{ currentTaskFileSummary.failedFiles }}</span>
+                <span class="value danger-text">{{ currentLogFileSummary.failedFiles }}</span>
               </button>
               <div class="task-log-file-summary-rows">
-                入库行数 {{ currentTaskFileSummary.processedRows }}
+                入库行数 {{ currentLogFileSummary.processedRows }}
               </div>
             </div>
             <div
-              v-show="!currentTaskDetailSummaryCollapsed && activeDetailTag !== 'Success' && hasErrorFiles"
+              v-show="!usesConfigRightList && !currentTaskDetailSummaryCollapsed && activeDetailTag !== 'Success' && hasErrorFiles"
               class="task-log-error-category-panel"
             >
               <div class="task-log-error-category-head">
@@ -195,66 +219,141 @@
 
               <template v-else>
                 <div class="task-log-detail-list">
+                  <template v-for="row in displayedTaskDetailRows" :key="row.key">
+                  <div v-if="row.type === 'group'" class="task-log-config-group task-log-task-group">
+                    <div class="task-log-task-group__main">
+                      <span class="mono">{{ row.label }}</span>
+                      <span class="status-tag" :class="getStatusClass(row.group?.taskStatus)">
+                        {{ row.group?.taskStatus || '--' }}
+                      </span>
+                      <span class="trigger-tag" :class="getTriggerTypeClass(row.group?.triggerType)">
+                        {{ formatTriggerType(row.group?.triggerType) }}
+                      </span>
+                    </div>
+                    <div class="task-log-config-group__stats">
+                      <span>开始 {{ formatDateTime(row.group?.startTime) }}</span>
+                      <span>结束 {{ formatDateTime(row.group?.endTime) }}</span>
+                      <span>总 {{ row.group?.totalFiles ?? row.count }}</span>
+                      <span>成功 {{ row.group?.successFiles ?? 0 }}</span>
+                      <span>Warning {{ row.group?.warningFiles ?? 0 }}</span>
+                      <span>失败 {{ row.group?.failedFiles ?? 0 }}</span>
+                      <span>行 {{ row.group?.processedRows ?? 0 }}</span>
+                    </div>
+                  </div>
                   <div
-                    v-for="item in filteredTaskDetails"
-                    :key="item.id || `${item.fileName}-${item.startTime}`"
+                    v-else-if="row.type === 'fileState'"
                     class="task-log-detail-item"
-                    :class="{ 'is-warning': isWarningDetail(item) }"
-                    role="button"
-                    tabindex="0"
-                    @click="openDetailModal(item)"
-                    @keydown.enter="openDetailModal(item)"
-                    @keydown.space.prevent="openDetailModal(item)"
                   >
                     <div class="task-log-detail-item__top">
-                      <span class="task-log-file">{{ getDetailTitle(item) }}</span>
-                      <span class="status-tag" :class="getStatusClass(getDetailDisplayStatus(item))">
-                        {{ getDetailDisplayStatus(item) || '--' }}
+                      <span class="task-log-file">{{ row.item.fileName || '--' }}</span>
+                      <span class="status-tag" :class="getStatusClass(row.item.lastStatus)">
+                        {{ row.item.lastStatus || '--' }}
                       </span>
                     </div>
 
-                    <div v-if="item.fullFilePath" class="task-log-file-path">
-                      {{ item.fullFilePath }}
+                    <div v-if="row.item.fullPath" class="task-log-file-path">
+                      {{ row.item.fullPath }}
+                    </div>
+
+                    <div class="task-log-detail-item__meta task-log-detail-item__meta--combined">
+                      <div class="task-log-detail-item__meta-left">
+                        <span class="task-log-row-metric">
+                          <span>业务日期</span>
+                          <strong>{{ formatDate(row.item.businessDate) }}</strong>
+                        </span>
+                        <span class="task-log-row-metric">
+                          <span>数据行数</span>
+                          <strong>{{ row.item.dataRowCount ?? 0 }}</strong>
+                        </span>
+                        <span class="task-log-row-metric">
+                          <span>起始行</span>
+                          <strong>{{ row.item.lastStartRow ?? 0 }}</strong>
+                        </span>
+                        <span class="task-log-row-metric">
+                          <span>新增行</span>
+                          <strong>{{ row.item.lastProcessedRows ?? 0 }}</strong>
+                        </span>
+                        <span class="task-log-row-metric">
+                          <span>来源</span>
+                          <strong>{{ row.item.lastUpdateSource || '--' }}</strong>
+                        </span>
+                        <span class="task-log-row-metric">
+                          <span>大小</span>
+                          <strong>{{ formatFileSize(row.item.fileSize) }}</strong>
+                        </span>
+                      </div>
+                      <div class="task-log-detail-item__meta-time">
+                        <span class="task-log-meta-chip task-log-meta-chip--time">
+                          <span>文件修改</span>
+                          <strong>{{ formatDateTime(row.item.lastWriteTime) }}</strong>
+                        </span>
+                        <span class="task-log-meta-chip task-log-meta-chip--time">
+                          <span>状态更新</span>
+                          <strong>{{ formatDateTime(row.item.updateTime) }}</strong>
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div
+                    v-else
+                    class="task-log-detail-item"
+                    :class="{ 'is-warning': isWarningDetail(row.item) }"
+                    role="button"
+                    tabindex="0"
+                    @click="openDetailModal(row.item)"
+                    @keydown.enter="openDetailModal(row.item)"
+                    @keydown.space.prevent="openDetailModal(row.item)"
+                  >
+                    <div class="task-log-detail-item__top">
+                      <span class="task-log-file">{{ getDetailTitle(row.item) }}</span>
+                      <span class="status-tag" :class="getStatusClass(getDetailDisplayStatus(row.item))">
+                        {{ getDetailDisplayStatus(row.item) || '--' }}
+                      </span>
+                    </div>
+
+                    <div v-if="row.item.fullFilePath" class="task-log-file-path">
+                      {{ row.item.fullFilePath }}
                     </div>
 
                     <div class="task-log-detail-item__meta task-log-detail-item__meta--combined">
                       <div class="task-log-detail-item__meta-left">
                         <span class="task-log-meta-chip task-log-meta-chip--config">
-                          <span>{{ getDetailConfigDisplay(item).label }}</span>
-                          <strong>{{ getDetailConfigDisplay(item).value }}</strong>
+                          <span>{{ getDetailConfigDisplay(row.item).label }}</span>
+                          <strong>{{ getDetailConfigDisplay(row.item).value }}</strong>
                         </span>
                         <span class="task-log-row-metric">
                           <span>起始行</span>
-                          <strong>{{ item.startRow ?? 0 }}</strong>
+                          <strong>{{ row.item.startRow ?? 0 }}</strong>
                         </span>
                         <span class="task-log-row-metric">
                           <span>处理行数</span>
-                          <strong>{{ item.processedRows ?? 0 }}</strong>
+                          <strong>{{ row.item.processedRows ?? 0 }}</strong>
                         </span>
                       </div>
                       <div class="task-log-detail-item__meta-time">
                         <span class="task-log-meta-chip task-log-meta-chip--time">
                           <span>开始</span>
-                          <strong>{{ formatDateTime(item.startTime) }}</strong>
+                          <strong>{{ formatDateTime(row.item.startTime) }}</strong>
                         </span>
                         <span class="task-log-meta-chip task-log-meta-chip--time">
                           <span>结束</span>
-                          <strong>{{ formatDateTime(item.endTime) }}</strong>
+                          <strong>{{ formatDateTime(row.item.endTime) }}</strong>
                         </span>
                       </div>
                     </div>
 
                     <div
-                      v-if="item.errorMessage"
+                      v-if="row.item.errorMessage"
                       class="task-log-error"
-                      :class="{ 'task-log-warning': isWarningDetail(item) }"
+                      :class="{ 'task-log-warning': isWarningDetail(row.item) }"
                     >
-                      <span v-if="item.errorCategoryName" class="task-log-error-category-tag">
-                        {{ item.errorCategoryName }}
+                      <span v-if="row.item.errorCategoryName" class="task-log-error-category-tag">
+                        {{ row.item.errorCategoryName }}
                       </span>
-                      {{ item.errorMessage }}
+                      {{ row.item.errorMessage }}
                     </div>
                   </div>
+                  </template>
                 </div>
 
                 <div class="task-log-detail-footer">
@@ -302,14 +401,16 @@
           </div>
         </div>
 
-        <div v-else class="empty-placeholder">暂无任务日志。请先执行采集任务。</div>
+        <div v-else class="empty-placeholder">
+          {{ usesConfigRightList ? '请选择右侧配置查看记录。' : '暂无任务日志。请先执行采集任务。' }}
+        </div>
       </section>
 
       <aside class="task-log-card task-log-history">
         <div class="task-log-card__header task-log-history-header">
           <div class="task-log-history-header__left">
-            <h3 class="task-log-card__title">历史任务</h3>
-            <p class="task-log-card__desc">点击切换查看不同任务</p>
+            <h3 class="task-log-card__title">{{ usesConfigRightList ? '配置列表' : '历史任务' }}</h3>
+            <p class="task-log-card__desc">{{ isFileLogView ? '点击配置查看文件状态' : isConfigLogView ? '点击配置查看采集历史' : '点击切换查看不同任务' }}</p>
           </div>
           <div class="task-log-history-header__right">
             <div class="history-date-filter">
@@ -347,23 +448,55 @@
           {{ historyDateFilterError }}
         </div>
 
-        <div v-if="listLoading" class="loading-placeholder">正在加载历史任务...</div>
+        <div v-if="listLoading" class="loading-placeholder">{{ usesConfigRightList ? '正在加载配置列表...' : '正在加载历史任务...' }}</div>
 
-        <div v-else-if="!taskList.length" class="empty-placeholder">暂无历史任务</div>
+        <div v-else-if="rightListTotal <= 0" class="empty-placeholder">{{ usesConfigRightList ? '暂无配置' : '暂无历史任务' }}</div>
 
-        <div v-else-if="!filteredHistoryTaskList.length" class="empty-placeholder">
-          当前筛选条件下暂无历史任务记录
+        <div v-else-if="!rightListItems.length" class="empty-placeholder">
+          {{ usesConfigRightList ? '当前页暂无配置记录' : '当前筛选条件下暂无历史任务记录' }}
         </div>
 
         <div v-else class="task-log-history-list">
           <div
-            v-for="item in filteredHistoryTaskList"
-            :key="item.taskLogId"
+            v-for="item in rightListItems"
+            :key="usesConfigRightList ? item.id : item.taskLogId"
             class="task-log-history-item"
-            :class="{ active: currentTask?.taskLogId === item.taskLogId }"
-            @click="selectTask(item)"
+            :class="{ active: usesConfigRightList ? selectedConfig?.id === item.id : currentTask?.taskLogId === item.taskLogId }"
+            @click="usesConfigRightList ? selectConfig(item) : selectTask(item)"
           >
-            <div class="task-log-history-item__top">
+            <template v-if="usesConfigRightList">
+              <div class="task-log-history-item__top task-log-history-item__top--config">
+                <span class="mono task-log-history-id task-log-config-title">
+                  <span class="task-log-config-title__prefix">配置</span>
+                  <strong>{{ getConfigName(item) || item.id || '--' }}</strong>
+                </span>
+                <span class="task-log-config-metrics">
+                  <span v-if="isFileLogView && getRightConfigSummary(item.id).totalFiles > 0" class="processed-rows-summary-tag">
+                    文件{{ getRightConfigSummary(item.id).totalFiles }}
+                  </span>
+                  <span v-if="!isFileLogView && getRightConfigSummary(item.id).warningFiles > 0" class="warning-summary-tag">
+                    Warning {{ getRightConfigSummary(item.id).warningFiles }}
+                  </span>
+                  <span v-if="getRightConfigSummary(item.id).failedFiles > 0" class="failed-summary-tag">
+                    Failed {{ getRightConfigSummary(item.id).failedFiles }}
+                  </span>
+                  <span v-if="isFileLogView && getRightConfigSummary(item.id).newFiles > 0" class="processed-rows-summary-tag">
+                    New {{ getRightConfigSummary(item.id).newFiles }}
+                  </span>
+                  <span v-if="getRightConfigSummary(item.id).processedRows > 1" class="processed-rows-summary-tag">
+                    采集{{ getRightConfigSummary(item.id).processedRows }}行
+                  </span>
+                </span>
+              </div>
+
+              <div class="task-log-history-item__meta">
+                <span>入库表 {{ getField(item, ['tableName', 'TableName']) }}</span>
+                <span>类型 {{ getField(item, ['fileType', 'FileType']) }}</span>
+              </div>
+            </template>
+
+            <template v-else>
+              <div class="task-log-history-item__top">
               <span class="mono task-log-history-id">{{ item.taskCode || item.taskLogId || '--' }}</span>
               <span v-if="getTaskDisplaySummary(item).warningCount > 0" class="warning-summary-tag">
                 存在{{ getTaskDisplaySummary(item).warningCount }}项无文件
@@ -393,12 +526,13 @@
             <div class="task-log-history-item__meta">
               <span>{{ formatDateTime(item.startTime) }}</span>
             </div>
+            </template>
           </div>
         </div>
 
-        <div v-if="taskListTotal > 0" class="task-log-history-footer">
+        <div v-if="rightListTotal > 0" class="task-log-history-footer">
           <div class="task-log-history-footer__summary">
-            共 {{ taskListTotal }} 条，第 {{ taskListPageNo }} / {{ totalPages }} 页
+            共 {{ rightListTotal }} 条，第 {{ taskListPageNo }} / {{ totalPages }} 页
           </div>
 
           <div class="task-log-history-pagination">
@@ -507,6 +641,10 @@ const props = defineProps({
     type: String,
     default: '',
   },
+  logViewMode: {
+    type: String,
+    default: 'task',
+  },
 })
 
 const emit = defineEmits(['task-selected'])
@@ -514,12 +652,20 @@ const emit = defineEmits(['task-selected'])
 const currentTask = ref(null)
 const taskList = ref([])
 const taskDetails = ref([])
+const taskDetailConfigGroups = ref([])
+const configList = ref([])
+const selectedConfig = ref(null)
+const configHistoryTaskGroups = ref([])
+const configHistorySummaryById = ref({})
+const configFileStateSummaryById = ref({})
+const fileStateList = ref([])
 const detailCacheByTaskId = ref({})
 const configCacheById = ref({})
 const taskDisplaySummaryById = ref({})
 const warningSummaryLoadingIds = new Set()
 const taskFileSummaryLoadingIds = new Set()
 const detailFilterTags = ['All', 'Success', 'Warning', 'Failed', 'New']
+const fileStateFilterTags = ['All', 'Success', 'Failed', 'New']
 const activeDetailTag = ref('All')
 const activeErrorCategory = ref('')
 const currentTaskSummaryCollapsed = ref(false)
@@ -587,7 +733,7 @@ const hasRunningTask = computed(() => {
 })
 
 const totalPages = computed(() => {
-  const total = Number(taskListTotal.value || 0)
+  const total = Number(rightListTotal.value || 0)
   const pageSize = Number(taskListPageSize.value || 10)
   return Math.max(1, Math.ceil(total / pageSize))
 })
@@ -763,6 +909,7 @@ const emptyTaskFileSummary = {
   warningFiles: 0,
   failedFiles: 0,
   processedRows: 0,
+  newFiles: 0,
   errorCategories: [],
 }
 
@@ -793,6 +940,7 @@ const normalizeTaskFileSummary = (raw = {}) => {
     warningFiles: rawWarningFiles + postProcessingFiles,
     failedFiles: Math.max(rawFailedFiles - postProcessingFiles, 0),
     processedRows: Number(raw.processedRows ?? raw.ProcessedRows ?? 0),
+    newFiles: Number(raw.newFiles ?? raw.NewFiles ?? 0),
     errorCategories,
   }
 }
@@ -843,6 +991,89 @@ const filteredTaskDetails = computed(() => {
   return taskDetails.value
 })
 
+const isConfigLogView = computed(() => props.logViewMode === 'config')
+const isFileLogView = computed(() => props.logViewMode === 'file')
+const usesConfigRightList = computed(() => isConfigLogView.value || isFileLogView.value)
+const visibleDetailFilterTags = computed(() =>
+  isFileLogView.value ? fileStateFilterTags : detailFilterTags,
+)
+
+const getConfigHistorySummary = (configId) =>
+  configHistorySummaryById.value[configId] || emptyTaskFileSummary
+
+const getConfigFileStateSummary = (configId) =>
+  configFileStateSummaryById.value[configId] || emptyTaskFileSummary
+
+const getRightConfigSummary = (configId) =>
+  isFileLogView.value ? getConfigFileStateSummary(configId) : getConfigHistorySummary(configId)
+
+const selectedConfigHistorySummary = computed(() =>
+  isFileLogView.value
+    ? getConfigFileStateSummary(selectedConfig.value?.id)
+    : getConfigHistorySummary(selectedConfig.value?.id),
+)
+
+const currentLogFileSummary = computed(() =>
+  usesConfigRightList.value ? selectedConfigHistorySummary.value : currentTaskFileSummary.value,
+)
+
+const currentLogTargetAvailable = computed(() =>
+  usesConfigRightList.value ? Boolean(selectedConfig.value) : Boolean(currentTask.value),
+)
+
+const rightListTotal = computed(() =>
+  usesConfigRightList.value ? configList.value.length : taskListTotal.value,
+)
+
+const rightListItems = computed(() => {
+  if (!usesConfigRightList.value) return filteredHistoryTaskList.value
+
+  const pageSize = Number(taskListPageSize.value || 10)
+  const start = (Number(taskListPageNo.value || 1) - 1) * pageSize
+  return configList.value.slice(start, start + pageSize)
+})
+
+const getDetailRowKey = (item = {}, index = 0) =>
+  item.id || `${item.configId || 'unknown'}-${item.fileName || 'file'}-${item.startTime || index}-${index}`
+
+const displayedTaskDetailRows = computed(() => {
+  if (isFileLogView.value) {
+    return fileStateList.value.map((item, index) => ({
+      type: 'fileState',
+      key: `file-state-${item.id || index}`,
+      item,
+    }))
+  }
+
+  if (!isConfigLogView.value) {
+    return filteredTaskDetails.value.map((item, index) => ({
+      type: 'detail',
+      key: `detail-${getDetailRowKey(item, index)}`,
+      item,
+    }))
+  }
+
+  const rows = []
+  configHistoryTaskGroups.value.forEach((group, groupIndex) => {
+    const groupKey = String(group.taskLogId || group.taskCode || groupIndex)
+    rows.push({
+      type: 'group',
+      key: `group-${groupKey}`,
+      label: group.taskCode || group.taskLogId || `任务 ${groupIndex + 1}`,
+      count: group.totalFiles,
+      group,
+    })
+    group.latestDetails.forEach((item, index) => {
+      rows.push({
+        type: 'detail',
+        key: `group-${groupKey}-detail-${getDetailRowKey(item, index)}`,
+        item,
+      })
+    })
+  })
+  return rows
+})
+
 const getStartOfDayMs = (dateString) => {
   if (!dateString) return null
   const date = new Date(`${dateString}T00:00:00`)
@@ -876,13 +1107,17 @@ const filteredHistoryTaskList = computed(() => {
 })
 
 const setActiveDetailTag = async (tag) => {
-  if (!detailFilterTags.includes(tag)) return
+  if (!visibleDetailFilterTags.value.includes(tag)) return
   if (activeDetailTag.value === tag && !activeErrorCategory.value) return
   activeDetailTag.value = tag
   activeErrorCategory.value = ''
   detailPageNo.value = 1
 
-  if (currentTask.value?.taskLogId) {
+  if (isFileLogView.value && selectedConfig.value?.id) {
+    await loadConfigFileStates(selectedConfig.value.id, { pageNo: 1 })
+  } else if (isConfigLogView.value && selectedConfig.value?.id) {
+    await loadConfigHistory(selectedConfig.value.id, { pageNo: 1 })
+  } else if (currentTask.value?.taskLogId) {
     await loadTaskDetails(currentTask.value.taskLogId, { force: true, pageNo: 1 })
   }
 }
@@ -892,12 +1127,16 @@ const isSummaryFilterActive = (tag) => activeDetailTag.value === tag
 const setActiveErrorCategory = async (category) => {
   if (!category) return
   activeErrorCategory.value = activeErrorCategory.value === category ? '' : category
-  if (activeDetailTag.value === 'Success' || activeDetailTag.value === 'New') {
+  if (activeDetailTag.value === 'Success' || activeDetailTag.value === 'New' || isFileLogView.value) {
     activeDetailTag.value = 'All'
   }
   detailPageNo.value = 1
 
-  if (currentTask.value?.taskLogId) {
+  if (isFileLogView.value && selectedConfig.value?.id) {
+    await loadConfigFileStates(selectedConfig.value.id, { pageNo: 1 })
+  } else if (isConfigLogView.value && selectedConfig.value?.id) {
+    await loadConfigHistory(selectedConfig.value.id, { pageNo: 1 })
+  } else if (currentTask.value?.taskLogId) {
     await loadTaskDetails(currentTask.value.taskLogId, { force: true, pageNo: 1 })
   }
 }
@@ -907,7 +1146,11 @@ const clearActiveErrorCategory = async () => {
   activeErrorCategory.value = ''
   detailPageNo.value = 1
 
-  if (currentTask.value?.taskLogId) {
+  if (isFileLogView.value && selectedConfig.value?.id) {
+    await loadConfigFileStates(selectedConfig.value.id, { pageNo: 1 })
+  } else if (isConfigLogView.value && selectedConfig.value?.id) {
+    await loadConfigHistory(selectedConfig.value.id, { pageNo: 1 })
+  } else if (currentTask.value?.taskLogId) {
     await loadTaskDetails(currentTask.value.taskLogId, { force: true, pageNo: 1 })
   }
 }
@@ -928,7 +1171,18 @@ const applyHistoryDateFilter = async () => {
   historyDateFilterError.value = ''
   effectiveHistoryStartDate.value = startDateValue
   effectiveHistoryEndDate.value = endDateValue
-  await loadTaskList(1)
+  if (usesConfigRightList.value) {
+    detailPageNo.value = 1
+    if (isFileLogView.value) {
+      await hydrateConfigFileStateSummaries()
+      await loadConfigFileStates(selectedConfig.value?.id, { pageNo: 1 })
+    } else {
+      await hydrateConfigHistorySummaries()
+      await loadConfigHistory(selectedConfig.value?.id, { pageNo: 1 })
+    }
+  } else {
+    await loadTaskList(1)
+  }
 }
 
 const clearHistoryDateFilter = async () => {
@@ -937,7 +1191,18 @@ const clearHistoryDateFilter = async () => {
   effectiveHistoryStartDate.value = ''
   effectiveHistoryEndDate.value = ''
   historyDateFilterError.value = ''
-  await loadTaskList(1)
+  if (usesConfigRightList.value) {
+    detailPageNo.value = 1
+    if (isFileLogView.value) {
+      await hydrateConfigFileStateSummaries()
+      await loadConfigFileStates(selectedConfig.value?.id, { pageNo: 1 })
+    } else {
+      await hydrateConfigHistorySummaries()
+      await loadConfigHistory(selectedConfig.value?.id, { pageNo: 1 })
+    }
+  } else {
+    await loadTaskList(1)
+  }
 }
 
 const normalizeTask = (raw = {}) => ({
@@ -974,6 +1239,87 @@ const normalizeDetail = (raw = {}) => ({
   errorCategory: raw.errorCategory || raw.ErrorCategory || '',
   errorCategoryName: raw.errorCategoryName || raw.ErrorCategoryName || '',
   config: raw.config || raw.Config || null,
+})
+
+const normalizeConfigDetailGroup = (raw = {}) => ({
+  type: 'group',
+  configId: raw.configId ?? raw.ConfigId ?? 0,
+  configName: raw.configName || raw.ConfigName || '',
+  totalFiles: Number(raw.totalFiles ?? raw.TotalFiles ?? 0),
+  successFiles: Number(raw.successFiles ?? raw.SuccessFiles ?? 0),
+  warningFiles: Number(raw.warningFiles ?? raw.WarningFiles ?? 0),
+  failedFiles: Number(raw.failedFiles ?? raw.FailedFiles ?? 0),
+  processedRows: Number(raw.processedRows ?? raw.ProcessedRows ?? 0),
+  latestDetails: (raw.latestDetails || raw.LatestDetails || []).map(normalizeDetail),
+})
+
+const normalizeConfigHistoryTaskGroup = (raw = {}) => ({
+  type: 'taskGroup',
+  taskLogId: raw.taskLogId || raw.TaskLogId || '',
+  taskCode: raw.taskCode || raw.TaskCode || '',
+  triggerType: raw.triggerType || raw.TriggerType || '',
+  taskStatus: raw.taskStatus || raw.TaskStatus || '',
+  startTime: raw.startTime || raw.StartTime || '',
+  endTime: raw.endTime || raw.EndTime || '',
+  totalFiles: Number(raw.totalFiles ?? raw.TotalFiles ?? 0),
+  successFiles: Number(raw.successFiles ?? raw.SuccessFiles ?? 0),
+  warningFiles: Number(raw.warningFiles ?? raw.WarningFiles ?? 0),
+  failedFiles: Number(raw.failedFiles ?? raw.FailedFiles ?? 0),
+  processedRows: Number(raw.processedRows ?? raw.ProcessedRows ?? 0),
+  latestDetails: (raw.latestDetails || raw.LatestDetails || []).map(normalizeDetail),
+})
+
+const normalizeFileState = (raw = {}) => ({
+  id: raw.id ?? raw.Id ?? '',
+  configId: raw.configId ?? raw.ConfigId ?? 0,
+  businessDate: raw.businessDate || raw.BusinessDate || '',
+  fileName: raw.fileName || raw.FileName || '',
+  fullPath: raw.fullPath || raw.FullPath || '',
+  dataRowCount: Number(raw.dataRowCount ?? raw.DataRowCount ?? 0),
+  lastStartRow: Number(raw.lastStartRow ?? raw.LastStartRow ?? 0),
+  lastProcessedRows: Number(raw.lastProcessedRows ?? raw.LastProcessedRows ?? 0),
+  lastTaskLogId: raw.lastTaskLogId || raw.LastTaskLogId || '',
+  lastStatus: raw.lastStatus || raw.LastStatus || '',
+  lastUpdateSource: raw.lastUpdateSource || raw.LastUpdateSource || '',
+  isSealed: Boolean(raw.isSealed ?? raw.IsSealed ?? false),
+  sealTime: raw.sealTime || raw.SealTime || '',
+  lastScanTime: raw.lastScanTime || raw.LastScanTime || '',
+  lastWriteTime: raw.lastWriteTime || raw.LastWriteTime || '',
+  lastWriteTimeUtc: raw.lastWriteTimeUtc || raw.LastWriteTimeUtc || '',
+  fileSize: raw.fileSize ?? raw.FileSize ?? null,
+  createTime: raw.createTime || raw.CreateTime || '',
+  updateTime: raw.updateTime || raw.UpdateTime || '',
+})
+
+const attachTaskGroupToDetails = (group = {}) => ({
+  ...group,
+  latestDetails: (group.latestDetails || []).map((detail) => ({
+    ...detail,
+    taskContext: {
+      taskLogId: group.taskLogId,
+      taskCode: group.taskCode,
+      triggerType: group.triggerType,
+      status: group.taskStatus,
+      startTime: group.startTime,
+      endTime: group.endTime,
+      totalConfigs: group.totalFiles,
+      successCount: group.successFiles,
+      failureCount: group.failedFiles,
+      processedCount: group.totalFiles,
+      progress: 100,
+    },
+  })),
+})
+
+const normalizeConfig = (raw = {}) => ({
+  ...raw,
+  id: raw.id ?? raw.Id ?? 0,
+  eqName: raw.eqName || raw.EqName || '',
+  tableName: raw.tableName || raw.TableName || '',
+  fileType: raw.fileType || raw.FileType || '',
+  filePathPattern: raw.filePathPattern || raw.FilePathPattern || '',
+  fileNamePattern: raw.fileNamePattern || raw.FileNamePattern || '',
+  isEnabled: raw.isEnabled ?? raw.IsEnabled,
 })
 
 const getField = (source, keys, fallback = '--') => {
@@ -1064,9 +1410,9 @@ const getPostProcessingClass = (value) => {
 }
 
 const detailModalSections = computed(() => {
-  const task = currentTask.value || {}
-  const taskSummary = currentTaskDisplaySummary.value
   const detail = selectedDetail.value || {}
+  const task = detail.taskContext || currentTask.value || {}
+  const taskSummary = detail.taskContext ? task : currentTaskDisplaySummary.value
   const detailStatus = getDetailDisplayStatus(detail)
   const config = selectedDetailConfig.value || detail.config || {}
 
@@ -1171,6 +1517,24 @@ const formatDateTime = (value) => {
 
   const pad = (n) => String(n).padStart(2, '0')
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+}
+
+const formatDate = (value) => {
+  if (!value) return '--'
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+}
+
+const formatFileSize = (value) => {
+  const bytes = Number(value)
+  if (!Number.isFinite(bytes) || bytes <= 0) return '--'
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
 
 const formatPercent = (value) => {
@@ -1304,6 +1668,126 @@ const hydrateTaskFileSummaries = (list = []) => {
   })()
 }
 
+const getHistoryQueryRange = () => ({
+  startTime: effectiveHistoryStartDate.value || undefined,
+  endTime: effectiveHistoryEndDate.value
+    ? getDateStringAfterDays(effectiveHistoryEndDate.value, 1)
+    : undefined,
+})
+
+const getFileStateQueryRange = () => ({
+  startTime: effectiveHistoryStartDate.value || undefined,
+  endTime: effectiveHistoryEndDate.value || undefined,
+})
+
+const hydrateConfigHistorySummaries = async (list = configList.value) => {
+  const configIds = list
+    .map((config) => config.id)
+    .filter((id) => Number(id) > 0)
+
+  if (!configIds.length) return
+
+  try {
+    const res = await api.fetchConfigHistorySummary(configIds, getHistoryQueryRange())
+    const summaries = res?.data || res || []
+    const next = {}
+    ;(Array.isArray(summaries) ? summaries : []).forEach((item = {}) => {
+      const configId = item.configId ?? item.ConfigId
+      if (!configId) return
+      next[configId] = {
+        totalFiles: Number(item.totalFiles ?? item.TotalFiles ?? 0),
+        successFiles: Number(item.successFiles ?? item.SuccessFiles ?? 0),
+        warningFiles: Number(item.warningFiles ?? item.WarningFiles ?? 0),
+        failedFiles: Number(item.failedFiles ?? item.FailedFiles ?? 0),
+        processedRows: Number(item.processedRows ?? item.ProcessedRows ?? 0),
+        errorCategories: [],
+      }
+    })
+    configHistorySummaryById.value = next
+  } catch (err) {
+    console.error('加载配置历史汇总失败', err)
+  }
+}
+
+const hydrateConfigFileStateSummaries = async (list = configList.value) => {
+  const configIds = list
+    .map((config) => config.id)
+    .filter((id) => Number(id) > 0)
+
+  if (!configIds.length) return
+
+  try {
+    const res = await api.fetchConfigFileStateSummary(configIds, getFileStateQueryRange())
+    const summaries = res?.data || res || []
+    const next = {}
+    ;(Array.isArray(summaries) ? summaries : []).forEach((item = {}) => {
+      const configId = item.configId ?? item.ConfigId
+      if (!configId) return
+      next[configId] = {
+        totalFiles: Number(item.totalFiles ?? item.TotalFiles ?? 0),
+        successFiles: Number(item.successFiles ?? item.SuccessFiles ?? 0),
+        warningFiles: 0,
+        failedFiles: Number(item.failedFiles ?? item.FailedFiles ?? 0),
+        processedRows: Number(item.processedRows ?? item.ProcessedRows ?? 0),
+        newFiles: Number(item.newFiles ?? item.NewFiles ?? 0),
+        errorCategories: [],
+      }
+    })
+    configFileStateSummaryById.value = next
+  } catch (err) {
+    console.error('加载配置文件状态汇总失败', err)
+  }
+}
+
+const loadConfigList = async ({ silent = false } = {}) => {
+  if (!silent) {
+    listLoading.value = true
+  }
+
+  try {
+    const res = await api.fetchConfigs()
+    const rawList = res?.data || res || []
+    const list = (Array.isArray(rawList) ? rawList : []).map(normalizeConfig)
+
+    configList.value = list
+    taskListPageNo.value = Math.min(taskListPageNo.value, Math.max(1, Math.ceil(list.length / taskListPageSize.value)))
+    if (isFileLogView.value) {
+      await hydrateConfigFileStateSummaries(list)
+    } else {
+      await hydrateConfigHistorySummaries(list)
+    }
+
+    const currentId = selectedConfig.value?.id
+    const matched = currentId ? list.find((item) => item.id === currentId) : null
+    if (matched) {
+      selectedConfig.value = matched
+      if (isFileLogView.value) {
+        await loadConfigFileStates(matched.id, { silent: true })
+      } else {
+        await loadConfigHistory(matched.id, { silent: true })
+      }
+      return
+    }
+
+    if (list.length) {
+      await selectConfig(list[0])
+    } else {
+      selectedConfig.value = null
+      configHistoryTaskGroups.value = []
+      fileStateList.value = []
+      taskDetails.value = []
+      detailTotal.value = 0
+    }
+  } catch (err) {
+    console.error('加载配置列表失败', err)
+    notify.error('加载配置列表失败')
+  } finally {
+    if (!silent) {
+      listLoading.value = false
+    }
+  }
+}
+
 const loadTaskList = async (pageNo = taskListPageNo.value, { silent = false } = {}) => {
   if (!silent) {
     listLoading.value = true
@@ -1372,17 +1856,33 @@ const getDateStringAfterDays = (dateString, days = 0) => {
 
 const changeTaskListPage = async (page) => {
   if (page < 1 || page > totalPages.value || page === taskListPageNo.value) return
-  await loadTaskList(page)
+  if (usesConfigRightList.value) {
+    taskListPageNo.value = page
+  } else {
+    await loadTaskList(page)
+  }
 }
 
 const changeDetailPage = async (page) => {
   if (page < 1 || page > detailTotalPages.value || page === detailPageNo.value) return
-  await loadTaskDetails(currentTask.value?.taskLogId, { pageNo: page })
+  if (isFileLogView.value) {
+    await loadConfigFileStates(selectedConfig.value?.id, { pageNo: page })
+  } else if (isConfigLogView.value) {
+    await loadConfigHistory(selectedConfig.value?.id, { pageNo: page })
+  } else {
+    await loadTaskDetails(currentTask.value?.taskLogId, { pageNo: page })
+  }
 }
 
 const changeDetailPageSize = async () => {
   detailPageNo.value = 1
-  await loadTaskDetails(currentTask.value?.taskLogId, { pageNo: 1 })
+  if (isFileLogView.value) {
+    await loadConfigFileStates(selectedConfig.value?.id, { pageNo: 1 })
+  } else if (isConfigLogView.value) {
+    await loadConfigHistory(selectedConfig.value?.id, { pageNo: 1 })
+  } else {
+    await loadTaskDetails(currentTask.value?.taskLogId, { pageNo: 1 })
+  }
 }
 
 const loadTaskStatus = async (taskLogId) => {
@@ -1438,13 +1938,22 @@ const loadTaskDetails = async (taskLogId, { pageNo = detailPageNo.value, silent 
       status: getDetailStatusParam(),
       errorCategory: activeDetailTag.value === 'Success' || isProcessedRowsFilterActive() ? undefined : activeErrorCategory.value || undefined,
       hasProcessedRows: isProcessedRowsFilterActive() ? true : undefined,
+      viewMode: isConfigLogView.value ? 'config' : undefined,
     })
     const payload = res?.data || res || {}
-    const rawDetails = Array.isArray(payload) ? payload : payload.items || payload.Items || []
-    const normalizedDetails = rawDetails.map(normalizeDetail)
+    const rawItems = Array.isArray(payload) ? payload : payload.items || payload.Items || []
+    const normalizedDetails = isConfigLogView.value
+      ? rawItems
+          .map(normalizeConfigDetailGroup)
+          .flatMap((group) => group.latestDetails)
+      : rawItems.map(normalizeDetail)
 
     preloadDetailConfigs(normalizedDetails)
+    taskDetailConfigGroups.value = isConfigLogView.value
+      ? rawItems.map(normalizeConfigDetailGroup)
+      : []
     taskDetails.value = normalizedDetails
+    fileStateList.value = []
     detailTotal.value = Array.isArray(payload) ? normalizedDetails.length : payload.total ?? payload.Total ?? normalizedDetails.length
     detailPageNo.value = Array.isArray(payload) ? pageNo : payload.pageNo ?? payload.PageNo ?? pageNo
     detailPageSize.value = Array.isArray(payload)
@@ -1453,6 +1962,84 @@ const loadTaskDetails = async (taskLogId, { pageNo = detailPageNo.value, silent 
   } catch (err) {
     console.error('加载任务明细失败', err)
     notify.error('加载任务明细失败')
+  } finally {
+    if (!silent) {
+      detailsLoading.value = false
+    }
+  }
+}
+
+const loadConfigHistory = async (configId = selectedConfig.value?.id, { pageNo = detailPageNo.value, silent = false } = {}) => {
+  if (!configId) return
+
+  if (!silent) {
+    detailsLoading.value = true
+  }
+
+  try {
+    const res = await api.fetchConfigHistory(configId, {
+      ...getFileStateQueryRange(),
+      pageNo,
+      pageSize: detailPageSize.value,
+      status: getDetailStatusParam(),
+      errorCategory: activeDetailTag.value === 'Success' || isProcessedRowsFilterActive() ? undefined : activeErrorCategory.value || undefined,
+      hasProcessedRows: isProcessedRowsFilterActive() ? true : undefined,
+    })
+    const payload = res?.data || res || {}
+    const rawItems = Array.isArray(payload) ? payload : payload.items || payload.Items || []
+    const groups = rawItems.map(normalizeConfigHistoryTaskGroup).map(attachTaskGroupToDetails)
+    const details = groups.flatMap((group) => group.latestDetails)
+
+    preloadDetailConfigs(details)
+    configHistoryTaskGroups.value = groups
+    taskDetailConfigGroups.value = []
+    taskDetails.value = details
+    fileStateList.value = []
+    detailTotal.value = Array.isArray(payload) ? groups.length : payload.total ?? payload.Total ?? groups.length
+    detailPageNo.value = Array.isArray(payload) ? pageNo : payload.pageNo ?? payload.PageNo ?? pageNo
+    detailPageSize.value = Array.isArray(payload)
+      ? detailPageSize.value
+      : payload.pageSize ?? payload.PageSize ?? detailPageSize.value
+  } catch (err) {
+    console.error('加载配置采集历史失败', err)
+    notify.error('加载配置采集历史失败')
+  } finally {
+    if (!silent) {
+      detailsLoading.value = false
+    }
+  }
+}
+
+const loadConfigFileStates = async (configId = selectedConfig.value?.id, { pageNo = detailPageNo.value, silent = false } = {}) => {
+  if (!configId) return
+
+  if (!silent) {
+    detailsLoading.value = true
+  }
+
+  try {
+    const res = await api.fetchConfigFileStates(configId, {
+      ...getHistoryQueryRange(),
+      pageNo,
+      pageSize: detailPageSize.value,
+      status: getDetailStatusParam(),
+      hasProcessedRows: isProcessedRowsFilterActive() ? true : undefined,
+    })
+    const payload = res?.data || res || {}
+    const rawItems = Array.isArray(payload) ? payload : payload.items || payload.Items || []
+
+    fileStateList.value = rawItems.map(normalizeFileState)
+    configHistoryTaskGroups.value = []
+    taskDetailConfigGroups.value = []
+    taskDetails.value = []
+    detailTotal.value = Array.isArray(payload) ? fileStateList.value.length : payload.total ?? payload.Total ?? fileStateList.value.length
+    detailPageNo.value = Array.isArray(payload) ? pageNo : payload.pageNo ?? payload.PageNo ?? pageNo
+    detailPageSize.value = Array.isArray(payload)
+      ? detailPageSize.value
+      : payload.pageSize ?? payload.PageSize ?? detailPageSize.value
+  } catch (err) {
+    console.error('加载配置文件状态失败', err)
+    notify.error('加载配置文件状态失败')
   } finally {
     if (!silent) {
       detailsLoading.value = false
@@ -1503,6 +2090,7 @@ const selectTask = async (item) => {
   detailPageNo.value = 1
   detailTotal.value = 0
   taskDetails.value = []
+  taskDetailConfigGroups.value = []
   emit('task-selected', currentTask.value)
 
   await Promise.all([
@@ -1512,7 +2100,40 @@ const selectTask = async (item) => {
   ])
 }
 
+const selectConfig = async (item) => {
+  selectedConfig.value = normalizeConfig(item)
+  activeDetailTag.value = 'All'
+  activeErrorCategory.value = ''
+  detailPageNo.value = 1
+  detailTotal.value = 0
+  taskDetails.value = []
+  taskDetailConfigGroups.value = []
+  configHistoryTaskGroups.value = []
+  fileStateList.value = []
+
+  if (isFileLogView.value) {
+    await loadConfigFileStates(selectedConfig.value.id, { pageNo: 1 })
+  } else {
+    await loadConfigHistory(selectedConfig.value.id, { pageNo: 1 })
+  }
+}
+
 const refreshCurrentTask = async ({ silent = false } = {}) => {
+  if (usesConfigRightList.value) {
+    if (isFileLogView.value) {
+      await Promise.all([
+        hydrateConfigFileStateSummaries(),
+        loadConfigFileStates(selectedConfig.value?.id, { silent }),
+      ])
+    } else {
+      await Promise.all([
+        hydrateConfigHistorySummaries(),
+        loadConfigHistory(selectedConfig.value?.id, { silent }),
+      ])
+    }
+    return
+  }
+
   if (!currentTask.value?.taskLogId) {
     if (!silent) {
       notify.warning('当前没有可刷新的任务')
@@ -1528,7 +2149,11 @@ const refreshCurrentTask = async ({ silent = false } = {}) => {
 }
 
 const refreshHistoryList = async () => {
-  await loadTaskList(taskListPageNo.value)
+  if (usesConfigRightList.value) {
+    await loadConfigList()
+  } else {
+    await loadTaskList(taskListPageNo.value)
+  }
 }
 
 const stopPolling = () => {
@@ -1545,7 +2170,11 @@ const refreshRunningTaskState = async () => {
   try {
     await refreshCurrentTask({ silent: true })
 
-    await loadTaskList(taskListPageNo.value, { silent: true })
+    if (usesConfigRightList.value) {
+      await loadConfigList({ silent: true })
+    } else {
+      await loadTaskList(taskListPageNo.value, { silent: true })
+    }
   } finally {
     pollingRefreshing.value = false
   }
@@ -1585,6 +2214,33 @@ watch(
 )
 
 // 获取一个月起点
+watch(
+  () => props.logViewMode,
+  async () => {
+    detailPageNo.value = 1
+    detailTotal.value = 0
+    taskDetails.value = []
+    taskDetailConfigGroups.value = []
+    configHistoryTaskGroups.value = []
+    fileStateList.value = []
+    if (!visibleDetailFilterTags.value.includes(activeDetailTag.value)) {
+      activeDetailTag.value = 'All'
+    }
+
+    if (usesConfigRightList.value) {
+      taskListPageNo.value = 1
+      await loadConfigList()
+      return
+    }
+
+    if (currentTask.value?.taskLogId) {
+      await loadTaskDetails(currentTask.value.taskLogId, { pageNo: 1 })
+    } else {
+      await loadTaskList(1)
+    }
+  },
+)
+
 const getDateStringOneMonthAgo = () => {
   const date = new Date()
   date.setMonth(date.getMonth() - 1)
@@ -1603,7 +2259,11 @@ onMounted(async () => {
   effectiveHistoryStartDate.value = oneMonthAgoDate
   effectiveHistoryEndDate.value = todayDate
 
-  await loadTaskList()
+  if (usesConfigRightList.value) {
+    await loadConfigList()
+  } else {
+    await loadTaskList()
+  }
 })
 
 onBeforeUnmount(() => {
@@ -2193,6 +2853,56 @@ defineExpose({
   cursor: pointer;
 }
 
+.task-log-config-group {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 1px solid #d9f7be;
+  border-radius: 8px;
+  background: #f6ffed;
+  color: #237804;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.task-log-task-group {
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.task-log-task-group__main {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 220px;
+}
+
+.task-log-config-group strong {
+  min-width: 32px;
+  text-align: right;
+}
+
+.task-log-config-group__stats {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #389e0d;
+}
+
+.task-log-config-group__stats span {
+  padding: 2px 7px;
+  border: 1px solid #b7eb8f;
+  border-radius: 999px;
+  background: #fff;
+}
+
 .task-log-detail-item.is-warning {
   background: #fff;
   border-color: #ffe58f;
@@ -2229,6 +2939,10 @@ defineExpose({
   justify-content: space-between;
   align-items: center;
   gap: 12px;
+}
+
+.task-log-history-item__top--config {
+  align-items: flex-start;
 }
 
 .task-log-detail-item__top,
@@ -2378,6 +3092,40 @@ defineExpose({
   font-weight: 600;
 }
 
+.task-log-config-title {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  line-height: 1.4;
+  word-break: normal;
+}
+
+.task-log-config-title__prefix {
+  color: #237804;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.task-log-config-title strong {
+  min-width: 0;
+  color: rgba(0, 0, 0, 0.88);
+  font-size: 14px;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-log-config-metrics {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex-shrink: 0;
+  max-width: 62%;
+}
+
 .warning-summary-tag {
   display: inline-flex;
   align-items: center;
@@ -2391,6 +3139,23 @@ defineExpose({
   border: 1px solid #ffe58f;
   font-size: 12px;
   font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.failed-summary-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 6px;
+  background: #fff2f0;
+  color: #cf1322;
+  border: 1px solid #ffccc7;
+  font-size: 12px;
+  font-weight: 700;
   white-space: nowrap;
   flex-shrink: 0;
 }

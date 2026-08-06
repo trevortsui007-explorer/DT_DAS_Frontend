@@ -448,6 +448,7 @@ export const normalizeExcelTemplate = (template) => {
     systemFields: Array.isArray(definition.systemFields) ? definition.systemFields : (template?.systemFields || []),
     fixedFields: definition.fixedFields ?? template?.fixedFields ?? {},
     rawFields: definition.rawFields ?? template?.rawFields ?? {},
+
     fieldMappings: definition.fieldMappings ?? template?.fieldMappings,
     configDefaults: {
       ...(template?.configDefaults || {}),
@@ -681,6 +682,7 @@ const getPreviewHeaders = (template, records) => {
 export const createTemplateExcelPreview = (rows, fileName = '', rawTemplate = LAMINATION_THICKNESS_TEMPLATE) => {
   const template = normalizeExcelTemplate(rawTemplate)
   const titleAddress = splitCellAddress(template.identity?.titleCell)
+
   const title = titleAddress ? normalizeText(getCell(rows, titleAddress.rowNumber, titleAddress.column)) : ''
   const titleContains = normalizeText(template.identity?.titleContains)
   const requiredCells = template.identity?.requiredCells || []
@@ -742,7 +744,9 @@ export const createTemplateExcelPreview = (rows, fileName = '', rawTemplate = LA
 
     Object.entries(template.rawFields || {}).forEach(([field, action]) => {
       rowData[field] = buildRawFieldValue(rows, rowNumber, action)
+
     })
+
 
     records.push(rowData)
   }

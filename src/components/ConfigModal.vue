@@ -278,6 +278,37 @@
                 <HelpTooltip text="扩展字段为非文件内字段" />
               </label>
               <div class="ext-fields-editor" :class="{ 'auto-filled-input': isAuto('ExtFields') }">
+                <div v-if="isTemplateParser" class="template-system-fields">
+                  <div class="template-system-fields__header">
+                    <span>模板继承字段</span>
+                    <small>来自所选 Excel 模板，只读且无需重复添加</small>
+                  </div>
+                  <div v-if="templateLoading" class="template-system-fields__state">
+                    正在读取模板字段...
+                  </div>
+                  <div
+                    v-else-if="selectedTemplateSystemFields.error"
+                    class="template-system-fields__state template-system-fields__state--error"
+                  >
+                    {{ selectedTemplateSystemFields.error }}
+                  </div>
+                  <div
+                    v-else-if="selectedTemplateSystemFields.fields.length"
+                    class="template-system-fields__tags"
+                  >
+                    <span
+                      v-for="field in selectedTemplateSystemFields.fields"
+                      :key="field"
+                      class="template-system-field-tag"
+                    >
+                      {{ field }}
+                    </span>
+                  </div>
+                  <div v-else class="template-system-fields__state">
+                    当前模板未配置系统字段
+                  </div>
+                </div>
+                <div v-if="isTemplateParser" class="ext-field-source-label">配置附加字段</div>
                 <div class="ext-fields-presets">
                   <button
                     v-for="preset in EXT_FIELD_PRESETS"
@@ -378,6 +409,174 @@
                 <button type="button" class="mapping-add-btn" @click="addFixedFieldRow">
                   + 新增固定字段
                 </button>
+              </div>
+            </div>
+
+            <div class="filename-parsing-card">
+              <div class="filename-parsing-card__header">
+                <div>
+                  <div class="filename-parsing-card__title">文件名解析</div>
+                  <div class="filename-parsing-card__hint">
+                    从文件名提取业务字段，并写入该文件的每条采集数据。
+                  </div>
+                </div>
+                <label class="filename-parsing-switch">
+                  <input type="checkbox" v-model="filenameParsingEnabled" />
+                  <span>{{ filenameParsingEnabled ? '已启用' : '未启用' }}</span>
+                </label>
+              </div>
+
+              <div v-if="filenameParsingEnabled" class="filename-parsing-card__body">
+                <div class="filename-parser-grid">
+                  <div class="form-item">
+                    <label>解析器类型</label>
+                    <select class="ant-input" v-model="filenameParserMode" @change="clearFilenameTestResult">
+                      <option value="regex">正则表达式</option>
+                      <option value="custom">自定义 C# 解析器</option>
+                    </select>
+                  </div>
+                  <div v-if="filenameParserMode === 'custom'" class="form-item">
+                    <label>解析器名称 (parserName)</label>
+                    <input
+                      class="ant-input"
+                      v-model.trim="filenameCustomParserName"
+                      placeholder="已在 IoC 注册的 parserName"
+                    />
+                  </div>
+                </div>
+
+                <template v-if="filenameParserMode === 'regex'">
+                  <div class="form-item">
+                    <div class="filename-pattern-label-row">
+                      <label>正则表达式</label>
+                      <button
+                        type="button"
+                        class="ant-btn ant-btn-default filename-detect-groups-btn"
+                        @click="detectFilenameCaptureGroups"
+                      >
+                        <SearchOutlined />
+                        <span>识别捕获组</span>
+                      </button>
+                    </div>
+                    <textarea
+                      class="ant-input filename-pattern-input"
+                      v-model="filenameRegexPattern"
+                      placeholder="使用命名捕获组，例如 (?&lt;customerPartNo&gt;[^_]+)"
+                    ></textarea>
+                  </div>
+                  <label class="filename-checkbox-row">
+                    <input type="checkbox" v-model="filenameIgnoreCase" />
+                    <span>忽略大小写</span>
+                  </label>
+
+                  <div class="filename-field-table">
+                    <div class="filename-field-table__head">
+                      <span>入库字段</span>
+                      <span>捕获组</span>
+                      <span>类型</span>
+                      <span>日期格式</span>
+                      <span>必填</span>
+                      <span>操作</span>
+                    </div>
+                    <div
+                      v-for="(row, index) in filenameFieldRows"
+                      :key="row.key"
+                      class="filename-field-table__row"
+                    >
+                      <input class="ant-input" v-model.trim="row.field" placeholder="CustomerPartNo" />
+                      <input class="ant-input" v-model.trim="row.group" placeholder="customerPartNo" />
+                      <select class="ant-input" v-model="row.type">
+                        <option value="text">text</option>
+                        <option value="int">int</option>
+                        <option value="decimal">decimal</option>
+                        <option value="date">date</option>
+                      </select>
+                      <input
+                        class="ant-input"
+                        v-model.trim="row.format"
+                        :disabled="row.type !== 'date'"
+                        placeholder="yyyy.M.d"
+                      />
+                      <label class="filename-required-check">
+                        <input type="checkbox" v-model="row.required" />
+                      </label>
+                      <button
+                        type="button"
+                        class="mapping-remove-btn"
+                        @click="removeFilenameFieldRow(index)"
+                      >
+                        删除
+                      </button>
+                    </div>
+                    <button type="button" class="mapping-add-btn" @click="addFilenameFieldRow">
+                      + 新增解析字段
+                    </button>
+                  </div>
+                </template>
+
+                <div v-else class="form-item">
+                  <label>解析器选项 (options JSON)</label>
+                  <textarea
+                    class="ant-input filename-options-input"
+                    v-model="filenameCustomOptionsText"
+                    placeholder="{}"
+                  ></textarea>
+                </div>
+
+                <div class="filename-test-panel">
+                  <div class="filename-test-grid">
+                    <div class="form-item">
+                      <label>测试文件名</label>
+                      <input
+                        class="ant-input"
+                        v-model.trim="filenameTestFileName"
+                        placeholder="例如: PCB_xxx_2026.7.31.xlsx"
+                      />
+                    </div>
+                    <div class="form-item">
+                      <label>完整路径（可选）</label>
+                      <input
+                        class="ant-input"
+                        v-model.trim="filenameTestFullPath"
+                        placeholder="D:/Reports/sample.xlsx"
+                      />
+                    </div>
+                  </div>
+                  <div class="filename-test-actions">
+                    <button
+                      type="button"
+                      class="ant-btn ant-btn-primary"
+                      :disabled="filenameTestLoading"
+                      @click="testFilenameParsing"
+                    >
+                      {{ filenameTestLoading ? '解析中...' : '测试解析' }}
+                    </button>
+                  </div>
+
+                  <div v-if="filenameTestError" class="filename-test-error">
+                    {{ filenameTestError }}
+                  </div>
+                  <div v-else-if="filenameTestResult" class="filename-test-result">
+                    <div
+                      v-for="[field, value] in filenameTestFieldEntries"
+                      :key="field"
+                      class="filename-test-result__row"
+                    >
+                      <span>{{ field }}</span>
+                      <code>{{ formatFilenameTestValue(value) }}</code>
+                    </div>
+                    <div v-if="!filenameTestFieldEntries.length" class="filename-test-empty">
+                      解析成功，未返回字段。
+                    </div>
+                    <div
+                      v-for="warning in filenameTestWarnings"
+                      :key="warning"
+                      class="filename-test-warning"
+                    >
+                      {{ warning }}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -607,6 +806,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
+import { SearchOutlined } from '@ant-design/icons-vue'
 import * as api from '@/api'
 import message from '@/components/index.js'
 import HelpTooltip from './HelpTooltip.vue'
@@ -625,6 +825,18 @@ const jsonImportText = ref('')
 const importTemplates = ref([])
 const templateLoading = ref(false)
 const templateLoadFailed = ref(false)
+const filenameParsingEnabled = ref(false)
+const filenameParserMode = ref('regex')
+const filenameCustomParserName = ref('')
+const filenameRegexPattern = ref('')
+const filenameIgnoreCase = ref(true)
+const filenameCustomOptionsText = ref('{}')
+const filenameFieldRows = ref([])
+const filenameTestFileName = ref('')
+const filenameTestFullPath = ref('')
+const filenameTestLoading = ref(false)
+const filenameTestResult = ref(null)
+const filenameTestError = ref('')
 
 const formData = ref({
   id: '',
@@ -671,6 +883,7 @@ const extFieldTags = ref([])
 const extFieldInput = ref('')
 let mappingRowSeed = 0
 let fixedFieldRowSeed = 0
+let filenameFieldRowSeed = 0
 
 const EXT_FIELD_PRESETS = [
   'Id(Guid)',
@@ -702,6 +915,12 @@ const modalTitle = computed(() => {
 })
 
 const isTemplateParser = computed(() => formData.value.parserType === 'template-excel')
+const filenameTestFieldEntries = computed(() =>
+  Object.entries(filenameTestResult.value?.fields || filenameTestResult.value?.Fields || {}),
+)
+const filenameTestWarnings = computed(
+  () => filenameTestResult.value?.warnings || filenameTestResult.value?.Warnings || [],
+)
 
 const normalizeFileType = (value) => {
   const fileType = String(value || '').trim().toLowerCase()
@@ -839,6 +1058,24 @@ const getTemplateLabel = (template) => {
   return version ? `${name} v${version}` : name
 }
 
+const readTemplateDefinition = (template) => {
+  const raw = template?.definitionJson ?? template?.DefinitionJson ?? template?.definition
+  if (!raw) return null
+  if (typeof raw === 'object' && !Array.isArray(raw)) return raw
+  if (typeof raw !== 'string') return null
+
+  const parsed = JSON.parse(raw)
+  return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null
+}
+
+const getDefinitionPropertyIgnoreCase = (definition, propertyName) => {
+  if (!definition || typeof definition !== 'object') return undefined
+  const key = Object.keys(definition).find(
+    (item) => item.toLowerCase() === propertyName.toLowerCase(),
+  )
+  return key ? definition[key] : undefined
+}
+
 const templateOptions = computed(() => {
   const options = importTemplates.value.filter(isTemplateEnabled)
   const selectedId = formData.value.templateId
@@ -856,6 +1093,46 @@ const templateOptions = computed(() => {
     },
     ...options,
   ]
+})
+
+const selectedTemplateSystemFields = computed(() => {
+  if (!isTemplateParser.value || !formData.value.templateId) {
+    return { fields: [], error: '' }
+  }
+
+  const selectedTemplate = importTemplates.value.find(
+    (template) => String(getTemplateId(template)) === String(formData.value.templateId),
+  )
+  if (!selectedTemplate) {
+    return {
+      fields: [],
+      error: templateLoadFailed.value ? '模板加载失败，无法读取继承字段' : '未获取到当前模板定义',
+    }
+  }
+
+  try {
+    const definition = readTemplateDefinition(selectedTemplate)
+    if (!definition) return { fields: [], error: '当前模板缺少 DefinitionJson' }
+
+    const rawFields = getDefinitionPropertyIgnoreCase(definition, 'systemFields')
+    if (rawFields === undefined || rawFields === null) return { fields: [], error: '' }
+    if (!Array.isArray(rawFields)) {
+      return { fields: [], error: '模板 systemFields 格式错误，应为数组' }
+    }
+
+    const seen = new Set()
+    const fields = rawFields
+      .map((field) => String(field || '').trim())
+      .filter((field) => {
+        const key = field.toLowerCase()
+        if (!key || seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+    return { fields, error: '' }
+  } catch {
+    return { fields: [], error: '模板 DefinitionJson 解析失败，无法读取继承字段' }
+  }
 })
 
 const ensureDefaultTemplate = () => {
@@ -914,6 +1191,307 @@ const parseParserOptionsObject = (value) => {
     return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}
   } catch {
     return {}
+  }
+}
+
+const createFilenameFieldRow = (
+  field = '',
+  group = '',
+  type = 'text',
+  format = '',
+  required = false,
+) => {
+  filenameFieldRowSeed += 1
+  return {
+    key: `filename-field-${filenameFieldRowSeed}`,
+    field,
+    group,
+    type,
+    format,
+    required,
+  }
+}
+
+const clearFilenameTestResult = () => {
+  filenameTestResult.value = null
+  filenameTestError.value = ''
+}
+
+const resetFilenameParsing = () => {
+  filenameParsingEnabled.value = false
+  filenameParserMode.value = 'regex'
+  filenameCustomParserName.value = ''
+  filenameRegexPattern.value = ''
+  filenameIgnoreCase.value = true
+  filenameCustomOptionsText.value = '{}'
+  filenameFieldRows.value = [createFilenameFieldRow()]
+  filenameTestFileName.value = ''
+  filenameTestFullPath.value = ''
+  filenameTestLoading.value = false
+  clearFilenameTestResult()
+}
+
+const getOptionValue = (value, camelName, pascalName) => {
+  if (!value || typeof value !== 'object') return undefined
+  if (value[camelName] !== undefined) return value[camelName]
+  if (value[pascalName] !== undefined) return value[pascalName]
+
+  const names = new Set([camelName.toLowerCase(), pascalName.toLowerCase()])
+  const key = Object.keys(value).find((item) => names.has(item.toLowerCase()))
+  return key ? value[key] : undefined
+}
+
+const deleteOptionIgnoreCase = (value, name) => {
+  Object.keys(value || {}).forEach((key) => {
+    if (key.toLowerCase() === name.toLowerCase()) delete value[key]
+  })
+}
+
+const readFilenameParsing = (value) => {
+  const root = parseParserOptionsObject(value)
+  const definition = getOptionValue(root, 'filenameParsing', 'FilenameParsing')
+  if (!definition || typeof definition !== 'object' || Array.isArray(definition)) {
+    resetFilenameParsing()
+    return
+  }
+
+  const parserName = String(getOptionValue(definition, 'parserName', 'ParserName') || '').trim()
+  const options = getOptionValue(definition, 'options', 'Options') || {}
+  const fields = getOptionValue(options, 'fields', 'Fields')
+
+  filenameParsingEnabled.value = true
+  filenameParserMode.value = parserName.toLowerCase() === 'regex' ? 'regex' : 'custom'
+  filenameCustomParserName.value = filenameParserMode.value === 'custom' ? parserName : ''
+  filenameRegexPattern.value = String(getOptionValue(options, 'pattern', 'Pattern') || '')
+  filenameIgnoreCase.value = toBooleanOption(
+    getOptionValue(options, 'ignoreCase', 'IgnoreCase'),
+    false,
+  )
+  filenameCustomOptionsText.value = JSON.stringify(options, null, 2)
+  filenameFieldRows.value = Array.isArray(fields)
+    ? fields.map((field) =>
+        createFilenameFieldRow(
+          getOptionValue(field, 'field', 'Field') || '',
+          getOptionValue(field, 'group', 'Group') || '',
+          getOptionValue(field, 'type', 'Type') || 'text',
+          getOptionValue(field, 'format', 'Format') || '',
+          toBooleanOption(getOptionValue(field, 'required', 'Required'), false),
+        ),
+      )
+    : []
+  if (!filenameFieldRows.value.length) {
+    filenameFieldRows.value = [createFilenameFieldRow()]
+  }
+  clearFilenameTestResult()
+}
+
+const addFilenameFieldRow = () => {
+  filenameFieldRows.value.push(createFilenameFieldRow())
+}
+
+const extractNamedCaptureGroups = (pattern) => {
+  const groups = []
+  const seen = new Set()
+  let escaped = false
+  let inCharacterClass = false
+
+  for (let index = 0; index < pattern.length; index += 1) {
+    const character = pattern[index]
+    if (escaped) {
+      escaped = false
+      continue
+    }
+    if (character === '\\') {
+      escaped = true
+      continue
+    }
+    if (character === '[') {
+      inCharacterClass = true
+      continue
+    }
+    if (character === ']' && inCharacterClass) {
+      inCharacterClass = false
+      continue
+    }
+    if (inCharacterClass || pattern.slice(index, index + 3) !== '(?<') continue
+
+    const nameStart = index + 3
+    if (pattern[nameStart] === '=' || pattern[nameStart] === '!') continue
+
+    const nameEnd = pattern.indexOf('>', nameStart)
+    if (nameEnd < 0) continue
+
+    const groupName = pattern.slice(nameStart, nameEnd)
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(groupName) || seen.has(groupName)) continue
+
+    seen.add(groupName)
+    groups.push(groupName)
+  }
+
+  return groups
+}
+
+const isBlankFilenameFieldRow = (row) =>
+  !String(row.field || '').trim() &&
+  !String(row.group || '').trim() &&
+  (!row.type || row.type === 'text') &&
+  !String(row.format || '').trim() &&
+  !row.required
+
+const toDefaultTargetField = (groupName) =>
+  groupName ? groupName.charAt(0).toUpperCase() + groupName.slice(1) : ''
+
+const detectFilenameCaptureGroups = () => {
+  const pattern = filenameRegexPattern.value.trim()
+  if (!pattern) {
+    message('请先输入正则表达式')
+    return
+  }
+
+  try {
+    new RegExp(pattern)
+  } catch (error) {
+    message('正则表达式无效：' + (error?.message || '格式错误'))
+    return
+  }
+
+  const groups = extractNamedCaptureGroups(pattern)
+  if (!groups.length) {
+    message('未识别到 (?<name>...) 命名捕获组')
+    return
+  }
+
+  const retainedRows = filenameFieldRows.value.filter((row) => !isBlankFilenameFieldRow(row))
+  const existingGroups = new Set(
+    retainedRows.map((row) => String(row.group || '').trim()).filter(Boolean),
+  )
+  const newGroups = groups.filter((groupName) => !existingGroups.has(groupName))
+
+  filenameFieldRows.value = [
+    ...retainedRows,
+    ...newGroups.map((groupName) =>
+      createFilenameFieldRow(toDefaultTargetField(groupName), groupName),
+    ),
+  ]
+  clearFilenameTestResult()
+  message('已识别 ' + groups.length + ' 个捕获组，新增 ' + newGroups.length + ' 个字段')
+}
+const removeFilenameFieldRow = (index) => {
+  filenameFieldRows.value.splice(index, 1)
+  if (!filenameFieldRows.value.length) {
+    filenameFieldRows.value.push(createFilenameFieldRow())
+  }
+}
+
+const parseCustomFilenameOptions = () => {
+  const parsed = JSON.parse(filenameCustomOptionsText.value || '{}')
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('自定义解析器 options 必须是 JSON 对象')
+  }
+  return parsed
+}
+
+const buildFilenameParsingDefinition = () => {
+  if (filenameParserMode.value === 'custom') {
+    return {
+      parserName: filenameCustomParserName.value.trim(),
+      options: parseCustomFilenameOptions(),
+    }
+  }
+
+  return {
+    parserName: 'regex',
+    options: {
+      pattern: filenameRegexPattern.value,
+      ignoreCase: !!filenameIgnoreCase.value,
+      fields: filenameFieldRows.value.map((row) => {
+        const field = {
+          field: row.field.trim(),
+          group: row.group.trim(),
+          type: row.type || 'text',
+          required: !!row.required,
+        }
+        if (field.type === 'date' && row.format.trim()) {
+          field.format = row.format.trim()
+        }
+        return field
+      }),
+    },
+  }
+}
+
+const validateFilenameParsing = () => {
+  if (!filenameParsingEnabled.value) return ''
+
+  if (filenameParserMode.value === 'custom') {
+    if (!filenameCustomParserName.value.trim()) return '请输入自定义解析器名称'
+    try {
+      parseCustomFilenameOptions()
+    } catch (error) {
+      return error?.message || '自定义解析器 options JSON 格式错误'
+    }
+    return ''
+  }
+
+  if (!filenameRegexPattern.value.trim()) return '请输入文件名正则表达式'
+  try {
+    new RegExp(filenameRegexPattern.value)
+  } catch (error) {
+    return `文件名正则表达式无效：${error?.message || '格式错误'}`
+  }
+
+  const targetFields = new Set()
+  for (const row of filenameFieldRows.value) {
+    const field = row.field.trim()
+    const group = row.group.trim()
+    if (!field || !group) return '文件名解析字段的入库字段和捕获组不能为空'
+
+    const normalizedField = field.toLowerCase()
+    if (targetFields.has(normalizedField)) return `文件名解析入库字段重复：${field}`
+    targetFields.add(normalizedField)
+
+    if (!['text', 'int', 'decimal', 'date'].includes(row.type)) {
+      return `文件名解析字段 ${field} 的类型不受支持`
+    }
+  }
+
+  return ''
+}
+
+const formatFilenameTestValue = (value) => {
+  if (value === null || value === undefined) return 'NULL'
+  if (typeof value === 'object') return JSON.stringify(value)
+  return String(value)
+}
+
+const testFilenameParsing = async () => {
+  clearFilenameTestResult()
+  const validationError = validateFilenameParsing()
+  if (validationError) {
+    filenameTestError.value = validationError
+    return
+  }
+  if (!filenameTestFileName.value.trim()) {
+    filenameTestError.value = '请输入测试文件名'
+    return
+  }
+
+  filenameTestLoading.value = true
+  try {
+    const result = await api.testFileNameParsing({
+      FileName: filenameTestFileName.value.trim(),
+      FullFilePath: filenameTestFullPath.value.trim(),
+      FilenameParsing: buildFilenameParsingDefinition(),
+    })
+    if (result?.code !== undefined && Number(result.code) !== 1) {
+      throw new Error(result.info || result.message || '文件名解析失败')
+    }
+    filenameTestResult.value = result?.data ?? result
+  } catch (error) {
+    filenameTestError.value =
+      error?.response?.data?.info || error?.info || error?.message || '文件名解析失败'
+  } finally {
+    filenameTestLoading.value = false
   }
 }
 
@@ -1024,6 +1602,13 @@ const buildParserOptions = () => {
   delete options.FixedFields
   delete options.AcquisitionMode
   delete options.FileAccess
+  deleteOptionIgnoreCase(options, 'filenameParsing')
+
+  if (filenameParsingEnabled.value) {
+    options.filenameParsing = buildFilenameParsingDefinition()
+  } else {
+    delete options.filenameParsing
+  }
 
   if (formData.value.folderRecursive || hadFolderScan) {
     options.folderScan = {
@@ -1335,6 +1920,7 @@ function open(edit = false, data = null, fromImport = false, options = {}) {
     setExtFieldTagsFromString(formData.value.extFields)
     fieldMappingRows.value = parseFieldMappingsToRows(rawFieldMappings)
     fixedFieldRows.value = parseFixedFieldsToRows(rawParserOptions)
+    readFilenameParsing(rawParserOptions)
     if (formData.value.parserType === 'template-excel') {
       loadImportTemplates()
     }
@@ -1400,6 +1986,7 @@ const resetForm = () => {
   }
   fieldMappingRows.value = [createMappingRow()]
   fixedFieldRows.value = [createFixedFieldRow()]
+  resetFilenameParsing()
   extFieldTags.value = []
   extFieldInput.value = ''
 }
@@ -1520,6 +2107,12 @@ async function save() {
 
     if (formData.value.parserType === 'template-excel' && !formData.value.templateId) {
       message('请选择导入模板')
+      return
+    }
+
+    const filenameParsingError = validateFilenameParsing()
+    if (filenameParsingError) {
+      message(filenameParsingError)
       return
     }
 
@@ -1867,6 +2460,259 @@ defineExpose({ open })
 
 .fixed-field-table__row .ant-input {
   height: 32px;
+}
+
+.template-system-fields {
+  margin-bottom: 12px;
+  padding: 10px;
+  border: 1px solid #d9e7d4;
+  border-radius: 7px;
+  background: #f8fcf6;
+}
+
+.template-system-fields__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.template-system-fields__header span,
+.ext-field-source-label {
+  color: #374151;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.template-system-fields__header small {
+  color: #6b7280;
+  font-size: 11px;
+  text-align: right;
+}
+
+.template-system-fields__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.template-system-field-tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 3px 9px;
+  border: 1px solid #b7dfaa;
+  border-radius: 6px;
+  background: #fff;
+  color: #356b2e;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.template-system-fields__state {
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.template-system-fields__state--error {
+  color: #cf1322;
+}
+
+.ext-field-source-label {
+  margin-bottom: 7px;
+}
+.filename-parsing-card {
+  margin: 12px 0 14px;
+  padding: 12px;
+  border: 1px solid #d9e7d4;
+  border-radius: 8px;
+  background: #fcfefb;
+}
+
+.filename-parsing-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.filename-parsing-card__title {
+  color: #1f2937;
+  font-weight: 700;
+}
+
+.filename-parsing-card__hint {
+  margin-top: 3px;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.filename-parsing-switch,
+.filename-checkbox-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #374151;
+  font-weight: 500;
+}
+
+.filename-parsing-switch {
+  flex: 0 0 auto;
+  min-height: 24px;
+}
+
+.filename-parsing-card__body {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #e6efe2;
+}
+
+.filename-parser-grid,
+.filename-test-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.filename-pattern-input,
+.filename-options-input {
+  min-height: 76px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.filename-pattern-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.filename-pattern-label-row label {
+  margin-bottom: 0;
+}
+
+.filename-detect-groups-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+}
+.filename-checkbox-row {
+  margin: 2px 0 10px;
+}
+
+.filename-field-table {
+  border: 1px solid #edf0f2;
+  border-radius: 7px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.filename-field-table__head,
+.filename-field-table__row {
+  display: grid;
+  grid-template-columns: minmax(105px, 1.25fr) minmax(90px, 1.1fr) 76px 92px 42px 58px;
+  gap: 7px;
+  align-items: center;
+}
+
+.filename-field-table__head {
+  padding: 8px;
+  background: #fafafa;
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.filename-field-table__row {
+  padding: 8px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.filename-field-table__row .ant-input {
+  min-width: 0;
+  height: 32px;
+}
+
+.filename-required-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.filename-test-panel {
+  margin-top: 12px;
+  padding: 10px;
+  border: 1px solid #edf0f2;
+  border-radius: 7px;
+  background: #fff;
+}
+
+.filename-test-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.filename-test-error {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border: 1px solid #ffccc7;
+  border-radius: 6px;
+  background: #fff2f0;
+  color: #cf1322;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.filename-test-result {
+  margin-top: 10px;
+  border: 1px solid #d9f7be;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.filename-test-result__row {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.7fr) minmax(0, 1.3fr);
+  gap: 10px;
+  padding: 7px 9px;
+  border-top: 1px solid #f0f0f0;
+  font-size: 12px;
+}
+
+.filename-test-result__row:first-child {
+  border-top: 0;
+}
+
+.filename-test-result__row span {
+  color: #4b5563;
+  font-weight: 600;
+}
+
+.filename-test-result__row code {
+  color: #1f2937;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.filename-test-empty,
+.filename-test-warning {
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+.filename-test-empty {
+  color: #6b7280;
+}
+
+.filename-test-warning {
+  border-top: 1px solid #ffe58f;
+  background: #fffbe6;
+  color: #ad6800;
 }
 
 .acquisition-mode-card {
@@ -2224,6 +3070,14 @@ defineExpose({ open })
 }
 
 @media (max-width: 720px) {
+  .filename-field-table {
+    overflow-x: auto;
+  }
+
+  .filename-field-table__head,
+  .filename-field-table__row {
+    min-width: 570px;
+  }
   .file-access-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -2234,6 +3088,19 @@ defineExpose({ open })
 }
 
 @media (max-width: 520px) {
+  .template-system-fields__header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .template-system-fields__header small {
+    text-align: left;
+  }
+
+  .filename-parser-grid,
+  .filename-test-grid {
+    grid-template-columns: 1fr;
+  }
   .file-access-grid {
     grid-template-columns: 1fr;
   }

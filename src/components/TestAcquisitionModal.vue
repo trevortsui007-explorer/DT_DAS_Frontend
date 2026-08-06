@@ -15,8 +15,8 @@
           <label class="test-option">
             <span>测试文件模式</span>
             <select v-model="form.testFileMode" class="ant-input" :disabled="running">
-              <option value="copy">复制测试文件</option>
               <option value="direct">直接使用源文件</option>
+              <option value="copy">复制测试文件</option>
             </select>
           </label>
           <label v-if="form.testFileMode === 'copy'" class="test-option">
@@ -202,7 +202,7 @@ const result = ref(null)
 const selectedSourcePath = ref('')
 
 const form = reactive({
-  testFileMode: 'copy',
+  testFileMode: 'direct',
   testFileLocation: 'source',
   localTestDirectory: '',
   runPostProcessing: true,
@@ -271,7 +271,7 @@ const open = (row) => {
   config.value = row
   result.value = null
   selectedSourcePath.value = ''
-  form.testFileMode = 'copy'
+  form.testFileMode = 'direct'
   form.testFileLocation = 'source'
   form.localTestDirectory = ''
   form.runPostProcessing = true

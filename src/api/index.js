@@ -18,6 +18,10 @@ export const updateConfig = (id, data) => {
   return request.put(`/api/data-acquisition/file-configs/${id}`, data)
 }
 
+export const testFileNameParsing = (data) => {
+  return request.post('/api/data-acquisition/file-configs/test-filename-parsing', data)
+}
+
 // ====================== IMPORT TEMPLATE ======================
 export const fetchImportTemplates = () => {
   return request.get('/api/data-acquisition/import-templates')
@@ -247,8 +251,52 @@ export const fetchTaskLogDetails = (taskLogId, params = {}) => {
       pageSize: params.pageSize ?? undefined,
       status: params.status ?? undefined,
       errorCategory: params.errorCategory ?? undefined,
-      hasProcessedRows: params.hasProcessedRows ?? undefined
+      hasProcessedRows: params.hasProcessedRows ?? undefined,
+      viewMode: params.viewMode ?? undefined
     }
+  })
+}
+
+export const fetchConfigHistory = (configId, params = {}) => {
+  return request.get(`/api/data-acquisition/execution/configs/${configId}/history`, {
+    params: {
+      pageNo: params.pageNo ?? undefined,
+      pageSize: params.pageSize ?? undefined,
+      status: params.status ?? undefined,
+      errorCategory: params.errorCategory ?? undefined,
+      hasProcessedRows: params.hasProcessedRows ?? undefined,
+      startTime: params.startTime ?? undefined,
+      endTime: params.endTime ?? undefined
+    }
+  })
+}
+
+export const fetchConfigHistorySummary = (configIds = [], params = {}) => {
+  return request.post('/api/data-acquisition/execution/configs/history-summary', {
+    configIds,
+    startTime: params.startTime ?? undefined,
+    endTime: params.endTime ?? undefined,
+  })
+}
+
+export const fetchConfigFileStates = (configId, params = {}) => {
+  return request.get(`/api/data-acquisition/execution/configs/${configId}/file-states`, {
+    params: {
+      pageNo: params.pageNo ?? undefined,
+      pageSize: params.pageSize ?? undefined,
+      status: params.status ?? undefined,
+      hasProcessedRows: params.hasProcessedRows ?? undefined,
+      startTime: params.startTime ?? undefined,
+      endTime: params.endTime ?? undefined,
+    }
+  })
+}
+
+export const fetchConfigFileStateSummary = (configIds = [], params = {}) => {
+  return request.post('/api/data-acquisition/execution/configs/file-state-summary', {
+    configIds,
+    startTime: params.startTime ?? undefined,
+    endTime: params.endTime ?? undefined,
   })
 }
 

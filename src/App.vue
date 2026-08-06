@@ -4,9 +4,36 @@
 
     <div class="module-card" :class="{ 'module-card-overview': activeTab === 'overview' }">
       <div class="header-section">
-        <div>
+        <div class="header-main">
           <h3 class="header-title">{{ currentTitle }}</h3>
           <div class="header-desc">{{ currentDesc }}</div>
+        </div>
+
+        <div v-if="activeTab === 'log'" class="log-mode-switch ant-btn-group">
+          <button
+            class="ant-btn log-mode-btn"
+            :class="{ 'is-active': logViewMode === 'task' }"
+            type="button"
+            @click="setLogViewMode('task')"
+          >
+            <span>按任务</span>
+          </button>
+          <button
+            class="ant-btn log-mode-btn"
+            :class="{ 'is-active': logViewMode === 'config' }"
+            type="button"
+            @click="setLogViewMode('config')"
+          >
+            <span>按配置</span>
+          </button>
+          <button
+            class="ant-btn log-mode-btn"
+            :class="{ 'is-active': logViewMode === 'file' }"
+            type="button"
+            @click="setLogViewMode('file')"
+          >
+            <span>按文件</span>
+          </button>
         </div>
 
         <div class="header-actions" :class="{ 'header-actions-overview': activeTab === 'overview' }">
@@ -51,6 +78,7 @@
         v-if="activeTab === 'log'"
         ref="taskLogViewRef"
         :initial-task-log-id="currentTaskLogId"
+        :log-view-mode="logViewMode"
       />
 
       <div v-else-if="activeTab === 'overview'" class="overview-stack">
@@ -294,6 +322,7 @@ const testAcquisitionModalRef = ref(null)
 
 // ====================== state ======================
 const activeTab = ref('overview')
+const logViewMode = ref('task')
 const loading = ref(false)
 const error = ref('')
 
@@ -1333,8 +1362,15 @@ const LIMITED_BUTTON_CONFIG_MAP = {
   ],
 }
 
+const setLogViewMode = (mode) => {
+  logViewMode.value = ['task', 'config', 'file'].includes(mode) ? mode : 'task'
+}
+
 const actionButtons = computed(() => {
   const buttonMap = isSystemAccount.value ? BUTTON_CONFIG_MAP : LIMITED_BUTTON_CONFIG_MAP
+  if (activeTab.value === 'log') {
+    return buttonMap.log || []
+  }
   return buttonMap[activeTab.value] || []
 })
 
@@ -1500,6 +1536,10 @@ onBeforeUnmount(() => {
   padding-right: 4px;
 }
 
+.header-main {
+  min-width: 0;
+}
+
 .header-actions {
   gap: 14px;
 }
@@ -1522,6 +1562,24 @@ onBeforeUnmount(() => {
 
 .api-switch-btn {
   margin-right: 10px;
+}
+
+.log-mode-switch {
+  margin-left: 18px;
+  margin-right: auto;
+  flex-shrink: 0;
+}
+
+.log-mode-btn {
+  min-width: 68px;
+  color: #4b5563;
+}
+
+.log-mode-btn.is-active {
+  border-color: #52c41a;
+  background: #f6ffed;
+  color: #389e0d;
+  font-weight: 600;
 }
 
 .inspection-btn {
